@@ -230,22 +230,18 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   margin: 20px auto 0;
-  padding: 11px 12px;
-  max-width: 590px;
-  border: 1px solid #e5e8e1;
-  border-radius: 10px;
-  background: #f7f8f5;
 }
 .shortcuts button {
-  border: 1px solid #dfe3dc;
-  padding: 7px 13px;
-  border-radius: 6px;
+  min-height: 40px;
+  border: 1px solid #cbd3ca;
+  padding: 8px 16px;
+  border-radius: 7px;
   background: #fff;
-  color: #5f6960;
-  font-size: 12px;
-  box-shadow: 0 1px 0 #eef0eb;
+  color: #465349;
+  font-size: 13px;
+  box-shadow: 0 1px 2px #263c3010;
 }
 .attachment-control {
   position: relative;
