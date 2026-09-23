@@ -1,3 +1,4 @@
+// 시작 화면에 문서 형식별 아이콘과 가능한 작업을 마인드맵 형태로 표시한다.
 import Image from 'next/image'
 
 const documents = [
@@ -9,12 +10,24 @@ const documents = [
   {
     type: 'xlsx',
     side: 'right',
-    actions: ['데이터 분석', '표·차트', '수식 정리', '인사이트 요약', 'XLSX 저장']
+    actions: [
+      '데이터 분석',
+      '표·차트',
+      '수식 정리',
+      '인사이트 요약',
+      'XLSX 저장'
+    ]
   },
   {
     type: 'pptx',
     side: 'left',
-    actions: ['슬라이드 구성', '발표 자료', '핵심 시각화', '발표자 노트', 'PPTX 저장']
+    actions: [
+      '슬라이드 구성',
+      '발표 자료',
+      '핵심 시각화',
+      '발표자 노트',
+      'PPTX 저장'
+    ]
   },
   {
     type: 'pdf',
@@ -41,10 +54,7 @@ export default function DocumentConstellation() {
             />
           </span>
           {document.actions.map((action, actionIndex) => (
-            <span
-              className={`mind-node node-${actionIndex + 1}`}
-              key={action}
-            >
+            <span className={`mind-node node-${actionIndex + 1}`} key={action}>
               {action}
             </span>
           ))}
