@@ -1,14 +1,59 @@
 'use client'
+// 작업 목록, 진행 상태, 문서 패널을 조합하고 전체 화면 상태를 관리하는 핵심 컨테이너다.
 import { useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown, Download, FileText, Menu, PanelRight, Pause, Play, Plus, Search, X } from 'lucide-react'
+import type {
+  CSSProperties,
+  KeyboardEvent,
+  PointerEvent as ReactPointerEvent
+} from 'react'
+import {
+  Check,
+  ChevronDown,
+  Download,
+  FileText,
+  Menu,
+  PanelRight,
+  Pause,
+  Play,
+  Plus,
+  Search,
+  X
+} from 'lucide-react'
 import Composer from './Composer'
 import DocumentConstellation from './DocumentConstellation'
 import { DocumentPreview, Sources, downloadDocument } from './Documents'
-import { createMockTask, getExampleTask, runMockTask, sendMockMessage } from '@/api/workroom'
-import { stageMeta, stageOrder, type Source, type Task, type TaskState } from './types'
+import {
+  createMockTask,
+  getExampleTask,
+  runMockTask,
+  sendMockMessage
+} from '@/api/workroom'
+import {
+  stageMeta,
+  stageOrder,
+  type Source,
+  type Task,
+  type TaskState
+} from './types'
 const STORAGE_KEY = 'workroom-tasks-v2'
-function readTasks() { try { const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); return Array.isArray(value) ? value as Task[] : [] } catch { return [] } }
-function stateLabel(state: TaskState) { if (state === 'completed') return '완료'; if (state === 'paused') return '일시정지'; if (state === 'failed') return '오류'; return stageMeta[state].label }
+const SIDEBAR_WIDTH_KEY = 'workroom-sidebar-width-v1'
+const DEFAULT_SIDEBAR_WIDTH = 265
+const MIN_SIDEBAR_WIDTH = 210
+const MAX_SIDEBAR_WIDTH = 380
+function readTasks() {
+  try {
+    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+    return Array.isArray(value) ? (value as Task[]) : []
+  } catch {
+    return []
+  }
+}
+function stateLabel(state: TaskState) {
+  if (state === 'completed') return '완료'
+  if (state === 'paused') return '일시정지'
+  if (state === 'failed') return '오류'
+  return stageMeta[state].label
+}
 export default function Workroom() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -19,23 +64,518 @@ export default function Workroom() {
   const [revision, setRevision] = useState('')
   const [notice, setNotice] = useState('')
   const [loaded, setLoaded] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
+  const [resizingSidebar, setResizingSidebar] = useState(false)
   const active = tasks.find((task) => task.id === activeId)
-  useEffect(() => { const saved = readTasks(); setTasks(saved.length ? saved : [getExampleTask()]); setLoaded(true) }, [])
-  useEffect(() => { if (loaded) localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)) }, [tasks, loaded])
-  const visibleTasks = useMemo(() => tasks.filter((task) => filter === 'all' || (filter === 'completed' ? task.state === 'completed' : task.state !== 'completed')), [tasks, filter])
-  function updateTask(next: Task) { setTasks((current) => current.map((task) => task.id === next.id ? next : task)) }
-  function openTask(id: string | null) { setActiveId(id); setMobileSidebar(false); setRightTab('document'); setEditing(false); setRevision('') }
-  function startTask(request: string, sources: Source[]) { const task = createMockTask(request, sources); setTasks((current) => [task, ...current]); openTask(task.id); void runMockTask(task, updateTask) }
-  async function requestRevision() { if (!active || !revision.trim()) return; const updated = await sendMockMessage(active, revision.trim(), 'revision'); updateTask({ ...updated, state: 'writing', stage: 'writing' }); setRevision(''); setNotice('수정 요청을 작업에 추가했습니다.'); void runMockTask(updated, updateTask) }
-  async function download(format: 'md' | 'docx') { if (!active?.document) return; await downloadDocument(active, format); setNotice(`${format.toUpperCase()} 파일을 다운로드했습니다.`) }
-  return <div className="workroom">
-    <header className="app-header"><div className="header-left"><button className="sidebar-toggle icon-button" onClick={() => setMobileSidebar((open) => !open)} aria-label="작업 메뉴 열기"><Menu size={19} /></button><div className="brand-mark">W</div><span className="brand">Workroom</span></div><div className="header-context"><span className="status-dot" /> 자료 기반 문서 작업</div><button className="header-command" type="button"><Search size={15} /> 작업 검색 <kbd>⌘ K</kbd></button></header>
-    <div className={`workspace ${active ? 'has-task' : ''} ${mobileSidebar ? 'sidebar-open' : ''}`}>
-      {mobileSidebar && <button className="sidebar-backdrop" onClick={() => setMobileSidebar(false)} aria-label="메뉴 닫기" />}
-      <aside className="sidebar" aria-label="작업 목록"><button className="new-task" onClick={() => openTask(null)}><Plus size={17} /> 새 작업</button><div className="sidebar-heading"><span>작업 공간</span><button type="button" aria-label="작업 검색"><Search size={14} /></button></div><nav className="filter-tabs" aria-label="작업 필터">{([['all', '전체'], ['active', '진행 중'], ['completed', '완료']] as const).map(([value, label]) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}<span>{tasks.filter((task) => value === 'all' || (value === 'completed' ? task.state === 'completed' : task.state !== 'completed')).length}</span></button>)}</nav><div className="history">{visibleTasks.map((task) => <button className={`history-item ${task.id === activeId ? 'selected' : ''}`} key={task.id} onClick={() => openTask(task.id)}><span className="history-icon"><FileText size={15} /></span><span className="history-copy"><strong>{task.title}</strong><small>{stateLabel(task.state)} · {new Date(task.updatedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}</small></span><ChevronDown size={14} className="history-chevron" /></button>)}</div>{!visibleTasks.length && <div className="empty-history">표시할 작업이 없습니다.<br />새 작업을 시작해 보세요.</div>}<div className="sidebar-footer"><div className="profile-avatar">오</div><div><strong>오수혁</strong><small>개인 작업 공간</small></div><button aria-label="계정 메뉴"><ChevronDown size={15} /></button></div></aside>
-      <main className="main-area">{!active ? <><DocumentConstellation /><section className="start"><span className="start-kicker">NEW WORKSPACE</span><h1>어떤 문서를<br /><em>만들어 볼까요?</em></h1><p>주제, 파일, 링크를 입력하면 필요한 자료를 모으고<br />목적에 맞는 문서 초안을 만들어 드립니다.</p><Composer onSubmit={startTask} /></section></> : <section className="task"><div className="task-topbar"><div><button className="back-button" onClick={() => openTask(null)}>← 모든 작업</button><h1>{active.title}</h1></div><div className={`state-badge state-${active.state}`}><span /> {stateLabel(active.state)}</div></div><div className="request-block"><span className="block-label">작업 요청</span><p>{active.request}</p></div><section className="progress-section"><div className="section-heading"><div><span className="block-label">WORKFLOW</span><h2>작업 진행</h2></div>{active.state !== 'completed' && active.state !== 'failed' && <button className="pause-button" onClick={() => updateTask({ ...active, state: active.state === 'paused' ? active.stage : 'paused' })}>{active.state === 'paused' ? <><Play size={14} /> 계속하기</> : <><Pause size={14} /> 잠시 멈추기</>}</button>}</div><ol className="progress">{stageOrder.map((stage) => { const currentIndex = stageOrder.indexOf(active.stage as (typeof stageOrder)[number]); const index = stageOrder.indexOf(stage); const done = active.state === 'completed' || currentIndex > index; const current = active.state !== 'paused' && active.state !== 'failed' && currentIndex === index; return <li className={`${done ? 'done' : ''} ${current ? 'current' : ''}`} key={stage}><span className="progress-mark">{done ? <Check size={14} /> : index + 1}</span><div><strong>{stageMeta[stage].label}</strong><small>{stageMeta[stage].detail}</small></div></li> })}</ol><p className="progress-status" role="status">{active.state === 'paused' ? '작업을 잠시 멈췄습니다.' : active.state === 'failed' ? active.error || '작업 중 문제가 발생했습니다.' : active.state === 'completed' ? '문서가 준비되었습니다. 오른쪽에서 확인해 보세요.' : stageMeta[active.stage].detail}</p></section><details className="materials" open><summary>사용한 자료 <span>{active.sources.length}</span><ChevronDown size={15} /></summary><Sources sources={active.sources} /></details>{active.messages.map((message) => <div className="message follow-up" key={message.id}><span className="block-label">{message.kind === 'revision' ? '수정 요청' : '추가 요청'}</span><p>{message.text}</p></div>)}<div className="follow-up-composer"><Composer compact onSubmit={(text) => { updateTask({ ...active, messages: [...active.messages, { id: crypto.randomUUID(), kind: 'followup', text, createdAt: Date.now() }] }); setNotice('추가 요청을 작업에 추가했습니다.') }} /></div></section>}</main>
-      {active && <aside className="document-panel" aria-label="문서와 출처"><div className="panel-header"><div className="panel-tabs"><button aria-pressed={rightTab === 'document'} onClick={() => setRightTab('document')}>문서 <span>{active.document ? '1' : '0'}</span></button><button aria-pressed={rightTab === 'sources'} onClick={() => setRightTab('sources')}>출처 <span>{active.sources.length}</span></button></div><button className="panel-close" onClick={() => openTask(null)} aria-label="문서 패널 닫기"><PanelRight size={16} /></button></div>{rightTab === 'sources' ? <Sources sources={active.sources} /> : <>{active.document ? <><div className="document-toolbar"><span>마지막 저장 {new Date(active.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span><button className="small-button" onClick={() => setEditing((value) => !value)}>{editing ? '미리보기' : '직접 편집'}</button></div>{editing ? <textarea className="document-editor" value={active.document} onChange={(event) => updateTask({ ...active, document: event.target.value, updatedAt: Date.now() })} /> : <DocumentPreview text={active.document} />}<div className="revision-form"><label htmlFor="revision">수정 요청</label><div className="revision-input"><input id="revision" value={revision} onChange={(event) => setRevision(event.target.value)} placeholder="어떤 부분을 바꿀까요?" /><button onClick={requestRevision} disabled={!revision.trim()} aria-label="수정 요청 보내기"><ArrowUpIcon /></button></div></div><div className="downloads"><span>내보내기</span><div><button onClick={() => download('md')}><Download size={13} /> Markdown</button><button onClick={() => download('docx')}><Download size={13} /> DOCX</button></div></div></> : <div className="document-empty"><FileText size={28} /><h2>문서를 준비하고 있어요</h2><p>작업이 끝나면 이곳에서<br />문서를 확인하고 수정할 수 있습니다.</p></div>}</>}</aside>}
-    </div>{notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="알림 닫기"><X size={15} /></button></div>}
-  </div>
+  useEffect(() => {
+    const saved = readTasks()
+    setTasks(saved.length ? saved : [getExampleTask()])
+    const savedSidebarWidth = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY))
+    if (Number.isFinite(savedSidebarWidth)) {
+      setSidebarWidth(
+        Math.min(
+          MAX_SIDEBAR_WIDTH,
+          Math.max(MIN_SIDEBAR_WIDTH, savedSidebarWidth)
+        )
+      )
+    }
+    setLoaded(true)
+  }, [])
+  useEffect(() => {
+    if (loaded) localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks))
+  }, [tasks, loaded])
+  useEffect(() => {
+    if (loaded) {
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth))
+    }
+  }, [sidebarWidth, loaded])
+  useEffect(() => {
+    if (!resizingSidebar) return
+    document.body.classList.add('is-resizing-sidebar')
+    return () => document.body.classList.remove('is-resizing-sidebar')
+  }, [resizingSidebar])
+  const visibleTasks = useMemo(
+    () =>
+      tasks.filter(
+        (task) =>
+          filter === 'all' ||
+          (filter === 'completed'
+            ? task.state === 'completed'
+            : task.state !== 'completed')
+      ),
+    [tasks, filter]
+  )
+  function updateTask(next: Task) {
+    setTasks((current) =>
+      current.map((task) => (task.id === next.id ? next : task))
+    )
+  }
+  function openTask(id: string | null) {
+    setActiveId(id)
+    setMobileSidebar(false)
+    setRightTab('document')
+    setEditing(false)
+    setRevision('')
+  }
+  function startTask(request: string, sources: Source[]) {
+    const task = createMockTask(request, sources)
+    setTasks((current) => [task, ...current])
+    openTask(task.id)
+    void runMockTask(task, updateTask)
+  }
+  async function requestRevision() {
+    if (!active || !revision.trim()) return
+    const updated = await sendMockMessage(active, revision.trim(), 'revision')
+    updateTask({ ...updated, state: 'writing', stage: 'writing' })
+    setRevision('')
+    setNotice('수정 요청을 작업에 추가했습니다.')
+    void runMockTask(updated, updateTask)
+  }
+  async function download(format: 'md' | 'docx') {
+    if (!active?.document) return
+    await downloadDocument(active, format)
+    setNotice(`${format.toUpperCase()} 파일을 다운로드했습니다.`)
+  }
+  function resizeSidebar(clientX: number) {
+    setSidebarWidth(
+      Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, clientX))
+    )
+  }
+  function handleResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setResizingSidebar(true)
+    resizeSidebar(event.clientX)
+  }
+  function handleResizePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
+    resizeSidebar(event.clientX)
+  }
+  function handleResizePointerEnd(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    setResizingSidebar(false)
+  }
+  function handleResizeKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const amount = event.shiftKey ? 25 : 10
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      setSidebarWidth((width) => Math.max(MIN_SIDEBAR_WIDTH, width - amount))
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      setSidebarWidth((width) => Math.min(MAX_SIDEBAR_WIDTH, width + amount))
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      setSidebarWidth(MIN_SIDEBAR_WIDTH)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      setSidebarWidth(MAX_SIDEBAR_WIDTH)
+    }
+  }
+  return (
+    <div className="workroom">
+      <header className="app-header">
+        <div className="header-left">
+          <button
+            className="sidebar-toggle icon-button"
+            onClick={() => setMobileSidebar((open) => !open)}
+            aria-label="작업 메뉴 열기"
+          >
+            <Menu size={19} />
+          </button>
+          <div className="brand-mark">W</div>
+          <span className="brand">Workroom</span>
+        </div>
+        <div className="header-context">
+          <span className="status-dot" /> 자료 기반 문서 작업
+        </div>
+        <button className="header-command" type="button">
+          <Search size={15} /> 작업 검색 <kbd>⌘ K</kbd>
+        </button>
+      </header>
+      <div
+        className={`workspace ${active ? 'has-task' : ''} ${mobileSidebar ? 'sidebar-open' : ''}`}
+        style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
+      >
+        {mobileSidebar && (
+          <button
+            className="sidebar-backdrop"
+            onClick={() => setMobileSidebar(false)}
+            aria-label="메뉴 닫기"
+          />
+        )}
+        <aside className="sidebar" aria-label="작업 목록">
+          <button className="new-task" onClick={() => openTask(null)}>
+            <Plus size={17} /> 새 작업
+          </button>
+          <div className="sidebar-heading">
+            <span>작업 공간</span>
+            <button type="button" aria-label="작업 검색">
+              <Search size={14} />
+            </button>
+          </div>
+          <nav className="filter-tabs" aria-label="작업 필터">
+            {(
+              [
+                ['all', '전체'],
+                ['active', '진행 중'],
+                ['completed', '완료']
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                aria-pressed={filter === value}
+                onClick={() => setFilter(value)}
+              >
+                {label}
+                <span>
+                  {
+                    tasks.filter(
+                      (task) =>
+                        value === 'all' ||
+                        (value === 'completed'
+                          ? task.state === 'completed'
+                          : task.state !== 'completed')
+                    ).length
+                  }
+                </span>
+              </button>
+            ))}
+          </nav>
+          <div className="history">
+            {visibleTasks.map((task) => (
+              <button
+                className={`history-item ${task.id === activeId ? 'selected' : ''}`}
+                key={task.id}
+                onClick={() => openTask(task.id)}
+              >
+                <span className="history-icon">
+                  <FileText size={15} />
+                </span>
+                <span className="history-copy">
+                  <strong>{task.title}</strong>
+                  <small>
+                    {stateLabel(task.state)} ·{' '}
+                    {new Date(task.updatedAt).toLocaleDateString('ko-KR', {
+                      month: 'short',
+                      day: 'numeric'
+                    })}
+                  </small>
+                </span>
+                <ChevronDown size={14} className="history-chevron" />
+              </button>
+            ))}
+          </div>
+          {!visibleTasks.length && (
+            <div className="empty-history">
+              표시할 작업이 없습니다.
+              <br />새 작업을 시작해 보세요.
+            </div>
+          )}
+          <div className="sidebar-footer">
+            <div className="profile-avatar">오</div>
+            <div>
+              <strong>오수혁</strong>
+              <small>개인 작업 공간</small>
+            </div>
+            <button aria-label="계정 메뉴">
+              <ChevronDown size={15} />
+            </button>
+          </div>
+          <div
+            className={`sidebar-resizer ${resizingSidebar ? 'is-resizing' : ''}`}
+            role="separator"
+            aria-label="사이드바 너비 조절"
+            aria-orientation="vertical"
+            aria-valuemin={MIN_SIDEBAR_WIDTH}
+            aria-valuemax={MAX_SIDEBAR_WIDTH}
+            aria-valuenow={sidebarWidth}
+            tabIndex={0}
+            onDoubleClick={() => setSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
+            onKeyDown={handleResizeKeyDown}
+            onPointerDown={handleResizePointerDown}
+            onPointerMove={handleResizePointerMove}
+            onPointerUp={handleResizePointerEnd}
+            onPointerCancel={handleResizePointerEnd}
+            title="드래그하여 너비 조절 · 더블클릭하여 기본값 복원"
+          />
+        </aside>
+        <main className="main-area">
+          {!active ? (
+            <>
+              <DocumentConstellation />
+              <section className="start">
+                <span className="start-kicker">NEW WORKSPACE</span>
+                <h1>
+                  어떤 문서를
+                  <br />
+                  <em>만들어 볼까요?</em>
+                </h1>
+                <p>
+                  주제, 파일, 링크를 입력하면 필요한 자료를 모으고
+                  <br />
+                  목적에 맞는 문서 초안을 만들어 드립니다.
+                </p>
+                <Composer onSubmit={startTask} />
+              </section>
+            </>
+          ) : (
+            <section className="task">
+              <div className="task-topbar">
+                <div>
+                  <button
+                    className="back-button"
+                    onClick={() => openTask(null)}
+                  >
+                    ← 모든 작업
+                  </button>
+                  <h1>{active.title}</h1>
+                </div>
+                <div className={`state-badge state-${active.state}`}>
+                  <span /> {stateLabel(active.state)}
+                </div>
+              </div>
+              <div className="request-block">
+                <span className="block-label">작업 요청</span>
+                <p>{active.request}</p>
+              </div>
+              <section className="progress-section">
+                <div className="section-heading">
+                  <div>
+                    <span className="block-label">WORKFLOW</span>
+                    <h2>작업 진행</h2>
+                  </div>
+                  {active.state !== 'completed' &&
+                    active.state !== 'failed' && (
+                      <button
+                        className="pause-button"
+                        onClick={() =>
+                          updateTask({
+                            ...active,
+                            state:
+                              active.state === 'paused'
+                                ? active.stage
+                                : 'paused'
+                          })
+                        }
+                      >
+                        {active.state === 'paused' ? (
+                          <>
+                            <Play size={14} /> 계속하기
+                          </>
+                        ) : (
+                          <>
+                            <Pause size={14} /> 잠시 멈추기
+                          </>
+                        )}
+                      </button>
+                    )}
+                </div>
+                <ol className="progress">
+                  {stageOrder.map((stage) => {
+                    const currentIndex = stageOrder.indexOf(
+                      active.stage as (typeof stageOrder)[number]
+                    )
+                    const index = stageOrder.indexOf(stage)
+                    const done =
+                      active.state === 'completed' || currentIndex > index
+                    const current =
+                      active.state !== 'paused' &&
+                      active.state !== 'failed' &&
+                      currentIndex === index
+                    return (
+                      <li
+                        className={`${done ? 'done' : ''} ${current ? 'current' : ''}`}
+                        key={stage}
+                      >
+                        <span className="progress-mark">
+                          {done ? <Check size={14} /> : index + 1}
+                        </span>
+                        <div>
+                          <strong>{stageMeta[stage].label}</strong>
+                          <small>{stageMeta[stage].detail}</small>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ol>
+                <p className="progress-status" role="status">
+                  {active.state === 'paused'
+                    ? '작업을 잠시 멈췄습니다.'
+                    : active.state === 'failed'
+                      ? active.error || '작업 중 문제가 발생했습니다.'
+                      : active.state === 'completed'
+                        ? '문서가 준비되었습니다. 오른쪽에서 확인해 보세요.'
+                        : stageMeta[active.stage].detail}
+                </p>
+              </section>
+              <details className="materials" open>
+                <summary>
+                  사용한 자료 <span>{active.sources.length}</span>
+                  <ChevronDown size={15} />
+                </summary>
+                <Sources sources={active.sources} />
+              </details>
+              {active.messages.map((message) => (
+                <div className="message follow-up" key={message.id}>
+                  <span className="block-label">
+                    {message.kind === 'revision' ? '수정 요청' : '추가 요청'}
+                  </span>
+                  <p>{message.text}</p>
+                </div>
+              ))}
+              <div className="follow-up-composer">
+                <Composer
+                  compact
+                  onSubmit={(text) => {
+                    updateTask({
+                      ...active,
+                      messages: [
+                        ...active.messages,
+                        {
+                          id: crypto.randomUUID(),
+                          kind: 'followup',
+                          text,
+                          createdAt: Date.now()
+                        }
+                      ]
+                    })
+                    setNotice('추가 요청을 작업에 추가했습니다.')
+                  }}
+                />
+              </div>
+            </section>
+          )}
+        </main>
+        {active && (
+          <aside className="document-panel" aria-label="문서와 출처">
+            <div className="panel-header">
+              <div className="panel-tabs">
+                <button
+                  aria-pressed={rightTab === 'document'}
+                  onClick={() => setRightTab('document')}
+                >
+                  문서 <span>{active.document ? '1' : '0'}</span>
+                </button>
+                <button
+                  aria-pressed={rightTab === 'sources'}
+                  onClick={() => setRightTab('sources')}
+                >
+                  출처 <span>{active.sources.length}</span>
+                </button>
+              </div>
+              <button
+                className="panel-close"
+                onClick={() => openTask(null)}
+                aria-label="문서 패널 닫기"
+              >
+                <PanelRight size={16} />
+              </button>
+            </div>
+            {rightTab === 'sources' ? (
+              <Sources sources={active.sources} />
+            ) : (
+              <>
+                {active.document ? (
+                  <>
+                    <div className="document-toolbar">
+                      <span>
+                        마지막 저장{' '}
+                        {new Date(active.updatedAt).toLocaleTimeString(
+                          'ko-KR',
+                          { hour: '2-digit', minute: '2-digit' }
+                        )}
+                      </span>
+                      <button
+                        className="small-button"
+                        onClick={() => setEditing((value) => !value)}
+                      >
+                        {editing ? '미리보기' : '직접 편집'}
+                      </button>
+                    </div>
+                    {editing ? (
+                      <textarea
+                        className="document-editor"
+                        value={active.document}
+                        onChange={(event) =>
+                          updateTask({
+                            ...active,
+                            document: event.target.value,
+                            updatedAt: Date.now()
+                          })
+                        }
+                      />
+                    ) : (
+                      <DocumentPreview text={active.document} />
+                    )}
+                    <div className="revision-form">
+                      <label htmlFor="revision">수정 요청</label>
+                      <div className="revision-input">
+                        <input
+                          id="revision"
+                          value={revision}
+                          onChange={(event) => setRevision(event.target.value)}
+                          placeholder="어떤 부분을 바꿀까요?"
+                        />
+                        <button
+                          onClick={requestRevision}
+                          disabled={!revision.trim()}
+                          aria-label="수정 요청 보내기"
+                        >
+                          <ArrowUpIcon />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="downloads">
+                      <span>내보내기</span>
+                      <div>
+                        <button onClick={() => download('md')}>
+                          <Download size={13} /> Markdown
+                        </button>
+                        <button onClick={() => download('docx')}>
+                          <Download size={13} /> DOCX
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="document-empty">
+                    <FileText size={28} />
+                    <h2>문서를 준비하고 있어요</h2>
+                    <p>
+                      작업이 끝나면 이곳에서
+                      <br />
+                      문서를 확인하고 수정할 수 있습니다.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </aside>
+        )}
+      </div>
+      {notice && (
+        <div className="notice" role="status">
+          <span>{notice}</span>
+          <button onClick={() => setNotice('')} aria-label="알림 닫기">
+            <X size={15} />
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
-function ArrowUpIcon() { return <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 12V4m0 0L4.8 7.2M8 4l3.2 3.2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg> }
+function ArrowUpIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M8 12V4m0 0L4.8 7.2M8 4l3.2 3.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
