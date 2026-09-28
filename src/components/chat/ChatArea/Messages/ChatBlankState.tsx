@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 
 const EXTERNAL_LINKS = {
   documentation: 'https://agno.link/agent-ui',
-  agenOS: 'https://os.agno.com',
+  agenOS: 'https://os.agno.com'
 }
 
 interface ActionButtonProps {
@@ -50,7 +50,8 @@ const ChatBlankState = () => {
           <span className="block text-brand">좋은 작업이 됩니다.</span>
         </motion.h1>
         <p className="max-w-lg text-base leading-7 text-muted">
-          에이전트를 선택하고, 필요한 일을 자연스럽게 설명해 보세요. 대화의 맥락은 이 작업실에 차곡차곡 쌓입니다.
+          에이전트를 선택하고, 필요한 일을 자연스럽게 설명해 보세요. 대화의
+          맥락은 이 작업실에 차곡차곡 쌓입니다.
         </p>
         <motion.div
           initial={{ opacity: 0, y: 10 }}

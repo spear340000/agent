@@ -69,20 +69,14 @@ export async function downloadDocument(task: Task, format: 'md' | 'docx') {
     blob = new Blob([task.document], { type: 'text/markdown;charset=utf-8' })
   else {
     const { Document, Packer, Paragraph, HeadingLevel } = await import('docx')
-    const children = task.document
-      .split('\n')
-      .map(
-        (line) =>
-          new Paragraph({
-            text: line.replace(/^#{1,2} |^> |^- /, ''),
-            ...(line.startsWith('# ')
-              ? { heading: HeadingLevel.HEADING_1 }
-              : {}),
-            ...(line.startsWith('## ')
-              ? { heading: HeadingLevel.HEADING_2 }
-              : {})
-          })
-      )
+    const children = task.document.split('\n').map(
+      (line) =>
+        new Paragraph({
+          text: line.replace(/^#{1,2} |^> |^- /, ''),
+          ...(line.startsWith('# ') ? { heading: HeadingLevel.HEADING_1 } : {}),
+          ...(line.startsWith('## ') ? { heading: HeadingLevel.HEADING_2 } : {})
+        })
+    )
     blob = await Packer.toBlob(new Document({ sections: [{ children }] }))
   }
   const url = URL.createObjectURL(blob)
