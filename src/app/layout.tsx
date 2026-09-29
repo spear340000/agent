@@ -1,7 +1,5 @@
 import type { Metadata } from 'next'
 import { DM_Mono, Geist } from 'next/font/google'
-import { NuqsAdapter } from 'nuqs/adapters/next/app'
-import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
 const geistSans = Geist({
@@ -17,7 +15,7 @@ const dmMono = DM_Mono({
 
 export const metadata: Metadata = {
   title: 'Workroom',
-  description: '자료를 모으고 문서를 준비하는 작업 공간'
+  description: '자료를 모으고 문서 초안을 준비하는 작업 공간'
 }
 
 export default function RootLayout({
@@ -26,8 +24,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={`${geistSans.variable} ${dmMono.variable} antialiased`}>
-        <NuqsAdapter>{children}</NuqsAdapter>
-        <Toaster />
+        {children}
       </body>
     </html>
   )
