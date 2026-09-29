@@ -24,8 +24,12 @@ const SidebarHeader = () => (
         <Icon type="agno" size="xs" />
       </div>
       <div>
-        <span className="block text-sm font-semibold text-primary">Agent workspace</span>
-        <span className="block text-[10px] text-muted">Your AI control room</span>
+        <span className="block text-sm font-semibold text-primary">
+          Agent workspace
+        </span>
+        <span className="block text-[10px] text-muted">
+          Your AI control room
+        </span>
       </div>
     </div>
   </div>
@@ -50,7 +54,7 @@ const NewChatButton = ({
 )
 
 const ModelDisplay = ({ model }: { model: string }) => (
-    <div className="flex h-9 w-full items-center gap-3 rounded-xl border border-border bg-accent p-3 text-xs font-medium uppercase text-muted">
+  <div className="flex h-9 w-full items-center gap-3 rounded-xl border border-border bg-accent p-3 text-xs font-medium uppercase text-muted">
     {(() => {
       const icon = getProviderIcon(model)
       return icon ? <Icon type={icon} className="shrink-0" size="xs" /> : null
