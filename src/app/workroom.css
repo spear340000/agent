@@ -126,16 +126,6 @@
   color: #a35a35;
 }
 
-.workfolio-mock-banner {
-  border: 1px solid #d9c9a6;
-  border-radius: 6px;
-  background: #f5eddb;
-  padding: 3px 8px;
-  color: #705a2d;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
 .workfolio-header__context-toggle {
   display: none;
   align-items: center;

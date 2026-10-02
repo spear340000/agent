@@ -7,20 +7,18 @@ import {
   type Connection,
   type RuntimeCapabilities
 } from '@/api/workroom'
-import { getMockCapabilities } from '@/mocks/backend'
-import { MOCK_BACKEND_ENABLED } from '@/mocks/mode'
 
 const CONNECTION_KEY = 'workfolio-backend-v2'
 
 export default function useBackendConnection() {
   const [connection, setConnection] = useState<Connection>(defaultConnection)
-  const [ready, setReady] = useState(MOCK_BACKEND_ENABLED)
+  const [ready, setReady] = useState(false)
   const [revision, setRevision] = useState(0)
   const [status, setStatus] = useState<'checking' | 'online' | 'offline'>(
-    MOCK_BACKEND_ENABLED ? 'online' : 'checking'
+    'checking'
   )
   const [capabilities, setCapabilities] = useState<RuntimeCapabilities | null>(
-    MOCK_BACKEND_ENABLED ? getMockCapabilities() : null
+    null
   )
   const [error, setError] = useState('')
 
@@ -51,12 +49,6 @@ export default function useBackendConnection() {
 
   useEffect(() => {
     if (!ready) return
-    if (MOCK_BACKEND_ENABLED) {
-      setCapabilities(getMockCapabilities())
-      setStatus('online')
-      setError('')
-      return
-    }
     let disposed = false
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout>

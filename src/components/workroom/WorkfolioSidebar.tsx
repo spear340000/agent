@@ -37,7 +37,6 @@ export type WorkfolioSidebarProps = {
   onOpenTools: () => void
   connectionLabel: string
   backendStatus: 'checking' | 'online' | 'offline'
-  showConnectionSettings: boolean
   onOpenConnection: () => void
   onReconnect: () => void
   systemTopic: 'overview' | 'flow' | 'rag' | 'wiki' | 'ontology' | 'okf' | 'mcp'
@@ -76,7 +75,6 @@ export default function WorkfolioSidebar({
   onOpenTools,
   connectionLabel,
   backendStatus,
-  showConnectionSettings,
   onOpenConnection,
   onReconnect,
   systemTopic,
@@ -355,7 +353,7 @@ export default function WorkfolioSidebar({
             <span aria-hidden="true" />
             <span>{connectionLabel}</span>
           </div>
-          {!onThemeToggle && !showConnectionSettings ? null : (
+          {!onThemeToggle && backendStatus !== 'offline' ? null : (
             <div className="workfolio-sidebar__utility-actions">
               {onThemeToggle ? (
                 <button
@@ -375,7 +373,7 @@ export default function WorkfolioSidebar({
                   )}
                 </button>
               ) : null}
-              {showConnectionSettings && backendStatus === 'offline' ? (
+              {backendStatus === 'offline' ? (
                 <button
                   type="button"
                   aria-label="백엔드 다시 연결"
@@ -385,16 +383,14 @@ export default function WorkfolioSidebar({
                   <RefreshCw aria-hidden="true" size={16} />
                 </button>
               ) : null}
-              {showConnectionSettings ? (
-                <button
-                  type="button"
-                  aria-label="백엔드 연결 설정"
-                  title="백엔드 연결 설정"
-                  onClick={onOpenConnection}
-                >
-                  <Settings aria-hidden="true" size={16} />
-                </button>
-              ) : null}
+              <button
+                type="button"
+                aria-label="백엔드 연결 설정"
+                title="백엔드 연결 설정"
+                onClick={onOpenConnection}
+              >
+                <Settings aria-hidden="true" size={16} />
+              </button>
             </div>
           )}
         </div>

@@ -88,7 +88,7 @@ export function prepareFinalDocument(markdown: string, title: string): string {
   const cleaned = lines
     .filter((line, index) => {
       if (omittedLines.has(index)) return false
-      return !/목업 화면 확인용/u.test(line)
+      return true
     })
     .join('\n')
     .replace(/\n(?:[\t ]*\n){2,}/gu, '\n\n')

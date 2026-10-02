@@ -38,7 +38,6 @@ import SystemExplorer, { type SystemTopic } from './SystemExplorer'
 import { downloadDocument } from './Documents'
 import { applySavedDocument } from './documentSave'
 import { getDocumentOutline, prepareFinalDocument } from './documentModel'
-import { MOCK_BACKEND_ENABLED } from '@/mocks/mode'
 import {
   summarizeDocumentChanges,
   toTaskSummary,
@@ -126,7 +125,7 @@ export default function Workroom() {
   const uploadedFiles = useRef(new WeakMap<File, ManagedFile>())
   const currentConnection = useRef(connection)
   currentConnection.current = connection
-  const [loaded, setLoaded] = useState(MOCK_BACKEND_ENABLED)
+  const [loaded, setLoaded] = useState(false)
   const [notice, setNotice] = useState('')
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null)
   const [saveFailure, setSaveFailure] = useState<SaveFailure | null>(null)
@@ -451,11 +450,7 @@ export default function Workroom() {
           '백엔드가 연결되지 않았습니다. 서버 상태를 확인한 뒤 다시 시도해 주세요.'
         )
       }
-      if (
-        !MOCK_BACKEND_ENABLED &&
-        workflow === 'legal' &&
-        capabilities?.model.configured === false
-      ) {
+      if (workflow === 'legal' && capabilities?.model.configured === false) {
         throw new Error(
           '모델 제공자 API 키가 설정되지 않아 작업을 시작할 수 없습니다.'
         )
@@ -480,11 +475,7 @@ export default function Workroom() {
         ...current
       ])
       openTask(created.task.id)
-      setNotice(
-        MOCK_BACKEND_ENABLED
-          ? '목업 작업을 만들었습니다. 실제 분석은 실행되지 않습니다.'
-          : '작업 요청을 백엔드에 전달했습니다.'
-      )
+      setNotice('작업 요청을 백엔드에 전달했습니다.')
       void refreshTask(created.task.id)
       return true
     } catch (error) {
@@ -620,11 +611,7 @@ export default function Workroom() {
           task.id === id ? applySavedDocument(task, artifact, document) : task
         )
       )
-      setNotice(
-        MOCK_BACKEND_ENABLED
-          ? '문서를 이 브라우저의 목업 저장소에 저장했습니다.'
-          : '문서 버전을 백엔드에 저장했습니다.'
-      )
+      setNotice('문서 버전을 백엔드에 저장했습니다.')
     } catch (error) {
       setSaveFailure({
         taskId: id,
@@ -644,7 +631,7 @@ export default function Workroom() {
         documentHeading || active.title
       )
       const finalTask = { ...active, document: finalDocument }
-      if (format === 'docx' && !MOCK_BACKEND_ENABLED && backendStatus === 'online') {
+      if (format === 'docx' && backendStatus === 'online') {
         const { file } = await officeApi.markdown(connection, {
           outputName: active.title,
           markdown: finalDocument
@@ -679,9 +666,8 @@ export default function Workroom() {
     )
   }
 
-  const connectionLabel = MOCK_BACKEND_ENABLED
-    ? '목업 모드'
-    : backendStatus === 'checking'
+  const connectionLabel =
+    backendStatus === 'checking'
       ? '백엔드 확인 중'
       : backendStatus === 'online'
         ? '백엔드 연결됨'
@@ -721,8 +707,7 @@ export default function Workroom() {
         >
           <span aria-hidden="true" />
           <span>{connectionLabel}</span>
-          {!MOCK_BACKEND_ENABLED &&
-          backendStatus === 'online' &&
+          {backendStatus === 'online' &&
           capabilities?.model.configured === false ? (
             <span className="workfolio-header__model-warning">
               · 모델 제공자 설정 필요
@@ -745,16 +730,7 @@ export default function Workroom() {
             <Moon aria-hidden="true" size={17} />
           )}
         </button>
-        {MOCK_BACKEND_ENABLED ? (
-          <span
-            className="workfolio-mock-banner"
-            role="status"
-            title="화면 확인용 목업입니다. 실제 AI·법령 검색·웹 검색·파일 처리·브라우저/컴퓨터 제어는 실행되지 않습니다."
-          >
-            목업 결과
-          </span>
-        ) : null}
-        {!MOCK_BACKEND_ENABLED && backendStatus === 'offline' && (
+        {backendStatus === 'offline' && (
           <button
             className="workfolio-header__action"
             type="button"
@@ -764,16 +740,14 @@ export default function Workroom() {
             <RefreshCw size={16} />
           </button>
         )}
-        {!MOCK_BACKEND_ENABLED ? (
-          <button
-            className="workfolio-header__action"
-            type="button"
-            aria-label="백엔드 연결 설정"
-            onClick={() => setConnectionOpen(true)}
-          >
-            <Settings size={17} />
-          </button>
-        ) : null}
+        <button
+          className="workfolio-header__action"
+          type="button"
+          aria-label="백엔드 연결 설정"
+          onClick={() => setConnectionOpen(true)}
+        >
+          <Settings size={17} />
+        </button>
         {active ? (
           <button
             className="workfolio-header__context-toggle"
@@ -809,7 +783,6 @@ export default function Workroom() {
           }}
           connectionLabel={connectionLabel}
           backendStatus={backendStatus}
-          showConnectionSettings={!MOCK_BACKEND_ENABLED}
           onOpenConnection={() => setConnectionOpen(true)}
           onReconnect={reconnect}
           systemTopic={systemTopic}
@@ -909,18 +882,16 @@ export default function Workroom() {
                 <span>한국 법률 정보</span>
                 <h1 id="workfolio-start-title">무엇을 물어보시겠어요?</h1>
                 <p>
-                  {MOCK_BACKEND_ENABLED
-                    ? '요청 입력과 작업 화면을 확인할 수 있습니다. 목업 결과는 예시이며 실제 법률 답변이나 문서를 생성하지 않습니다.'
-                    : '질문과 참고 자료를 보내면 로컬 법령·판례 저장소를 찾아 인용과 함께 답변하고, 필요한 경우 법률 문서 초안까지 작성합니다.'}
+                  질문과 참고 자료를 보내면 로컬 법령·판례 저장소를 찾아 인용과
+                  함께 답변하고, 필요한 경우 법률 문서 초안까지 작성합니다.
                 </p>
               </div>
-              {!loaded && !MOCK_BACKEND_ENABLED ? (
+              {!loaded ? (
                 <p className="workfolio-start__status" role="status">
                   백엔드와 작업 목록을 확인하고 있습니다.
                 </p>
               ) : null}
               {loaded &&
-              !MOCK_BACKEND_ENABLED &&
               backendStatus === 'offline' ? (
                 <p className="workfolio-start__warning" role="alert">
                   {connectionError || '백엔드에 연결되지 않았습니다.'} 자동으로
@@ -928,14 +899,12 @@ export default function Workroom() {
                 </p>
               ) : null}
               {loaded &&
-              !MOCK_BACKEND_ENABLED &&
               capabilities?.model.configured === false ? (
                 <p className="workfolio-start__warning" role="status">
                   백엔드는 연결됐지만 모델 제공자 API 키가 설정되지 않았습니다.
                 </p>
               ) : null}
               {loaded &&
-              !MOCK_BACKEND_ENABLED &&
               capabilities?.legalRetrieval &&
               capabilities.legalRetrieval.state === 'unavailable' ? (
                 <p className="workfolio-start__warning" role="status">
@@ -944,7 +913,6 @@ export default function Workroom() {
                 </p>
               ) : null}
               {loaded &&
-              !MOCK_BACKEND_ENABLED &&
               capabilities?.legalRetrieval &&
               capabilities.legalRetrieval.state === 'degraded' ? (
                 <p className="workfolio-start__warning" role="status">
@@ -952,9 +920,9 @@ export default function Workroom() {
                 </p>
               ) : null}
               <p className="workfolio-start__privacy">
-                {MOCK_BACKEND_ENABLED
-                  ? '목업 모드에서는 입력을 외부로 보내지 않습니다. 첨부 자료와 검색은 화면 예시로만 처리합니다.'
-                  : '질문 내용과 검색된 조문·판례 일부가 모델 제공자에게 전송됩니다. 법령 검색은 이 컴퓨터 안에서만 실행되며, 첨부한 자료는 이 작업의 근거로만 사용되고 법령 저장소에 등록되지 않습니다.'}
+                질문 내용과 검색된 조문·판례 일부가 모델 제공자에게 전송됩니다.
+                법령 검색은 이 컴퓨터 안에서만 실행되며, 첨부한 자료는 이 작업의
+                근거로만 사용되고 법령 저장소에 등록되지 않습니다.
               </p>
               <Composer
                 onSubmit={startTask}

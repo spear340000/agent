@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react'
 import { officeApi } from '@/api/automation'
-import { MOCK_BACKEND_ENABLED } from '@/mocks/mode'
 import { ToolButton, type ToolProps } from './ToolFields'
 
 export default function ComputerTools({
@@ -38,9 +37,8 @@ export default function ComputerTools({
     >
       <h2>네이티브 컴퓨터 제어</h2>
       <p>
-        {MOCK_BACKEND_ENABLED
-          ? '목업 모드에서는 실제 컴퓨터 화면을 캡처하거나 클릭·입력하지 않습니다.'
-          : '백엔드가 실행 중인 Windows의 기본 화면을 제어합니다. 클릭·입력은 백엔드 터미널에서 한 번 더 승인해야 실행됩니다.'}
+        백엔드가 실행 중인 Windows의 기본 화면을 제어합니다. 클릭·입력은 백엔드
+        터미널에서 한 번 더 승인해야 실행됩니다.
       </p>
       {!available && (
         <p className="workfolio-tool-error" role="status">
