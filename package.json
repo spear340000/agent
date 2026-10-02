@@ -1,0 +1,36 @@
+{
+  "name": "workfolio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx backend/src/server.ts",
+    "start": "node dist/backend/server.js",
+    "build": "tsc -p backend/tsconfig.build.json",
+    "test": "npm run test:backend",
+    "typecheck": "tsc -p backend/tsconfig.json --noEmit",
+    "backend": "tsx backend/src/server.ts",
+    "searxng:up": "tsx backend/src/cli/searxng-container.ts up",
+    "searxng:down": "tsx backend/src/cli/searxng-container.ts down",
+    "searxng:status": "tsx backend/src/cli/searxng-container.ts status",
+    "auth:token": "tsx backend/src/cli/generate-api-token.ts",
+    "check": "tsc -p backend/tsconfig.json --noEmit",
+    "test:backend": "tsx backend/tests/bootstrap.ts"
+  },
+  "dependencies": {
+    "diff": "^9.0.0",
+    "docx": "^9.7.1",
+    "docxtemplater": "^3.71.0",
+    "exceljs": "^4.4.0",
+    "mammoth": "^1.12.3",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
+    "pizzip": "^3.3.0",
+    "playwright-core": "^1.63.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}
