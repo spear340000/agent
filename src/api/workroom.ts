@@ -1,3 +1,6 @@
+import { downloadMockFile, mockRequest } from '@/mocks/backend'
+import { MOCK_BACKEND_ENABLED } from '@/mocks/mode'
+
 export const DEFAULT_BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL?.trim() || 'http://127.0.0.1:8787'
 export const MAX_SOURCE_FILE_BYTES = 10 * 1024 * 1024
@@ -137,7 +140,11 @@ export function searchLegalLibrary(
   query: string,
   corpus: 'law' | 'precedent' | 'graph' | 'all',
   connection: Connection = defaultConnection,
-  limit = corpus === 'law' || corpus === 'all' ? 20 : corpus === 'graph' ? 30 : 10,
+  limit = corpus === 'law' || corpus === 'all'
+    ? 20
+    : corpus === 'graph'
+      ? 30
+      : 10,
   fetcher: Fetcher = fetch
 ): Promise<{
   query: string
@@ -305,12 +312,14 @@ export async function request<T>(
     ? AbortSignal.any([options.signal, timeout])
     : timeout
   try {
-    response = await fetcher(backendUrl(connection, path), {
-      ...options,
-      headers,
-      cache: 'no-store',
-      signal
-    })
+    response = MOCK_BACKEND_ENABLED
+      ? await mockRequest(path, { ...options, headers, signal })
+      : await fetcher(backendUrl(connection, path), {
+          ...options,
+          headers,
+          cache: 'no-store',
+          signal
+        })
   } catch (error) {
     if (options.signal?.aborted) throw error
     throw new ApiError(
@@ -537,6 +546,7 @@ export async function downloadFile(
   connection: Connection = defaultConnection,
   fetcher: Fetcher = fetch
 ): Promise<void> {
+  if (MOCK_BACKEND_ENABLED) return downloadMockFile(id, name)
   let response: Response
   try {
     response = await fetcher(
@@ -571,6 +581,27 @@ export async function watchTask(
   fetcher: Fetcher = fetch,
   options: { retryDelayMs?: number; maxRetries?: number } = {}
 ): Promise<void> {
+  if (MOCK_BACKEND_ENABLED) {
+    while (!signal.aborted) {
+      const details = await getTaskDetails(id, connection, fetcher, signal)
+      if (signal.aborted) return
+      onUpdate(details)
+      if (['completed', 'failed', 'cancelled'].includes(details.task.status))
+        return
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, options.retryDelayMs ?? 500)
+        signal.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(timer)
+            resolve()
+          },
+          { once: true }
+        )
+      })
+    }
+    return
+  }
   let lastId = 0
   let attempts = 0
   const refresh = async () => {

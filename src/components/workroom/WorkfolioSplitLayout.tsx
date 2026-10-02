@@ -86,7 +86,7 @@ export default function WorkfolioSplitLayout({
     }
     const nextWidth = resizeContextPaneWidth(
       start.width,
-      event.clientX - start.x
+      start.x - event.clientX
     )
     pendingWidth.current = nextWidth
     layoutRef.current?.style.setProperty('--wf-context-width', `${nextWidth}px`)
@@ -96,8 +96,8 @@ export default function WorkfolioSplitLayout({
     const adjustment = event.shiftKey ? 25 : 10
     let nextWidth: number | null = null
 
-    if (event.key === 'ArrowLeft') nextWidth = contextWidth - adjustment
-    else if (event.key === 'ArrowRight') nextWidth = contextWidth + adjustment
+    if (event.key === 'ArrowLeft') nextWidth = contextWidth + adjustment
+    else if (event.key === 'ArrowRight') nextWidth = contextWidth - adjustment
     else if (event.key === 'Home') nextWidth = MIN_CONTEXT_PANE_WIDTH
     else if (event.key === 'End') nextWidth = MAX_CONTEXT_PANE_WIDTH
 
@@ -120,16 +120,16 @@ export default function WorkfolioSplitLayout({
         { '--wf-context-width': `${contextWidth}px` } as React.CSSProperties
       }
     >
-      {context}
+      {workArea}
       <div
         className="workfolio-splitter"
         role="separator"
-        aria-label="대화 영역 너비 조절"
+        aria-label="작업 정보 패널 너비 조절"
         aria-orientation="vertical"
         aria-valuemin={MIN_CONTEXT_PANE_WIDTH}
         aria-valuemax={MAX_CONTEXT_PANE_WIDTH}
         aria-valuenow={contextWidth}
-        title="드래그하거나 화살표 키로 대화 영역 너비 조절"
+        title="드래그하거나 화살표 키로 작업 정보 패널 너비 조절"
         tabIndex={0}
         onKeyDown={handleKeyDown}
         onPointerDown={handlePointerDown}
@@ -138,7 +138,7 @@ export default function WorkfolioSplitLayout({
         onPointerCancel={finishResize}
         onLostPointerCapture={finishResize}
       />
-      {workArea}
+      {context}
     </div>
   )
 }

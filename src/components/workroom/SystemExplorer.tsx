@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
   Activity,
+  ArrowRight,
   BookOpen,
   Boxes,
   Braces,
@@ -25,7 +26,7 @@ import {
   type LegalMcpTool,
   type RuntimeCapabilities
 } from '@/api/workroom'
-import type { Task } from './types'
+import { legalIntentLabels, stageMeta, type Task } from './types'
 
 type Props = {
   capabilities: RuntimeCapabilities | null
@@ -173,58 +174,277 @@ function LegalGraphCanvas({
   )
 }
 
-function FlowNode({ title, detail, status, kind = 'step' }: {
+function FlowNode({
+  title,
+  detail,
+  status,
+  kind = 'step',
+  listItem = true
+}: {
   title: string
   detail: string
   status: string
   kind?: 'start' | 'planner' | 'tool' | 'step' | 'result'
+  listItem?: boolean
 }) {
   return (
-    <article className={`system-flow__node system-flow__node--${kind} system-flow__node--${status}`} role="listitem">
-      <span className="system-flow__node-kind">{kind === 'start' ? '입력' : kind === 'planner' ? '플래너' : kind === 'tool' ? '검색 도구' : kind === 'result' ? '결과' : '실행 단계'}</span>
+    <article
+      className={`system-flow__node system-flow__node--${kind} system-flow__node--${status}`}
+      role={listItem ? 'listitem' : undefined}
+    >
+      <span className="system-flow__node-kind">
+        {kind === 'start'
+          ? '입력'
+          : kind === 'planner'
+            ? '플래너'
+            : kind === 'tool'
+              ? '검색 도구'
+              : kind === 'result'
+                ? '결과'
+                : '실행 단계'}
+      </span>
       <strong>{title}</strong>
       <small>{detail}</small>
     </article>
   )
 }
 
-function FlowLink() {
-  return <span className="system-flow__link" aria-hidden="true"><i /></span>
+function stepState(step: Task['steps'][number]): string {
+  return step.status === 'completed'
+    ? 'complete'
+    : step.status === 'running'
+      ? 'active'
+      : step.status === 'failed'
+        ? 'failed'
+        : step.status === 'cancelled'
+          ? 'cancelled'
+          : 'waiting'
 }
 
-function stepState(step: Task['steps'][number]): string {
-  return step.status === 'completed' ? 'complete' : step.status === 'running' ? 'active' : step.status === 'failed' ? 'failed' : 'waiting'
+function stepDetail(step: Task['steps'][number]): string {
+  if (step.error) return step.error
+  if (step.status === 'completed') return `완료 · ${step.progress}%`
+  if (step.status === 'running') return `진행 중 · ${step.progress}%`
+  if (step.status === 'failed') return '실패'
+  if (step.status === 'cancelled') return '취소됨'
+  return '대기 중'
 }
 
 function WorkflowCanvas({ task }: { task: Task }) {
   const tools = task.legal?.sourceStatus.ledger?.tools ?? []
-  const planningSteps = task.steps.filter(step => /plan|계획|요청 정리/iu.test(step.title))
-  const collectionSteps = task.steps.filter(step => /collect|수집|검색/iu.test(step.title) && !planningSteps.includes(step))
-  const otherSteps = task.steps.filter(step => !planningSteps.includes(step) && !collectionSteps.includes(step))
+  const planningSteps = task.steps.filter((step) =>
+    /plan|계획|요청 정리/iu.test(step.title)
+  )
+  const collectionSteps = task.steps.filter(
+    (step) =>
+      /collect|수집|검색|자료 확인|첨부.*확인/iu.test(step.title) &&
+      !planningSteps.includes(step)
+  )
+  const otherSteps = task.steps.filter(
+    (step) =>
+      !planningSteps.includes(step) && !collectionSteps.includes(step)
+  )
   const citations = task.legal?.citations ?? []
+  const taskLabel =
+    task.state === 'completed'
+      ? '완료'
+      : task.state === 'failed'
+        ? '실패'
+        : task.state === 'cancelled'
+          ? '취소됨'
+          : task.state === 'paused'
+            ? '일시정지'
+            : task.state === 'queued'
+              ? '대기 중'
+              : stageMeta[task.stage].label
+  const completedSteps = task.steps.filter(
+    (step) => step.status === 'completed'
+  ).length
+  const intent = task.legal
+    ? (legalIntentLabels[task.legal.intent] ?? '법률 답변')
+    : '문서 작업'
+  const resultStatus =
+    task.state === 'completed'
+      ? 'complete'
+      : task.state === 'failed' || task.state === 'cancelled'
+        ? 'failed'
+        : task.state === 'queued' || task.state === 'paused'
+          ? 'waiting'
+          : 'active'
+  const flowItems: (
+    | {
+        key: string
+        type: 'node'
+        node: {
+          title: string
+          detail: string
+          status: string
+          kind?: 'start' | 'planner' | 'step' | 'result'
+        }
+      }
+    | { key: string; type: 'tools' }
+  )[] = [
+    {
+      key: 'request',
+      type: 'node',
+      node: {
+        kind: 'start',
+        title: intent,
+        detail: `${task.sources.length}개 참고 자료 · ${task.sources.filter((source) => source.kind === 'file').length}개 파일 · ${task.sources.filter((source) => source.kind === 'link').length}개 링크`,
+        status: 'complete'
+      }
+    },
+    ...planningSteps.map((step) => ({
+      key: step.id,
+      type: 'node' as const,
+      node: {
+        title: step.title,
+        detail: stepDetail(step),
+        status: stepState(step)
+      }
+    })),
+    ...(task.legal?.plannerCalls
+      ? [
+          {
+            key: 'planner',
+            type: 'node' as const,
+            node: {
+              kind: 'planner' as const,
+              title: '조사 계획 수립',
+              detail: `복합 조사 경로 · 플래너 ${task.legal.plannerCalls}회 호출`,
+              status: 'complete'
+            }
+          }
+        ]
+      : []),
+    ...collectionSteps.map((step) => ({
+      key: step.id,
+      type: 'node' as const,
+      node: {
+        title: step.title,
+        detail: stepDetail(step),
+        status: stepState(step)
+      }
+    })),
+    ...(tools.length ? [{ key: 'tools', type: 'tools' as const }] : []),
+    ...otherSteps.map((step) => ({
+      key: step.id,
+      type: 'node' as const,
+      node: {
+        title: step.title,
+        detail: stepDetail(step),
+        status: stepState(step)
+      }
+    })),
+    {
+      key: 'result',
+      type: 'node',
+      node: {
+        kind: 'result',
+        title:
+          citations.length > 0
+            ? '근거 포함 결과'
+            : task.state === 'failed'
+              ? '작업 실패'
+              : '결과 문서',
+        detail: `${citations.length}건 인용 · ${taskLabel}`,
+        status: resultStatus
+      }
+    }
+  ]
+
   return (
     <div className="system-flow" aria-label="실행 워크플로 그래프">
-      <div className="system-flow__canvas" role="list">
-        <FlowNode kind="start" title="사용자 요청" detail={`${task.sources.length}개 입력 자료 · ${task.request}`} status="complete" />
-        {planningSteps.map(step => <React.Fragment key={step.id}><FlowLink /><FlowNode title={step.title} detail={step.error || `${step.progress}%`} status={stepState(step)} /></React.Fragment>)}
-        {task.legal?.plannerCalls ? <><FlowLink /><FlowNode kind="planner" title="조사 계획 수립" detail={`복합 조사 경로 · 플래너 ${task.legal.plannerCalls}회 호출`} status="complete" /></> : null}
-        {!tools.length ? collectionSteps.map(step => <React.Fragment key={step.id}><FlowLink /><FlowNode title={step.title} detail={step.error || `${step.progress}%`} status={stepState(step)} /></React.Fragment>) : null}
-        {tools.length ? collectionSteps.map(step => <React.Fragment key={step.id}><FlowLink /><FlowNode title={step.title} detail={step.error || `${step.progress}%`} status={stepState(step)} /></React.Fragment>) : null}
-        {tools.length ? <>
-          <FlowLink />
-          <section className="system-flow__group" role="listitem" aria-label="실제 검색 도구 호출">
-            <header><strong>RAG 검색 실행</strong><small>{tools.length}회 · 호출 순서</small></header>
-            <div className="system-flow__tool-list" role="list">
-              {tools.map((tool, index) => <FlowNode key={`${tool.tool}:${index}`} kind="tool" title={tool.label} detail={`${tool.query ? `질의: ${tool.query} · ` : ''}결과 ${tool.results}건`} status={tool.results > 0 ? 'complete' : 'empty'} />)}
-            </div>
-          </section>
-        </> : null}
-        {otherSteps.map(step => <React.Fragment key={step.id}><FlowLink /><FlowNode title={step.title} detail={step.error || `${step.progress}%`} status={stepState(step)} /></React.Fragment>)}
-        <FlowLink />
-        <FlowNode kind="result" title={citations.length ? '근거 포함 결과' : task.state === 'failed' ? '작업 실패' : '결과 문서'} detail={`${citations.length}개 인용 · 작업 ${task.state}`} status={task.state === 'failed' ? 'failed' : task.state === 'completed' ? 'complete' : 'active'} />
+      <div className="system-flow__summary" aria-label="실행 현황">
+        <div>
+          <span>현재 상태</span>
+          <strong>{taskLabel}</strong>
+        </div>
+        <div>
+          <span>실행 단계</span>
+          <strong>
+            {task.steps.length
+              ? `${completedSteps}/${task.steps.length} 완료`
+              : task.state === 'completed'
+                ? '단계 기록 없음'
+                : '단계 기록 대기'}
+          </strong>
+        </div>
+        <div>
+          <span>검색 도구</span>
+          <strong>
+            {task.legal?.sourceStatus.ledger?.toolCalls ??
+              task.legal?.toolCalls ??
+              tools.length}
+            회
+          </strong>
+        </div>
+        <div>
+          <span>인용 근거</span>
+          <strong>{citations.length}건</strong>
+        </div>
       </div>
-      {!task.legal?.sourceStatus.ledger && task.steps.length > 0 ? <p className="system-explorer__note">이 작업에는 RAG 도구 호출 원장이 저장되지 않아 백엔드 실행 단계만 표시합니다. 호출 노드는 추정해서 만들지 않았습니다.</p> : null}
-      {!task.steps.length && !tools.length ? <p className="system-explorer__note">이 작업은 실행 단계 기록이 없습니다. 저장된 실행 기록이 생기면 그래프에 표시됩니다.</p> : null}
+      <div className="system-flow__canvas" role="list">
+        {flowItems.map((item, index) => {
+          const itemNumber = index + 1
+          const hasNext = index < flowItems.length - 1
+          return (
+            <div
+              className="system-flow__item"
+              key={item.key}
+              role="listitem"
+              data-has-next={hasNext || undefined}
+              data-row-end-three={itemNumber % 3 === 0 || undefined}
+              data-row-end-two={itemNumber % 2 === 0 || undefined}
+            >
+              {item.type === 'node' ? (
+                <FlowNode {...item.node} listItem={false} />
+              ) : (
+                <section
+                  className="system-flow__group"
+                  aria-label="실제 검색 도구 호출"
+                >
+                  <header>
+                    <strong>실제 RAG 검색</strong>
+                    <small>{tools.length}회 · 호출 순서</small>
+                  </header>
+                  <div className="system-flow__tool-list" role="list">
+                    {tools.map((tool, toolIndex) => (
+                      <FlowNode
+                        key={`${tool.tool}:${toolIndex}`}
+                        kind="tool"
+                        title={tool.label}
+                        detail={`${tool.query ? `질의: ${tool.query} · ` : ''}결과 ${tool.results}건`}
+                        status={tool.results > 0 ? 'complete' : 'empty'}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+              {hasNext ? (
+                <ArrowRight
+                  className="system-flow__connector"
+                  aria-hidden="true"
+                  size={18}
+                  strokeWidth={2.4}
+                />
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
+      {!task.legal?.sourceStatus.ledger && task.steps.length > 0 ? (
+        <p className="system-explorer__note">
+          이 작업에는 검색 도구 호출 기록이 저장되지 않아 백엔드 실행 단계만
+          표시합니다.
+        </p>
+      ) : null}
+      {!task.steps.length && !tools.length ? (
+        <p className="system-explorer__note">
+          이 작업에는 실행 단계 기록이 없습니다. 백엔드에서 단계 기록을 받으면
+          이곳에 표시합니다.
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -711,7 +931,7 @@ export default function SystemExplorer({
                   <strong>{label}</strong>
                   <small>
                     {id === 'flow'
-                      ? '요청 분기와 조건부 계획·실행 경로'
+                      ? '실행 단계·플래너·검색 도구 호출 기록'
                       : id === 'rag'
                         ? '법령·판례 검색 계층과 실행 상태'
                         : id === 'wiki'
@@ -733,7 +953,8 @@ export default function SystemExplorer({
         <div className="system-explorer__content" id="system-flow">
           <h2>에이전틱 플로우</h2>
           <p className="system-explorer__lead">
-            저장된 작업에서 실제 실행 단계와 플래너 사용 여부를 확인합니다.
+            요청부터 자료 검색, 분석, 문서 결과까지 저장된 실행 단계와 실제
+            도구 호출을 한눈에 확인합니다.
           </p>
           {tasks.length ? (
             <label className="system-explorer__task-select">

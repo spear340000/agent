@@ -2,7 +2,12 @@ import React from 'react'
 
 export type MarkdownListItem = { text: string; level: number }
 export type MarkdownBlock =
-  | { kind: 'heading'; level: 1 | 2 | 3 | 4; text: string }
+  | {
+      kind: 'heading'
+      level: 1 | 2 | 3 | 4 | 5 | 6
+      text: string
+      line: number
+    }
   | { kind: 'paragraph'; text: string }
   | { kind: 'table'; rows: string[][] }
   | { kind: 'quote'; text: string }
@@ -10,7 +15,7 @@ export type MarkdownBlock =
   | { kind: 'code'; language: string; text: string }
   | { kind: 'rule' }
 
-const HEADING = /^ {0,3}(#{1,4})[ \t]+(.+?)[ \t]*#*[ \t]*$/
+const HEADING = /^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/
 const UNORDERED = /^( {0,3})([-*+])[ \t]+(.+)$/
 const ORDERED = /^( {0,3})(\d{1,9})[.)][ \t]+(.+)$/
 const QUOTE = /^ {0,3}>[ \t]?(.*)$/
@@ -61,7 +66,8 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
   }
   const flushList = (): void => {
     if (!list) return
-    if (list.items.length > 0) blocks.push({ kind: 'list', ordered: list.ordered, items: list.items })
+    if (list.items.length > 0)
+      blocks.push({ kind: 'list', ordered: list.ordered, items: list.items })
     list = null
   }
   const flushAll = (): void => {
@@ -80,13 +86,19 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
       index += 1
       while (index < lines.length) {
         const current = lines[index]!
-        const closing = new RegExp(`^ {0,3}${marker[0] === '`' ? '`' : '~'}{${marker.length},}[ \\t]*$`)
+        const closing = new RegExp(
+          `^ {0,3}${marker[0] === '`' ? '`' : '~'}{${marker.length},}[ \\t]*$`
+        )
         if (closing.test(current)) break
         body.push(current)
         index += 1
       }
       index += 1
-      blocks.push({ kind: 'code', language: fence[2] ?? '', text: body.join('\n') })
+      blocks.push({
+        kind: 'code',
+        language: fence[2] ?? '',
+        text: body.join('\n')
+      })
       continue
     }
     if (line.trim() === '') {
@@ -103,13 +115,26 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
     if (index + 1 < lines.length && line.includes('|')) {
       const headers = tableCells(line)
       const separators = tableCells(lines[index + 1]!)
-      if (headers.length > 0 && separators.length === headers.length && separators.every(cell => /^:?-{3,}:?$/.test(cell))) {
+      if (
+        headers.length > 0 &&
+        separators.length === headers.length &&
+        separators.every((cell) => /^:?-{3,}:?$/.test(cell))
+      ) {
         flushAll()
         const rows = [headers]
         index += 2
-        while (index < lines.length && lines[index]!.trim() !== '' && lines[index]!.includes('|')) {
+        while (
+          index < lines.length &&
+          lines[index]!.trim() !== '' &&
+          lines[index]!.includes('|')
+        ) {
           const cells = tableCells(lines[index]!)
-          rows.push(Array.from({ length: headers.length }, (_, column) => cells[column] ?? ''))
+          rows.push(
+            Array.from(
+              { length: headers.length },
+              (_, column) => cells[column] ?? ''
+            )
+          )
           index += 1
         }
         blocks.push({ kind: 'table', rows })
@@ -121,8 +146,9 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
       flushAll()
       blocks.push({
         kind: 'heading',
-        level: Math.min(heading[1]!.length, 4) as 1 | 2 | 3 | 4,
-        text: heading[2]!.trim()
+        level: heading[1]!.length as 1 | 2 | 3 | 4 | 5 | 6,
+        text: heading[2]!.trim(),
+        line: index + 1
       })
       index += 1
       continue
@@ -145,7 +171,10 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
         flushList()
         list = { ordered: orderedItem, items: [] }
       }
-      const indent = (unordered?.[1] ?? ordered?.[1] ?? '').replace(/\t/g, '  ').length
+      const indent = (unordered?.[1] ?? ordered?.[1] ?? '').replace(
+        /\t/g,
+        '  '
+      ).length
       list.items.push({
         text: (unordered?.[3] ?? ordered?.[3] ?? '').trim(),
         level: Math.min(Math.floor(indent / 2), 2)
@@ -176,7 +205,10 @@ const INLINE = new RegExp(
 
 const SAFE_URL = /^https?:\/\/[^\s"'<>]+$/i
 
-export function renderInlineMarkdown(text: string, keyPrefix: string): React.ReactNode[] {
+export function renderInlineMarkdown(
+  text: string,
+  keyPrefix: string
+): React.ReactNode[] {
   const nodes: React.ReactNode[] = []
   let cursor = 0
   let index = 0
@@ -212,7 +244,9 @@ export function renderInlineMarkdown(text: string, keyPrefix: string): React.Rea
         </a>
       )
     } else if (match[6] !== undefined) {
-      nodes.push(<strong key={key}>{renderInlineMarkdown(match[7] ?? '', key)}</strong>)
+      nodes.push(
+        <strong key={key}>{renderInlineMarkdown(match[7] ?? '', key)}</strong>
+      )
     } else if (match[8] !== undefined) {
       nodes.push(<em key={key}>{match[8]}</em>)
     } else if (CITATION.test(match[0]!)) {

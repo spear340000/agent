@@ -29,17 +29,40 @@ function ListItems({
   )
 }
 
-export default function MarkdownView({ value }: { value: string }) {
+export default function MarkdownView({
+  value,
+  highlightedHeadingLine = null,
+  onContentClick
+}: {
+  value: string
+  highlightedHeadingLine?: number | null
+  onContentClick?: () => void
+}) {
   const blocks = useMemo(() => parseMarkdownBlocks(value), [value])
   return (
-    <div className="markdown-view">
+    <div className="markdown-view" onClick={onContentClick}>
       {blocks.map((block, index) => {
         const key = `md-${index}`
         switch (block.kind) {
           case 'heading': {
-            const Tag = `h${block.level}` as 'h1' | 'h2' | 'h3' | 'h4'
+            const Tag = `h${block.level}` as
+              | 'h1'
+              | 'h2'
+              | 'h3'
+              | 'h4'
+              | 'h5'
+              | 'h6'
             return (
-              <Tag key={key} data-level={block.level}>
+              <Tag
+                key={key}
+                id={`md-heading-${block.line}`}
+                className={
+                  block.line === highlightedHeadingLine
+                    ? 'markdown-view__heading-highlight'
+                    : undefined
+                }
+                data-level={block.level}
+              >
                 {renderInlineMarkdown(block.text, key)}
               </Tag>
             )
@@ -69,7 +92,13 @@ export default function MarkdownView({ value }: { value: string }) {
             return <hr key={key} />
           case 'table':
             return (
-              <div className="md-table-wrap" key={key} role="region" aria-label="문서 표" tabIndex={0}>
+              <div
+                className="md-table-wrap"
+                key={key}
+                role="region"
+                aria-label="문서 표"
+                tabIndex={0}
+              >
                 <table>
                   <thead>
                     <tr>
@@ -85,7 +114,10 @@ export default function MarkdownView({ value }: { value: string }) {
                       <tr key={`${key}-row-${rowIndex}`}>
                         {row.map((cell, column) => (
                           <td key={`${key}-cell-${rowIndex}-${column}`}>
-                            {renderInlineMarkdown(cell, `${key}-cell-${rowIndex}-${column}`)}
+                            {renderInlineMarkdown(
+                              cell,
+                              `${key}-cell-${rowIndex}-${column}`
+                            )}
                           </td>
                         ))}
                       </tr>
@@ -95,9 +127,7 @@ export default function MarkdownView({ value }: { value: string }) {
               </div>
             )
           default:
-            return (
-              <p key={key}>{renderInlineMarkdown(block.text, key)}</p>
-            )
+            return <p key={key}>{renderInlineMarkdown(block.text, key)}</p>
         }
       })}
     </div>

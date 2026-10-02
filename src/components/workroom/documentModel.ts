@@ -66,6 +66,43 @@ export function getDocumentOutline(markdown: string): DocumentHeading[] {
   return headings
 }
 
+const NON_DOCUMENT_SECTIONS = /^(?:요청|요청 내용|사용자 요청|초안 구조(?: 예시)?|문서 구조(?: 예시)?|구성 예시)$/iu
+
+export function prepareFinalDocument(markdown: string, title: string): string {
+  const lines = markdown.split(/\r\n|\n|\r/u)
+  const headings = getDocumentOutline(markdown)
+  const omittedLines = new Set<number>()
+
+  headings.forEach((heading, index) => {
+    if (!NON_DOCUMENT_SECTIONS.test(heading.title.trim())) return
+    const nextSection = headings
+      .slice(index + 1)
+      .find((candidate) => candidate.level <= heading.level)
+    const firstLine = heading.line - 1
+    const afterLastLine = nextSection ? nextSection.line - 1 : lines.length
+    for (let line = firstLine; line < afterLastLine; line += 1) {
+      omittedLines.add(line)
+    }
+  })
+
+  const cleaned = lines
+    .filter((line, index) => {
+      if (omittedLines.has(index)) return false
+      return !/목업 화면 확인용/u.test(line)
+    })
+    .join('\n')
+    .replace(/\n(?:[\t ]*\n){2,}/gu, '\n\n')
+    .trim()
+  if (!cleaned) return `# ${title.trim()}`
+
+  const hasTitleHeading = getDocumentOutline(cleaned).some(
+    (heading) => heading.level === 1
+  )
+  return hasTitleHeading || !title.trim()
+    ? cleaned
+    : `# ${title.trim()}\n\n${cleaned}`
+}
+
 function clampOffset(markdown: string, offset: number): number {
   if (!Number.isFinite(offset)) return 0
   return Math.max(0, Math.min(markdown.length, Math.trunc(offset)))

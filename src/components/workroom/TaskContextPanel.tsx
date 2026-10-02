@@ -1,8 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { AlertCircle, Check, FileText, LoaderCircle, Play, X } from 'lucide-react'
+import {
+  AlertCircle,
+  Check,
+  ChevronDown,
+  FileText,
+  LoaderCircle,
+  Play,
+  X
+} from 'lucide-react'
 import Composer from './Composer'
 import { Sources } from './Documents'
-import { legalIntentLabels, legalPathLabels, stageMeta, stageOrder } from './types'
+import {
+  legalIntentLabels,
+  legalPathLabels,
+  stageMeta,
+  stageOrder
+} from './types'
 import type { Source, Task, TaskState, WorkflowStage } from './types'
 
 export type TaskContextPanelProps = {
@@ -37,7 +50,9 @@ function statusMessage(task: Task): string {
       return '백엔드 작업 대기열에 등록되어 있습니다.'
     case 'running': {
       const active = task.steps.find((step) => step.status === 'running')
-      return active ? `${active.title} 단계에서 진행 중입니다.` : stageMeta[task.stage].detail
+      return active
+        ? `${active.title} 단계에서 진행 중입니다.`
+        : stageMeta[task.stage].detail
     }
     case 'paused':
       return '작업이 일시정지되었습니다.'
@@ -128,7 +143,13 @@ function Ledger({ task }: { task: Task }) {
   )
 }
 
-function LegalAnswer({ task, onDraftFromAnswer }: { task: Task; onDraftFromAnswer?: () => void }) {
+function LegalAnswer({
+  task,
+  onDraftFromAnswer
+}: {
+  task: Task
+  onDraftFromAnswer?: () => void
+}) {
   const legal = task.legal
   if (!legal) return null
   return (
@@ -138,20 +159,18 @@ function LegalAnswer({ task, onDraftFromAnswer }: { task: Task; onDraftFromAnswe
     >
       <div className="task-context__section-heading">
         <h3 id="task-legal-title">법률 답변</h3>
-        <span>
-          {legalIntentLabels[legal.intent] ?? '법률 답변'}
-        </span>
+        <span>{legalIntentLabels[legal.intent] ?? '법률 답변'}</span>
       </div>
       <p className="task-context__legal-path">
-        {legalPathLabels[legal.path]} · 검색 근거 {legal.sourceStatus.retrieved}건 · 본문
-        인용 {legal.sourceStatus.cited ?? 0}건 ·{' '}
+        {legalPathLabels[legal.path]} · 검색 근거 {legal.sourceStatus.retrieved}
+        건 · 본문 인용 {legal.sourceStatus.cited ?? 0}건 ·{' '}
         {legal.sourceStatus.currentness === 'record-dated'
           ? '기록에 포함된 날짜 표기로만 확인'
           : '색인이 현행 여부를 확인하지 않음'}
       </p>
       <p className="task-context__legal-note">
-        일반인을 위한 법률 정보이며 법률 자문이나 대리인이 아닙니다. 중요한
-        결정 전에는 전문가 상담으로 확인하세요.
+        일반인을 위한 법률 정보이며 법률 자문이나 대리인이 아닙니다. 중요한 결정
+        전에는 전문가 상담으로 확인하세요.
       </p>
       {legal.citations.length > 0 ? (
         <>
@@ -180,7 +199,9 @@ function LegalAnswer({ task, onDraftFromAnswer }: { task: Task; onDraftFromAnswe
                     {CORPUS_LABELS[citation.corpus] ?? citation.corpus}
                     {citation.date
                       ? ` · ${
-                          citation.date.kind === 'amendment' ? '개정 표기' : '선고'
+                          citation.date.kind === 'amendment'
+                            ? '개정 표기'
+                            : '선고'
                         } ${citation.date.value}`
                       : ''}
                   </small>
@@ -246,9 +267,20 @@ export default function TaskContextPanel({
           key: stage,
           title: stageMeta[stage].label,
           done: task.state === 'completed' || index < currentIndex,
-          current: !isTerminal(task.state) && index === currentIndex && activeStage,
+          current:
+            !isTerminal(task.state) && index === currentIndex && activeStage,
           detail: stageMeta[stage].detail
         }))
+  const currentStep = timeline.find((step) => step.current)
+  const completedSteps = timeline.filter((step) => step.done).length
+  const progressSummary =
+    task.state === 'completed'
+      ? `${timeline.length}단계 완료`
+      : task.state === 'running'
+        ? `진행 중 · ${currentStep?.title ?? '작업 중'}`
+        : task.state === 'queued'
+          ? '시작 대기 중'
+          : `${taskStateLabel(task.state)} · ${completedSteps}/${timeline.length}`
 
   useEffect(() => setRequestKind('followup'), [task.id])
   useEffect(() => {
@@ -274,129 +306,171 @@ export default function TaskContextPanel({
       className={`task-context ${mobileOpen ? 'task-context--mobile-open' : ''}`}
       aria-label="작업 컨텍스트"
     >
-      <div className="task-context__header">
-        <div>
-          <span className="task-context__eyebrow">작업</span>
-          <h2>{task.title}</h2>
-        </div>
-        <span
-          className={`task-context__state task-context__state--${task.state}`}
-        >
-          {taskStateLabel(task.state)}
-        </span>
-        <button
-          ref={closeButton}
-          className="task-context__mobile-close"
-          type="button"
-          aria-label="작업 정보 닫기"
-          onClick={() => onMobileOpenChange(false)}
-        >
-          <X aria-hidden="true" size={18} />
-        </button>
-      </div>
-
-      <section
-        className="task-context__section"
-        aria-labelledby="task-request-title"
+      <button
+        ref={closeButton}
+        className="task-context__mobile-close"
+        type="button"
+        aria-label="작업 정보 닫기"
+        onClick={() => onMobileOpenChange(false)}
       >
-        <h3 id="task-request-title">요청 내용</h3>
-        <div
-          className="task-context__message task-context__message--user"
-          aria-label="사용자 메시지"
-        >
-          <p className="task-context__request">{task.request}</p>
-        </div>
-      </section>
+        <X aria-hidden="true" size={18} />
+      </button>
 
-      <section
-        className="task-context__section"
-        aria-labelledby="task-sources-title"
+      <div
+        className="task-context__scroll"
+        role="region"
+        aria-label="작업 정보"
+        tabIndex={0}
       >
-        <div className="task-context__section-heading">
-          <h3 id="task-sources-title">참고 자료</h3>
-          <span>{task.sources.length}</span>
-        </div>
-        <Sources sources={task.sources} />
-      </section>
-
-      <section
-        className="task-context__section"
-        aria-labelledby="task-progress-title"
-      >
-        <div className="task-context__section-heading">
-          <h3 id="task-progress-title">작업 진행 상황</h3>
-          {['queued', 'running'].includes(task.state) ? (
-            <button
-              className="task-context__action"
-              type="button"
-              onClick={onCancel}
-            >
-              <X aria-hidden="true" size={14} />
-              <span>작업 취소</span>
-            </button>
-          ) : task.state === 'failed' ? (
-            <button
-              className="task-context__action"
-              type="button"
-              onClick={onRerun}
-            >
-              <Play aria-hidden="true" size={14} />
-              <span>다시 실행</span>
-            </button>
-          ) : null}
-        </div>
-        <ol className="task-context__timeline">
-          {timeline.map((step) => (
-            <li
-              className={`task-context__step ${step.done ? 'is-done' : ''} ${step.current ? 'is-current' : ''}`}
-              key={step.key}
-            >
-              <span className="task-context__step-mark" aria-hidden="true">
-                {step.done ? (
-                  <Check size={14} />
-                ) : step.current ? (
-                  <LoaderCircle size={14} className="is-spinning" />
-                ) : (
-                  <span />
-                )}
-              </span>
-              <div>
-                <strong>{step.title}</strong>
-                {step.current || step.detail ? (
-                  <p>{step.detail ?? stageMeta[task.stage].detail}</p>
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ol>
-        <p
-          className={`task-context__status ${task.state === 'failed' ? 'task-context__status--error' : ''}`}
-          role={task.state === 'failed' ? 'alert' : 'status'}
+        <section
+          className="task-context__section"
+          aria-labelledby="task-request-title"
         >
-          {task.state === 'failed' ? (
-            <AlertCircle aria-hidden="true" size={15} />
-          ) : null}
-          {statusMessage(task)}
-        </p>
-      </section>
-
-      {task.messages
-        .filter((message) => message.kind !== 'system')
-        .map((message) => (
-          <article
+          <h3 id="task-request-title">요청 내용</h3>
+          <div
             className="task-context__message task-context__message--user"
             aria-label="사용자 메시지"
-            key={message.id}
           >
-            <span className="task-context__message-label">
-              {message.kind === 'revision' ? '수정 요청' : '추가 요청'}
-            </span>
-            <p>{message.text}</p>
-          </article>
-        ))}
+            <p className="task-context__request">{task.request}</p>
+          </div>
+        </section>
 
-      <LegalAnswer task={task} onDraftFromAnswer={onDraftFromAnswer} />
-      <Ledger task={task} />
+        <div className="task-context__header">
+          <div>
+            <span className="task-context__eyebrow">작업</span>
+            <h2>{task.title}</h2>
+          </div>
+          <span
+            className={`task-context__state task-context__state--${task.state}`}
+          >
+            {taskStateLabel(task.state)}
+          </span>
+        </div>
+
+        <section
+          className="task-context__section"
+          aria-labelledby="task-sources-title"
+        >
+          <div className="task-context__section-heading">
+            <h3 id="task-sources-title">참고 자료</h3>
+            <span>{task.sources.length}</span>
+          </div>
+          <Sources sources={task.sources} />
+        </section>
+
+        <section
+          className="task-context__section"
+          aria-labelledby="task-progress-title"
+        >
+          <div className="task-context__section-heading">
+            <details className="task-context__progress-details">
+              <summary aria-labelledby="task-progress-title">
+                <span id="task-progress-title">작업 진행 상황</span>
+                <span className="task-context__progress-summary">
+                  {progressSummary}
+                </span>
+                <ChevronDown
+                  className="task-context__progress-chevron"
+                  aria-hidden="true"
+                  size={15}
+                />
+              </summary>
+              <div className="task-context__progress-content">
+                <ol className="task-context__timeline">
+                  {timeline.map((step) => (
+                    <li
+                      className={`task-context__step ${step.done ? 'is-done' : ''} ${step.current ? 'is-current' : ''}`}
+                      key={step.key}
+                    >
+                      <span
+                        className="task-context__step-mark"
+                        aria-hidden="true"
+                      >
+                        {step.done ? (
+                          <Check size={14} />
+                        ) : step.current ? (
+                          <LoaderCircle size={14} className="is-spinning" />
+                        ) : (
+                          <span />
+                        )}
+                      </span>
+                      <div>
+                        <strong>{step.title}</strong>
+                        {step.current || step.detail ? (
+                          <p>{step.detail ?? stageMeta[task.stage].detail}</p>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+                <p
+                  className={`task-context__status ${task.state === 'failed' ? 'task-context__status--error' : ''}`}
+                  role={task.state === 'failed' ? 'alert' : 'status'}
+                >
+                  {task.state === 'failed' ? (
+                    <AlertCircle aria-hidden="true" size={15} />
+                  ) : null}
+                  {statusMessage(task)}
+                </p>
+              </div>
+            </details>
+            {['queued', 'running'].includes(task.state) ? (
+              <button
+                className="task-context__action"
+                type="button"
+                onClick={onCancel}
+              >
+                <X aria-hidden="true" size={14} />
+                <span>작업 취소</span>
+              </button>
+            ) : task.state === 'failed' ? (
+              <button
+                className="task-context__action"
+                type="button"
+                onClick={onRerun}
+              >
+                <Play aria-hidden="true" size={14} />
+                <span>다시 실행</span>
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        {task.messages
+          .filter((message) => message.kind !== 'system')
+          .map((message) => (
+            <article
+              className="task-context__message task-context__message--user"
+              aria-label="사용자 메시지"
+              key={message.id}
+            >
+              <span className="task-context__message-label">
+                {message.kind === 'revision' ? '수정 요청' : '추가 요청'}
+              </span>
+              <p>{message.text}</p>
+              {message.changeSummary ? (
+                <div
+                  className="task-context__change-summary"
+                  aria-label="추가 요청 반영 요약"
+                >
+                  <strong>반영 요약</strong>
+                  <p>
+                    <b>위치</b> {message.changeSummary.location}
+                  </p>
+                  <p>
+                    <b>변경</b> {message.changeSummary.changes.join(' · ')}
+                  </p>
+                  <p>
+                    <b>방식</b> {message.changeSummary.method}
+                  </p>
+                </div>
+              ) : null}
+            </article>
+          ))}
+
+        <LegalAnswer task={task} onDraftFromAnswer={onDraftFromAnswer} />
+        <Ledger task={task} />
+      </div>
 
       <div className="task-context__composer">
         <div

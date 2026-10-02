@@ -4,12 +4,10 @@ import { useRef, useState } from 'react'
 import React from 'react'
 import { ArrowUp, FilePlus2, Link2, X } from 'lucide-react'
 import { validateSourceFile } from '@/api/workroom'
+import { MOCK_BACKEND_ENABLED } from '@/mocks/mode'
 import type { Source } from './types'
 const suggestions = [
-  [
-    '조문 확인',
-    '민법 제398조가 정하는 손해배상 예정은 어떻게 되나요?'
-  ],
+  ['조문 확인', '민법 제398조가 정하는 손해배상 예정은 어떻게 되나요?'],
   [
     '요금분쟁',
     '임대인이 보증금을 갚지 않을 때 제가 할 수 있는 법적 대응은 무엇인가요?'
@@ -197,7 +195,8 @@ export default function Composer({
           >
             <ArrowUp size={17} />
           </button>
-        </div>        {sources.length > 0 && (
+        </div>{' '}
+        {sources.length > 0 && (
           <div className="attachment-list">
             {sources.map((source, index) => (
               <span className="attachment" key={source.id}>
@@ -284,9 +283,13 @@ export default function Composer({
             문서 작업
           </button>
           <p>
-            {workflow === 'legal'
-              ? '로컬 법령·판례 저장소를 찾아 인용과 함께 답변합니다.'
-              : '법령 검색 없이 첨부 자료와 웹 자료로 문서만 만듭니다.'}
+            {MOCK_BACKEND_ENABLED
+              ? workflow === 'legal'
+                ? '목업 모드에서는 실제 법률 자료를 검색하지 않습니다.'
+                : '문서 작업 화면만 확인합니다. 자료 내용은 분석하지 않습니다.'
+              : workflow === 'legal'
+                ? '로컬 법령·판례 저장소를 찾아 인용과 함께 답변합니다.'
+                : '법령 검색 없이 첨부 자료와 웹 자료로 문서만 만듭니다.'}
           </p>
         </div>
       )}

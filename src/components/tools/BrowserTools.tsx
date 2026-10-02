@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import { officeApi, type BrowserResult } from '@/api/automation'
+import { MOCK_BACKEND_ENABLED } from '@/mocks/mode'
 import { ToolButton, type ToolProps } from './ToolFields'
 
 export default function BrowserTools({
@@ -62,10 +63,11 @@ export default function BrowserTools({
     >
       <h2>브라우저 자동화</h2>
       <p>
-        실제 Chrome 세션에서 공개 웹페이지를 탐색하고, 요소를 클릭하거나
-        입력하고, 텍스트와 화면을 가져옵니다. 사설망·로컬 주소는 차단됩니다.
+        {MOCK_BACKEND_ENABLED
+          ? '목업 모드에서는 입력한 주소에 접속하거나 브라우저 동작을 실행하지 않습니다.'
+          : '공개 웹페이지를 탐색하고, 요소를 클릭하거나 입력하고, 텍스트와 화면을 가져옵니다. 사설망·로컬 주소는 차단됩니다.'}
       </p>
-      {!available && (
+      {!available && !MOCK_BACKEND_ENABLED && (
         <p className="workfolio-tool-error" role="status">
           Chrome 실행 파일을 찾지 못했습니다. 백엔드의 BROWSER_EXECUTABLE_PATH를
           확인하세요.

@@ -5,6 +5,7 @@ import {
   Check,
   BookOpen,
   Boxes,
+  FolderOpen,
   GitBranch,
   FileText,
   List,
@@ -13,12 +14,18 @@ import {
   Workflow,
   PanelLeftClose,
   PanelLeftOpen,
+  Moon,
   Plus,
+  RefreshCw,
+  Settings,
+  Sun,
   X
 } from 'lucide-react'
 import type { Task, TaskState } from './types'
 
 export type WorkfolioSidebarProps = {
+  theme?: 'light' | 'dark'
+  onThemeToggle?: () => void
   tasks: Task[]
   activeTaskId: string | null
   filter: 'all' | 'active' | 'completed'
@@ -26,6 +33,13 @@ export type WorkfolioSidebarProps = {
   onOpenTask: (id: string | null) => void
   section: 'chat' | 'system'
   onSectionChange: (section: 'chat' | 'system') => void
+  toolsActive: boolean
+  onOpenTools: () => void
+  connectionLabel: string
+  backendStatus: 'checking' | 'online' | 'offline'
+  showConnectionSettings: boolean
+  onOpenConnection: () => void
+  onReconnect: () => void
   systemTopic: 'overview' | 'flow' | 'rag' | 'wiki' | 'ontology' | 'okf' | 'mcp'
   onSystemTopicChange: (topic: WorkfolioSidebarProps['systemTopic']) => void
   mobileOpen: boolean
@@ -49,6 +63,8 @@ function stateLabel(state: TaskState): string {
 }
 
 export default function WorkfolioSidebar({
+  theme = 'light',
+  onThemeToggle,
   tasks,
   activeTaskId,
   filter,
@@ -56,6 +72,13 @@ export default function WorkfolioSidebar({
   onOpenTask,
   section,
   onSectionChange,
+  toolsActive,
+  onOpenTools,
+  connectionLabel,
+  backendStatus,
+  showConnectionSettings,
+  onOpenConnection,
+  onReconnect,
   systemTopic,
   onSystemTopicChange,
   mobileOpen,
@@ -183,6 +206,19 @@ export default function WorkfolioSidebar({
           </button>
         </div>
 
+        {section === 'chat' ? (
+          <button
+            className="workfolio-sidebar__new"
+            type="button"
+            aria-label="새 작업"
+            title="새 작업"
+            onClick={() => openTask(null)}
+          >
+            <Plus aria-hidden="true" size={17} />
+            <span className="workfolio-sidebar__new-label">새 작업</span>
+          </button>
+        ) : null}
+
         <nav className="workfolio-sidebar__sections" aria-label="주 메뉴">
           <button
             type="button"
@@ -202,21 +238,20 @@ export default function WorkfolioSidebar({
             <Boxes aria-hidden="true" size={17} />
             <span>시스템 구성</span>
           </button>
+          <button
+            className="workfolio-sidebar__tools"
+            type="button"
+            aria-current={toolsActive ? 'page' : undefined}
+            title="문서 도구"
+            onClick={onOpenTools}
+          >
+            <FolderOpen aria-hidden="true" size={17} />
+            <span>문서 도구</span>
+          </button>
         </nav>
 
-        {section === 'chat' ? (
-          <>
-            <button
-              className="workfolio-sidebar__new"
-              type="button"
-              aria-label="새 작업"
-              title="새 작업"
-              onClick={() => openTask(null)}
-            >
-              <Plus aria-hidden="true" size={17} />
-              <span className="workfolio-sidebar__new-label">새 작업</span>
-            </button>
-
+      {section === 'chat' ? (
+        <>
             <div className="workfolio-sidebar__section-heading">채팅 내역</div>
             <nav className="workfolio-sidebar__filters" aria-label="채팅 필터">
               {(
@@ -310,6 +345,59 @@ export default function WorkfolioSidebar({
             ))}
           </div>
         )}
+
+        <div className="workfolio-sidebar__utility">
+          <div
+            className={`workfolio-sidebar__connection workfolio-sidebar__connection--${backendStatus}`}
+            role="status"
+            title={connectionLabel}
+          >
+            <span aria-hidden="true" />
+            <span>{connectionLabel}</span>
+          </div>
+          {!onThemeToggle && !showConnectionSettings ? null : (
+            <div className="workfolio-sidebar__utility-actions">
+              {onThemeToggle ? (
+                <button
+                  type="button"
+                  aria-label={
+                    theme === 'dark' ? '화이트 모드로 전환' : '다크 모드로 전환'
+                  }
+                  title={
+                    theme === 'dark' ? '화이트 모드로 전환' : '다크 모드로 전환'
+                  }
+                  onClick={onThemeToggle}
+                >
+                  {theme === 'dark' ? (
+                    <Sun aria-hidden="true" size={16} />
+                  ) : (
+                    <Moon aria-hidden="true" size={16} />
+                  )}
+                </button>
+              ) : null}
+              {showConnectionSettings && backendStatus === 'offline' ? (
+                <button
+                  type="button"
+                  aria-label="백엔드 다시 연결"
+                  title="백엔드 다시 연결"
+                  onClick={onReconnect}
+                >
+                  <RefreshCw aria-hidden="true" size={16} />
+                </button>
+              ) : null}
+              {showConnectionSettings ? (
+                <button
+                  type="button"
+                  aria-label="백엔드 연결 설정"
+                  title="백엔드 연결 설정"
+                  onClick={onOpenConnection}
+                >
+                  <Settings aria-hidden="true" size={16} />
+                </button>
+              ) : null}
+            </div>
+          )}
+        </div>
 
         <div
           className="workfolio-sidebar__resizer"

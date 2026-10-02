@@ -2,6 +2,7 @@
 import React from 'react'
 import { ExternalLink, FileText, Link2 } from 'lucide-react'
 import type { Source, Task } from './types'
+import { prepareFinalDocument } from './documentModel'
 export function DocumentPreview({ text }: { text: string }) {
   return (
     <article className="document-text">
@@ -65,12 +66,13 @@ export function Sources({ sources }: { sources: Source[] }) {
   )
 }
 export async function downloadDocument(task: Task, format: 'md' | 'docx') {
+  const finalDocument = prepareFinalDocument(task.document, task.title)
   let blob: Blob
   if (format === 'md')
-    blob = new Blob([task.document], { type: 'text/markdown;charset=utf-8' })
+    blob = new Blob([finalDocument], { type: 'text/markdown;charset=utf-8' })
   else {
     const { Document, Packer, Paragraph, HeadingLevel } = await import('docx')
-    const children = task.document.split('\n').map(
+    const children = finalDocument.split('\n').map(
       (line) =>
         new Paragraph({
           text: line.replace(/^#{1,2} |^> |^- /, ''),

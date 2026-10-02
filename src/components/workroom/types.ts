@@ -27,6 +27,11 @@ export type TaskMessage = {
   kind: 'revision' | 'followup' | 'system'
   text: string
   scope?: string
+  changeSummary?: {
+    location: string
+    changes: string[]
+    method: string
+  }
   createdAt: number
 }
 export type TaskStep = {
@@ -47,13 +52,19 @@ export type LegalAnswerView = {
   artifactId?: string
   fileId?: string
 }
-export type LegalLayerState = 'used' | 'ready' | 'degraded' | 'unused' | 'unavailable'
+export type LegalLayerState =
+  | 'used'
+  | 'ready'
+  | 'degraded'
+  | 'unused'
+  | 'unavailable'
 export type Task = {
   id: string
   title: string
   request: string
   sources: Source[]
   messages: TaskMessage[]
+  revisionBaseline?: { document: string; request: string }
   steps: TaskStep[]
   stage: WorkflowStage
   state: TaskState

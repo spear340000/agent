@@ -172,7 +172,8 @@ function ledgerFrom(value: unknown): LegalLedger | undefined {
         }))
       : [],
     toolCalls: typeof value.toolCalls === 'number' ? value.toolCalls : 0,
-    maxToolCalls: typeof value.maxToolCalls === 'number' ? value.maxToolCalls : 0,
+    maxToolCalls:
+      typeof value.maxToolCalls === 'number' ? value.maxToolCalls : 0,
     planner: {
       calls: planner && typeof planner.calls === 'number' ? planner.calls : 0,
       mode: planner?.mode === 'used' ? 'used' : 'not-used'
@@ -183,7 +184,11 @@ function ledgerFrom(value: unknown): LegalLedger | undefined {
 export function legalAnswerFromEvents(
   events: BackendEvent[]
 ): LegalAnswerView | undefined {
-  const event = [...events].reverse().find((item) => item.type === 'legal.answer' || item.type === 'legal.retrieval')
+  const event = [...events]
+    .reverse()
+    .find(
+      (item) => item.type === 'legal.answer' || item.type === 'legal.retrieval'
+    )
   const metadata = event?.metadata
   if (!isRecord(metadata)) return undefined
   const sourceStatus = metadata.sourceStatus
@@ -201,7 +206,8 @@ export function legalAnswerFromEvents(
           : {}),
         ...(isRecord(citation.date) &&
         typeof citation.date.value === 'string' &&
-        (citation.date.kind === 'amendment' || citation.date.kind === 'decision')
+        (citation.date.kind === 'amendment' ||
+          citation.date.kind === 'decision')
           ? {
               date: {
                 kind: citation.date.kind as 'amendment' | 'decision',
@@ -229,7 +235,9 @@ export function legalAnswerFromEvents(
         ? sourceStatus.degraded.map(String)
         : [],
       currentness:
-        sourceStatus.currentness === 'record-dated' ? 'record-dated' : 'unverified',
+        sourceStatus.currentness === 'record-dated'
+          ? 'record-dated'
+          : 'unverified',
       notes: Array.isArray(sourceStatus.notes)
         ? sourceStatus.notes.map(String)
         : [],
@@ -257,7 +265,10 @@ export function legalAnswerFromEvents(
 export function toWorkroomTask(
   details: TaskDetails,
   previous?: Partial<
-    Pick<Task, 'sources' | 'messages' | 'document' | 'documentDirty'>
+    Pick<
+      Task,
+      'sources' | 'messages' | 'document' | 'documentDirty' | 'revisionBaseline'
+    >
   >
 ): Task {
   const { task } = details
@@ -265,18 +276,19 @@ export function toWorkroomTask(
     .filter((item) => item.kind === 'document')
     .reduce<
       (typeof details.artifacts)[number] | undefined
-    >(
-      (latest, item) =>
-        !latest || item.createdAt.localeCompare(latest.createdAt) >= 0
-          ? item
-          : latest,
-      undefined
-    )
+    >((latest, item) => (!latest || item.createdAt.localeCompare(latest.createdAt) >= 0 ? item : latest), undefined)
   const messageMap = new Map(
-    [...(previous?.messages ?? []), ...messagesFromEvents(details.events)].map(
-      (message) => [message.id, message]
-    )
+    (previous?.messages ?? []).map((message) => [message.id, message])
   )
+  for (const message of messagesFromEvents(details.events)) {
+    const previousMessage = messageMap.get(message.id)
+    messageMap.set(
+      message.id,
+      previousMessage?.changeSummary
+        ? { ...message, changeSummary: previousMessage.changeSummary }
+        : message
+    )
+  }
   const savedDocument = artifact?.content ?? ''
   const documentDirty = previous?.documentDirty ?? false
   const steps: TaskStep[] = task.steps.map((step) => ({
@@ -295,6 +307,9 @@ export function toWorkroomTask(
     messages: [...messageMap.values()].sort(
       (left, right) => left.createdAt - right.createdAt
     ),
+    ...(previous?.revisionBaseline === undefined
+      ? {}
+      : { revisionBaseline: previous.revisionBaseline }),
     steps,
     stage: stageForTask(task),
     state: task.status,
@@ -315,6 +330,78 @@ export function toWorkroomTask(
       const legal = legalAnswerFromEvents(details.events)
       return legal ? { legal } : {}
     })()
+  }
+}
+
+function countLines(lines: string[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const line of lines) {
+    if (!line.trim()) continue
+    counts.set(line, (counts.get(line) ?? 0) + 1)
+  }
+  return counts
+}
+
+function takeLine(counts: Map<string, number>, line: string): boolean {
+  const count = counts.get(line) ?? 0
+  if (count === 0) return false
+  if (count === 1) counts.delete(line)
+  else counts.set(line, count - 1)
+  return true
+}
+
+export function summarizeDocumentChanges(
+  previousDocument: string,
+  updatedDocument: string
+): NonNullable<Task['messages'][number]['changeSummary']> {
+  const previousLines = previousDocument.split(/\r\n|\n|\r/)
+  const updatedLines = updatedDocument.split(/\r\n|\n|\r/)
+  const oldLineCounts = countLines(previousLines)
+  const newLineCounts = countLines(updatedLines)
+  const addedCounts = new Map(oldLineCounts)
+  const removedCounts = new Map(newLineCounts)
+  const added: string[] = []
+  const removed: string[] = []
+  let section = '문서 본문'
+  const locations = new Set<string>()
+
+  for (const line of updatedLines) {
+    const heading = line.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/)
+    if (heading) {
+      section = heading[1]!.trim()
+      if (!takeLine(addedCounts, line)) locations.add(section)
+      continue
+    }
+    if (!line.trim() || takeLine(addedCounts, line)) continue
+    locations.add(section)
+    if (added.length < 2) added.push(line.trim())
+  }
+
+  section = '문서 본문'
+  for (const line of previousLines) {
+    const heading = line.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/)
+    if (heading) {
+      section = heading[1]!.trim()
+      if (!takeLine(removedCounts, line)) locations.add(section)
+      continue
+    }
+    if (!line.trim() || takeLine(removedCounts, line)) continue
+    locations.add(section)
+    if (removed.length < 2) removed.push(line.trim())
+  }
+
+  const changes = [
+    ...added.map((line) => `추가·보완: ${line}`),
+    ...removed.map((line) => `수정 전 내용: ${line}`)
+  ].slice(0, 3)
+
+  return {
+    location: [...locations].slice(0, 3).join(' · ') || '문서 본문',
+    changes: changes.length > 0 ? changes : ['문서 본문에 확인된 변경 없음'],
+    method:
+      added.length > 0
+        ? '추가 요청 내용을 해당 항목에 반영하고 관련 문장을 보완했습니다.'
+        : '추가 요청에 맞춰 기존 문장을 수정했습니다.'
   }
 }
 

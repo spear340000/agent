@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  ArrowLeft,
   Bold,
   Check,
   Download,
@@ -19,7 +20,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   applyDocumentCommand,
   getDocumentOutline,
-  getDocumentSaveStatus
+  getDocumentSaveStatus,
+  prepareFinalDocument
 } from './documentModel'
 import type {
   DocumentCommand,
@@ -38,9 +40,11 @@ export type DocumentWorkspaceProps = {
   canSave?: boolean
   saveError: string | null
   initialMode?: 'view' | 'edit'
+  previewMode?: boolean
   onChange: (value: string) => void
   onSave: () => Promise<void>
   onExport: (format: 'md' | 'docx') => void
+  onPreviewModeChange?: (preview: boolean) => void
 }
 
 const toolbarActions: {
@@ -71,9 +75,11 @@ export default function DocumentWorkspace({
   canSave = true,
   saveError,
   initialMode = 'view',
+  previewMode = false,
   onChange,
   onSave,
-  onExport
+  onExport,
+  onPreviewModeChange
 }: DocumentWorkspaceProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const pendingSelection = useRef<Pick<
@@ -81,7 +87,17 @@ export default function DocumentWorkspace({
     'selectionStart' | 'selectionEnd'
   > | null>(null)
   const [mode, setMode] = useState<'view' | 'edit'>(initialMode)
-  const headings = useMemo(() => getDocumentOutline(value), [value])
+  const [highlightedHeadingLine, setHighlightedHeadingLine] = useState<
+    number | null
+  >(null)
+  const finalDocument = useMemo(
+    () => prepareFinalDocument(value, title),
+    [title, value]
+  )
+  const headings = useMemo(
+    () => getDocumentOutline(previewMode ? finalDocument : value),
+    [finalDocument, previewMode, value]
+  )
   const saveStatus = getDocumentSaveStatus({
     dirty,
     saving,
@@ -121,7 +137,8 @@ export default function DocumentWorkspace({
   function selectHeading(heading: DocumentHeading) {
     if (mode === 'view') {
       const target = document.getElementById(`md-heading-${heading.line}`)
-      target?.scrollIntoView({ block: 'start' })
+      setHighlightedHeadingLine(heading.line)
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       return
     }
     const editor = editorRef.current
@@ -129,11 +146,12 @@ export default function DocumentWorkspace({
     const offset = Math.min(value.length, heading.start)
     editor.focus()
     editor.setSelectionRange(offset, offset)
+    setHighlightedHeadingLine(null)
   }
 
   return (
     <section
-      className="document-workspace"
+      className={`document-workspace ${mode === 'edit' ? 'document-workspace--editing' : ''} ${previewMode ? 'document-workspace--final-preview' : ''}`}
       aria-labelledby="document-workspace-title"
     >
       <div className="document-workspace__toolbar-row">
@@ -142,7 +160,7 @@ export default function DocumentWorkspace({
           role="toolbar"
           aria-label="문서 서식"
         >
-          {mode === 'edit'
+          {!previewMode && mode === 'edit'
             ? toolbarActions.map(({ command, label, icon: Icon }) => (
                 <button
                   key={command}
@@ -158,50 +176,59 @@ export default function DocumentWorkspace({
             : null}
         </div>
         <div className="document-workspace__actions">
-          <div
-            className="document-workspace__mode"
-            role="group"
-            aria-label="문서 보기 방식"
-          >
+          {previewMode ? (
             <button
-              className="document-workspace__button document-workspace__button--quiet"
+              className="document-workspace__button document-workspace__button--quiet document-workspace__preview-back"
               type="button"
-              aria-pressed={mode === 'view'}
-              onClick={() => setMode('view')}
+              onClick={() => onPreviewModeChange?.(false)}
             >
-              <Eye aria-hidden="true" size={15} />
-              <span>보기</span>
+              <ArrowLeft aria-hidden="true" size={15} />
+              <span>작업 화면</span>
             </button>
-            <button
-              className="document-workspace__button document-workspace__button--quiet"
-              type="button"
-              aria-pressed={mode === 'edit'}
-              onClick={() => setMode('edit')}
-            >
-              <Pencil aria-hidden="true" size={15} />
-              <span>편집</span>
-            </button>
-          </div>
-          {saveStatus !== 'saved' || hasPersistedDocument ? (
-            <span
-              className={`document-workspace__save-status document-workspace__save-status--${saveStatus}`}
-              role="status"
-              aria-live="polite"
-            >
-              {saveStatus === 'saved' ? (
-                <Check aria-hidden="true" size={14} />
-              ) : saveStatus === 'saving' ? (
-                <LoaderCircle
-                  aria-hidden="true"
-                  size={14}
-                  className="is-spinning"
-                />
-              ) : saveStatus === 'error' ? (
-                <AlertCircle aria-hidden="true" size={14} />
-              ) : null}
-              {saveLabels[saveStatus]}
-            </span>
-          ) : null}
+          ) : (
+            <>
+              <div
+                className="document-workspace__mode"
+                role="group"
+                aria-label="문서 보기 방식"
+              >
+                <button
+                  className="document-workspace__button document-workspace__button--quiet"
+                  type="button"
+                  aria-pressed={mode === 'view'}
+                  onClick={() => setMode('view')}
+                >
+                  <Eye aria-hidden="true" size={15} />
+                  <span>보기</span>
+                </button>
+                <button
+                  className="document-workspace__button document-workspace__button--quiet"
+                  type="button"
+                  aria-pressed={mode === 'edit'}
+                  onClick={() => {
+                    setHighlightedHeadingLine(null)
+                    setMode('edit')
+                  }}
+                >
+                  <Pencil aria-hidden="true" size={15} />
+                  <span>편집</span>
+                </button>
+              </div>
+              <button
+                className="document-workspace__button document-workspace__button--quiet document-workspace__preview-open"
+                type="button"
+                aria-label="내보내기 미리보기"
+                onClick={() => {
+                  setHighlightedHeadingLine(null)
+                  setMode('view')
+                  onPreviewModeChange?.(true)
+                }}
+              >
+                <Eye aria-hidden="true" size={15} />
+                <span>내보내기 미리보기</span>
+              </button>
+            </>
+          )}
           <button
             className="document-workspace__button document-workspace__button--quiet"
             type="button"
@@ -218,19 +245,43 @@ export default function DocumentWorkspace({
             <FileDown aria-hidden="true" size={15} />
             <span>DOCX</span>
           </button>
-          <button
-            className="document-workspace__button document-workspace__button--primary"
-            type="button"
-            disabled={!dirty || saving || !canSave}
-            onClick={() => void onSave().catch(() => undefined)}
-          >
-            <Save aria-hidden="true" size={15} />
-            <span>저장</span>
-          </button>
+          {!previewMode ? (
+            <div className="document-workspace__save-group">
+              {saveStatus !== 'saved' || hasPersistedDocument ? (
+                <span
+                  className={`document-workspace__save-status document-workspace__save-status--${saveStatus}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {saveStatus === 'saved' ? (
+                    <Check aria-hidden="true" size={14} />
+                  ) : saveStatus === 'saving' ? (
+                    <LoaderCircle
+                      aria-hidden="true"
+                      size={14}
+                      className="is-spinning"
+                    />
+                  ) : saveStatus === 'error' ? (
+                    <AlertCircle aria-hidden="true" size={14} />
+                  ) : null}
+                  {saveLabels[saveStatus]}
+                </span>
+              ) : null}
+              <button
+                className="document-workspace__button document-workspace__button--primary"
+                type="button"
+                disabled={!dirty || saving || !canSave}
+                onClick={() => void onSave().catch(() => undefined)}
+              >
+                <Save aria-hidden="true" size={15} />
+                <span>저장</span>
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      {saveError ? (
+      {!previewMode && saveError ? (
         <p className="document-workspace__error" role="alert">
           {saveError}
         </p>
@@ -247,7 +298,11 @@ export default function DocumentWorkspace({
               className="document-workspace__preview"
               aria-label="문서 미리보기"
             >
-              <MarkdownView value={value} />
+              <MarkdownView
+                value={previewMode ? finalDocument : value}
+                highlightedHeadingLine={highlightedHeadingLine}
+                onContentClick={() => setHighlightedHeadingLine(null)}
+              />
             </div>
           ) : (
             <>
@@ -265,6 +320,7 @@ export default function DocumentWorkspace({
                 value={value}
                 maxLength={200000}
                 onChange={(event) => onChange(event.currentTarget.value)}
+                onClick={() => setHighlightedHeadingLine(null)}
                 spellCheck
               />
             </>
