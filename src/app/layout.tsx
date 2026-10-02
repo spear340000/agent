@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { DM_Mono, Geist } from 'next/font/google'
 import './globals.css'
+import './tools.css'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -14,8 +15,8 @@ const dmMono = DM_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Workroom',
-  description: '자료를 모으고 문서 초안을 준비하는 작업 공간'
+  title: 'Workfolio',
+  description: '요청과 자료를 바탕으로 문서를 만들고 관리하는 작업 공간'
 }
 
 export default function RootLayout({

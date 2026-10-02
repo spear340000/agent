@@ -1,0 +1,323 @@
+import type {
+  BackendEvent,
+  BackendTask,
+  LegalAnswer,
+  LegalLedger,
+  TaskDetails
+} from '@/api/workroom'
+import type {
+  LegalAnswerView,
+  Source,
+  Task,
+  TaskMessage,
+  TaskStep,
+  WorkflowStage
+} from './types'
+
+const stageByStep: WorkflowStage[] = [
+  'planning',
+  'collecting',
+  'collecting',
+  'analyzing',
+  'writing',
+  'writing'
+]
+
+function stageForTask(task: BackendTask): WorkflowStage {
+  if (task.status === 'completed') return 'completed'
+  const activeIndex = task.steps.findIndex(
+    (step) =>
+      step.status === 'running' ||
+      step.status === 'failed' ||
+      step.status === 'cancelled'
+  )
+  const pendingIndex = task.steps.findIndex((step) => step.status === 'pending')
+  const index = activeIndex >= 0 ? activeIndex : pendingIndex
+  return stageByStep[index ?? 0] ?? 'planning'
+}
+
+function messagesFromEvents(events: BackendEvent[]): TaskMessage[] {
+  return events.flatMap((event) => {
+    if (event.type !== 'task.revised') return []
+    const kind = event.metadata?.kind
+    const message = event.metadata?.message
+    if (
+      (kind !== 'revision' && kind !== 'followup') ||
+      typeof message !== 'string'
+    ) {
+      return []
+    }
+    return [
+      {
+        id: String(event.id),
+        kind,
+        text: message,
+        createdAt: Date.parse(event.createdAt) || 0
+      }
+    ]
+  })
+}
+
+const FILE_STEP_TITLES = ['Read source files', '첨부 자료 확인']
+const LINK_STEP_TITLES = ['Research the web', '공개 웹 자료 확인']
+
+function sourceState(
+  task: BackendTask,
+  step: BackendTask['steps'][number] | undefined
+): Source['status'] {
+  if (step?.status === 'failed') return 'error'
+  if (step?.status === 'completed' || task.status === 'completed')
+    return 'ready'
+  if (task.status === 'running' && step?.status === 'running')
+    return 'collecting'
+  return 'queued'
+}
+
+function sourceList(task: BackendTask, previous: Source[] = []): Source[] {
+  const priorFiles = new Map(
+    previous
+      .filter((source) => source.kind === 'file')
+      .map((source) => [source.fileId ?? source.id, source] as const)
+  )
+  const fileStatus = sourceState(
+    task,
+    task.steps.find((step) => FILE_STEP_TITLES.includes(step.title))
+  )
+  const files = task.sourceFileIds.map((fileId) => {
+    const prior = priorFiles.get(fileId)
+    return {
+      id: fileId,
+      fileId,
+      name: prior?.name ?? fileId,
+      kind: 'file' as const,
+      status: fileStatus
+    }
+  })
+  const linkStatus = sourceState(
+    task,
+    task.steps.find((step) => LINK_STEP_TITLES.includes(step.title))
+  )
+  const links = task.sourceUrls.map((url) => {
+    const prior = previous.find(
+      (source) => source.kind === 'link' && source.url === url
+    )
+    let hostname = url
+    try {
+      hostname = new URL(url).hostname
+    } catch {
+      // Keep historical source values visible if an older task contains one.
+    }
+    return {
+      id: url,
+      name: prior?.name ?? hostname,
+      kind: 'link' as const,
+      url,
+      status: linkStatus
+    }
+  })
+  return [...files, ...links]
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+const LEDGER_LAYER_IDS = [
+  'law-keyword',
+  'precedent-keyword',
+  'vector',
+  'graph',
+  'ontology',
+  'okf'
+] as const
+const LEDGER_STATES = [
+  'used',
+  'ready',
+  'degraded',
+  'unused',
+  'unavailable'
+] as const
+
+function ledgerFrom(value: unknown): LegalLedger | undefined {
+  if (!isRecord(value)) return undefined
+  const layers = Array.isArray(value.layers)
+    ? value.layers.filter(isRecord).flatMap((layer) => {
+        const id = String(layer.id ?? '')
+        if (!LEDGER_LAYER_IDS.includes(id as (typeof LEDGER_LAYER_IDS)[number]))
+          return []
+        const state = String(layer.state ?? '')
+        return [
+          {
+            id: id as LegalLedger['layers'][number]['id'],
+            label: String(layer.label ?? id),
+            state: (LEDGER_STATES.includes(
+              state as (typeof LEDGER_STATES)[number]
+            )
+              ? state
+              : 'ready') as LegalLedger['layers'][number]['state'],
+            detail: String(layer.detail ?? '')
+          }
+        ]
+      })
+    : []
+  const planner = isRecord(value.planner) ? value.planner : undefined
+  return {
+    layers,
+    tools: Array.isArray(value.tools)
+      ? value.tools.filter(isRecord).map((tool) => ({
+          tool: String(tool.tool ?? ''),
+          label: String(tool.label ?? ''),
+          query: String(tool.query ?? ''),
+          results: typeof tool.results === 'number' ? tool.results : 0
+        }))
+      : [],
+    toolCalls: typeof value.toolCalls === 'number' ? value.toolCalls : 0,
+    maxToolCalls: typeof value.maxToolCalls === 'number' ? value.maxToolCalls : 0,
+    planner: {
+      calls: planner && typeof planner.calls === 'number' ? planner.calls : 0,
+      mode: planner?.mode === 'used' ? 'used' : 'not-used'
+    }
+  }
+}
+
+export function legalAnswerFromEvents(
+  events: BackendEvent[]
+): LegalAnswerView | undefined {
+  const event = [...events].reverse().find((item) => item.type === 'legal.answer' || item.type === 'legal.retrieval')
+  const metadata = event?.metadata
+  if (!isRecord(metadata)) return undefined
+  const sourceStatus = metadata.sourceStatus
+  if (!isRecord(sourceStatus)) return undefined
+  const citations = Array.isArray(metadata.citations)
+    ? metadata.citations.filter(isRecord).map((citation) => ({
+        citationId: String(citation.citationId ?? ''),
+        recordId: String(citation.recordId ?? ''),
+        corpus: (typeof citation.corpus === 'string'
+          ? citation.corpus
+          : 'law') as LegalAnswer['citations'][number]['corpus'],
+        label: String(citation.label ?? ''),
+        ...(typeof citation.officialUrl === 'string'
+          ? { officialUrl: citation.officialUrl }
+          : {}),
+        ...(isRecord(citation.date) &&
+        typeof citation.date.value === 'string' &&
+        (citation.date.kind === 'amendment' || citation.date.kind === 'decision')
+          ? {
+              date: {
+                kind: citation.date.kind as 'amendment' | 'decision',
+                value: citation.date.value
+              }
+            }
+          : {})
+      }))
+    : []
+  return {
+    intent: String(metadata.intent ?? 'legal-question'),
+    path: metadata.path === 'orchestrated' ? 'orchestrated' : 'direct',
+    answer: typeof metadata.answer === 'string' ? metadata.answer : '',
+    citations,
+    sourceStatus: {
+      corpusReady: sourceStatus.corpusReady === true,
+      retrieved:
+        typeof sourceStatus.retrieved === 'number'
+          ? sourceStatus.retrieved
+          : citations.length,
+      ...(typeof sourceStatus.cited === 'number'
+        ? { cited: sourceStatus.cited }
+        : {}),
+      degraded: Array.isArray(sourceStatus.degraded)
+        ? sourceStatus.degraded.map(String)
+        : [],
+      currentness:
+        sourceStatus.currentness === 'record-dated' ? 'record-dated' : 'unverified',
+      notes: Array.isArray(sourceStatus.notes)
+        ? sourceStatus.notes.map(String)
+        : [],
+      failures: Array.isArray(sourceStatus.failures)
+        ? sourceStatus.failures.filter(isRecord).map((failure) => ({
+            step: String(failure.step ?? ''),
+            kind: String(failure.kind ?? ''),
+            message: String(failure.message ?? '')
+          }))
+        : [],
+      ...(() => {
+        const ledger = ledgerFrom(sourceStatus.ledger)
+        return ledger ? { ledger } : {}
+      })()
+    },
+    plannerCalls: metadata.plannerCalls === 1 ? 1 : 0,
+    toolCalls: typeof metadata.toolCalls === 'number' ? metadata.toolCalls : 0,
+    ...(typeof metadata.artifactId === 'string'
+      ? { artifactId: metadata.artifactId }
+      : {}),
+    ...(typeof metadata.fileId === 'string' ? { fileId: metadata.fileId } : {})
+  }
+}
+
+export function toWorkroomTask(
+  details: TaskDetails,
+  previous?: Partial<
+    Pick<Task, 'sources' | 'messages' | 'document' | 'documentDirty'>
+  >
+): Task {
+  const { task } = details
+  const artifact = details.artifacts
+    .filter((item) => item.kind === 'document')
+    .reduce<
+      (typeof details.artifacts)[number] | undefined
+    >(
+      (latest, item) =>
+        !latest || item.createdAt.localeCompare(latest.createdAt) >= 0
+          ? item
+          : latest,
+      undefined
+    )
+  const messageMap = new Map(
+    [...(previous?.messages ?? []), ...messagesFromEvents(details.events)].map(
+      (message) => [message.id, message]
+    )
+  )
+  const savedDocument = artifact?.content ?? ''
+  const documentDirty = previous?.documentDirty ?? false
+  const steps: TaskStep[] = task.steps.map((step) => ({
+    id: step.id,
+    title: step.title,
+    status: step.status,
+    progress: step.progress,
+    ...(step.error === undefined ? {} : { error: step.error })
+  }))
+
+  return {
+    id: task.id,
+    title: task.title,
+    request: task.prompt,
+    sources: sourceList(task, previous?.sources),
+    messages: [...messageMap.values()].sort(
+      (left, right) => left.createdAt - right.createdAt
+    ),
+    steps,
+    stage: stageForTask(task),
+    state: task.status,
+    document: documentDirty
+      ? (previous?.document ?? savedDocument)
+      : savedDocument,
+    savedDocument,
+    documentDirty,
+    artifactFileId: artifact?.fileId,
+    artifactName: artifact?.name,
+    artifactMimeType: artifact?.mimeType,
+    sourceFileIds: [...task.sourceFileIds],
+    documentType: 'md',
+    createdAt: Date.parse(task.createdAt) || 0,
+    updatedAt: Date.parse(task.updatedAt) || 0,
+    error: task.error,
+    ...(() => {
+      const legal = legalAnswerFromEvents(details.events)
+      return legal ? { legal } : {}
+    })()
+  }
+}
+
+export function toTaskSummary(task: BackendTask): Task {
+  return toWorkroomTask({ task, events: [], artifacts: [] })
+}

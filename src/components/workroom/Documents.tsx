@@ -1,4 +1,5 @@
 // 생성 문서와 참고 자료를 렌더링하고 Markdown·DOCX 다운로드를 처리한다.
+import React from 'react'
 import { ExternalLink, FileText, Link2 } from 'lucide-react'
 import type { Source, Task } from './types'
 export function DocumentPreview({ text }: { text: string }) {
@@ -58,7 +59,7 @@ export function Sources({ sources }: { sources: Source[] }) {
         <p className="muted">아직 추가된 자료가 없습니다.</p>
       )}
       <p className="fine-print">
-        사용한 파일과 웹 자료는 문서의 근거로 표시됩니다.
+        작업에 첨부하거나 참고 자료로 등록한 항목입니다.
       </p>
     </div>
   )

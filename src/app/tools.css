@@ -1,0 +1,378 @@
+.workfolio-header__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border-radius: 5px;
+  color: #58665c !important;
+}
+.workfolio-header__action:hover,
+.workfolio-header__action[aria-pressed='true'] {
+  background: #eae7de;
+}
+.workfolio .workfolio-primary {
+  padding: 9px 17px;
+  background: #236b52;
+  color: #fffdf8;
+  border: 1px solid #236b52;
+  border-radius: 6px;
+  font-weight: 600;
+}
+.workfolio .workfolio-primary:hover:not(:disabled) {
+  background: #1c5944;
+}
+.workfolio-dialog {
+  width: min(460px, calc(100vw - 32px));
+  border: 1px solid #ded8cd;
+  border-radius: 10px;
+  padding: 24px;
+  color: #202823;
+  background: #fbf9f4;
+  box-shadow: 0 18px 65px #20282326;
+}
+.workfolio-dialog::backdrop {
+  background: #20282361;
+}
+.workfolio-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.workfolio-dialog h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.workfolio-dialog p {
+  margin: 15px 0;
+  color: #59685f;
+  font-size: 13px;
+}
+.workfolio-dialog form {
+  display: grid;
+  gap: 16px;
+}
+.workfolio-dialog label,
+.workfolio-tool-form > label,
+.workfolio-file-library > label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.workfolio-dialog input:not([type='checkbox']),
+.workfolio-tools input:not([type='checkbox']),
+.workfolio-tools select,
+.workfolio-tools textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid #d5d6cb;
+  border-radius: 5px;
+  background: #fffdf8;
+  color: #26382d;
+}
+.workfolio-dialog .workfolio-checkbox,
+.workfolio-tools .workfolio-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 400;
+}
+.workfolio-checkbox input {
+  accent-color: #236b52;
+}
+.workfolio-tool-error {
+  padding: 10px 12px;
+  border-left: 3px solid #ad5445;
+  color: #8a392f !important;
+  background: #f6eae4;
+  overflow-wrap: anywhere;
+}
+.workfolio-tool-warning {
+  color: #876337;
+}
+.workfolio-tools {
+  max-width: 1400px;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding: 26px 32px 36px;
+}
+.workfolio-tools__heading > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #59685f;
+  font-size: 12px;
+}
+.workfolio-tools__heading h1 {
+  margin: 15px 0 6px;
+  font-size: 26px;
+  letter-spacing: -0.04em;
+  font-weight: 650;
+}
+.workfolio-tools__heading p,
+.workfolio-tool-form p,
+.workfolio-file-library p {
+  color: #59685f;
+  font-size: 13px;
+  margin: 6px 0 14px;
+}
+.workfolio-tools__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  border-bottom: 1px solid #e0dace;
+  margin: 20px 0 15px;
+  padding-bottom: 8px;
+}
+.workfolio-tools__tabs button {
+  padding: 7px 12px;
+  border-radius: 5px;
+  font-size: 13px;
+}
+.workfolio-tools__tabs button[aria-pressed='true'] {
+  color: #1c5944;
+  background: #e5ebe2;
+  font-weight: 600;
+}
+.workfolio-tools__tabs button:hover {
+  background: #eeebe2;
+}
+.workfolio-tools__upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 22px;
+}
+.workfolio-tools__upload button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid #dad5cb;
+  border-radius: 5px;
+  font-size: 12px;
+}
+.workfolio-tools__upload > span {
+  margin-left: auto;
+  font-size: 12px;
+  color: #6e7971;
+}
+.workfolio-tools__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+  gap: 28px;
+  align-items: start;
+}
+.workfolio-tool-form {
+  display: grid;
+  gap: 15px;
+  min-width: 0;
+}
+.workfolio-tool-form h2,
+.workfolio-tool-result h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+.workfolio-tool-form > p {
+  margin: -5px 0 0;
+}
+.workfolio-tool-form textarea {
+  resize: vertical;
+  max-height: 60vh;
+  min-height: 60px;
+}
+.workfolio-tool-form fieldset {
+  border: 1px solid #dfd9cd;
+  border-radius: 5px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.workfolio-tool-form legend {
+  padding: 0 5px;
+  font-size: 13px;
+}
+.workfolio-tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+.workfolio-tool-row > input,
+.workfolio-tool-row > label {
+  flex: 1;
+  min-width: 80px;
+}
+.workfolio-tool-row button {
+  font-size: 12px;
+  padding: 8px;
+}
+.workfolio-tool-row > label {
+  display: grid;
+  gap: 5px;
+}
+.workfolio-file-library {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.workfolio-file-library > label {
+  max-width: 420px;
+}
+.workfolio-file-library > p {
+  margin-top: 10px;
+}
+.workfolio-file-library ul,
+.workfolio-tool-result ul {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.workfolio-file-library li,
+.workfolio-tool-result li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  border-bottom: 1px solid #e3ddd1;
+  padding: 12px 3px;
+}
+.workfolio-file-library strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.workfolio-file-library small {
+  color: #6e7971;
+  font-size: 12px;
+}
+.workfolio-file-library button,
+.workfolio-tool-result li button {
+  color: #236b52;
+  padding: 8px;
+  font-size: 12px;
+}
+.workfolio-operation-list {
+  padding-left: 22px;
+  margin: 0;
+  font-size: 12px;
+}
+.workfolio-operation-list li {
+  margin: 5px 0;
+}
+.workfolio-operation-list button {
+  float: right;
+  color: #8a392f;
+}
+.workfolio-table-wrap {
+  max-width: 100%;
+  overflow: auto;
+}
+.workfolio-table-wrap table {
+  border-collapse: collapse;
+  width: 100%;
+  background: #faf8f1;
+  font-size: 12px;
+  margin: 10px 0;
+}
+.workfolio-table-wrap th,
+.workfolio-table-wrap td {
+  padding: 7px 9px;
+  border: 1px solid #e1dccf;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 250px;
+}
+.workfolio-tool-result {
+  min-width: 0;
+  border-left: 1px solid #ded8cd;
+  padding: 5px 0 5px 22px;
+  position: sticky;
+  top: 0;
+}
+.workfolio-tool-result pre {
+  font: inherit;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 65vh;
+  overflow: auto;
+  padding: 12px;
+  background: #eeebe2;
+  border-radius: 5px;
+}
+.workfolio-tool-result img {
+  width: 100%;
+  height: auto;
+  border: 1px solid #ded8cd;
+  border-radius: 5px;
+}
+.workfolio-browser-location {
+  overflow-wrap: anywhere;
+}
+.workfolio-search-source {
+  border-top: 1px solid #ddd8cb;
+  padding: 16px 0;
+}
+.workfolio-search-source a {
+  color: #236b52;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.workfolio-search-source pre {
+  font: inherit;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 250px;
+  overflow: auto;
+}
+.workfolio-tools__load-more {
+  margin-top: 22px;
+  padding: 8px 12px;
+  border: 1px solid #d6d3c8 !important;
+  border-radius: 5px;
+}
+@media (max-width: 1000px) {
+  .workfolio-tools__content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workfolio-tool-result {
+    border-left: 0;
+    border-top: 1px solid #ded8cd;
+    padding: 20px 0 0;
+    position: static;
+  }
+}
+@media (max-width: 760px) {
+  .workfolio-tools {
+    padding: 20px 16px 30px;
+  }
+  .workfolio-header {
+    gap: 5px;
+    padding: 0 10px;
+  }
+  .workfolio-header__action {
+    padding: 7px;
+  }
+  .workfolio-header__action > span {
+    display: none;
+  }
+  .workfolio-header__connection {
+    font-size: 11px;
+    gap: 5px;
+  }
+  .workfolio-header__model-warning {
+    display: none;
+  }
+  .workfolio-dialog {
+    padding: 20px;
+  }
+}
