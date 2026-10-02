@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Legal Wiki Ontology</title>
+  <style>
+    :root{--ink:#15243d;--muted:#718096;--line:#ccd6e4;--paper:#f4f7fb;--law:#6d4fe0;--article:#2f72e8;--offense:#e5526d;--penalty:#ed8b32;--source:#20a678;--instrument:#9d5bd2}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 48% 42%,#fff 0,#f6f8fc 48%,#eaf0f7 100%);font-family:Inter,"Malgun Gothic",Arial,sans-serif;color:var(--ink)}
+    header{display:flex;align-items:end;justify-content:space-between;gap:24px;padding:26px 34px 14px}h1{font-size:25px;margin:0 0 5px;letter-spacing:-.04em}header p{margin:0;color:var(--muted);font-size:13px}.stats{font-size:12px;color:#52647d;text-align:right}
+    .layout{display:grid;grid-template-columns:minmax(720px,1fr) 290px;gap:14px;padding:0 24px 24px}.card{background:rgba(255,255,255,.8);border:1px solid rgba(190,203,222,.72);box-shadow:0 18px 50px rgba(36,58,91,.08);backdrop-filter:blur(10px);border-radius:20px}
+    .canvas{min-height:760px;position:relative;overflow:hidden}.toolbar{position:absolute;z-index:2;left:18px;top:18px;display:flex;gap:9px;align-items:center;flex-wrap:wrap}.search{border:1px solid #ccd7e6;background:#fff;border-radius:12px;padding:10px 13px;width:240px;color:var(--ink);outline:none}.search:focus{border-color:#7f9fe8;box-shadow:0 0 0 3px #e7eeff}
+    #filters{display:flex;gap:6px;flex-wrap:wrap}.filter{display:flex;align-items:center;gap:5px;padding:7px 9px;border-radius:10px;background:#fff;border:1px solid #d9e1ec;font-size:11px;color:#506078;cursor:pointer}.filter input{accent-color:#426fd5}.dot{width:7px;height:7px;border-radius:50%}
+    svg{width:100%;height:760px;display:block}.ring{fill:none;stroke:#dce5f1;stroke-width:1;stroke-dasharray:4 8}.edge{stroke:var(--line);stroke-width:1;opacity:.44}.edge.active{stroke:#527bd7;stroke-width:1.7;opacity:.9}.node{cursor:pointer;transition:.18s}.node circle{stroke:#fff;stroke-width:2;filter:drop-shadow(0 5px 6px rgba(35,55,89,.16))}.node:hover{filter:brightness(1.04)}.node.dim{opacity:.1}.node.active circle{stroke:#172a4b;stroke-width:3}.label{font-size:10px;font-weight:750;text-anchor:middle;fill:var(--ink);paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round;pointer-events:none}.minor{display:none}.node:hover .minor,.node.active .minor{display:block}
+    .side{padding:21px;min-height:760px}h2{font-size:15px;margin:0 0 13px}.empty{font-size:13px;line-height:1.7;color:var(--muted);padding-top:8px}.badge{display:inline-flex;padding:5px 8px;border-radius:8px;background:#edf2ff;color:#4767aa;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em}.detail-title{font-size:20px;font-weight:850;margin:12px 0;word-break:keep-all}.detail-text{font-size:13px;line-height:1.72;color:#4f6079;white-space:pre-wrap;max-height:350px;overflow:auto}.meta{margin-top:18px;padding-top:15px;border-top:1px solid #e2e8f0;font-size:11px;line-height:1.7;color:#758399;word-break:break-all}.relations{margin-top:18px}.relations button{width:100%;text-align:left;border:0;background:#f3f6fb;border-radius:10px;padding:9px 10px;margin:4px 0;font-size:11px;color:#42526b;cursor:pointer}.relations button:hover{background:#eaf0fa}
+    .error{padding:90px 30px;text-align:center;color:#b24356}.legend{position:absolute;left:20px;bottom:16px;display:flex;gap:14px;flex-wrap:wrap;color:#6a788d;font-size:10px}.legend span{display:flex;align-items:center;gap:5px}
+    @media(max-width:1000px){header{align-items:start;flex-direction:column}.stats{text-align:left}.layout{grid-template-columns:1fr}.canvas{min-height:650px}svg{height:650px}.side{min-height:auto}.search{width:200px}}
+  </style>
+</head>
+<body>
+<header><div><h1>Legal Wiki Ontology</h1><p>LLM Wiki에서 추출한 법률·조문·범죄·형벌·출처 관계</p></div><div class="stats" id="stats">데이터를 불러오는 중…</div></header>
+<main class="layout">
+  <section class="card canvas">
+    <div class="toolbar"><input class="search" id="search" placeholder="법률·조문 검색"><div id="filters"></div></div>
+    <svg id="graph" viewBox="0 0 1100 760" role="img" aria-label="법률 Wiki 온톨로지 원형 그래프"></svg>
+    <div class="legend" id="legend"></div>
+  </section>
+  <aside class="card side"><h2>Knowledge detail</h2><div id="details" class="empty">노드를 선택하면 Wiki 근거와 연결 관계를 확인할 수 있습니다.</div></aside>
+</main>
+<script>
+const DATA_URL="ontology/legal-wiki.json";
+const colors={Law:"#6d4fe0",Article:"#2f72e8",Offense:"#e5526d",Penalty:"#ed8b32",Source:"#20a678",Instrument:"#9d5bd2"};
+const names={Law:"법률",Article:"조문",Offense:"범죄",Penalty:"형벌",Source:"출처",Instrument:"수단"};
+const radii={Law:145,Article:225,Offense:275,Penalty:300,Instrument:300,Source:320};
+const sizes={Law:25,Article:11,Offense:14,Penalty:10,Instrument:12,Source:8};
+let data,positions={},selected=null,enabled=new Set(Object.keys(colors));
+const svg=document.getElementById("graph"),details=document.getElementById("details"),search=document.getElementById("search");
+const NS="http://www.w3.org/2000/svg",cx=550,cy=400;
+function el(tag,attrs={}){const node=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,v));return node}
+function short(text,n=18){return text.length>n?text.slice(0,n-1)+"…":text}
+function prepare(){
+  Object.keys(colors).forEach((type,typeIndex)=>{const items=data.nodes.filter(n=>n.type===type);items.forEach((node,i)=>{const angle=-Math.PI/2+(Math.PI*2*i/Math.max(items.length,1))+(typeIndex*.08);positions[node.id]={x:cx+Math.cos(angle)*radii[type],y:cy+Math.sin(angle)*radii[type]}})});
+}
+function render(){
+  svg.innerHTML="";[145,225,275,320].forEach(r=>svg.appendChild(el("circle",{cx,cy,r,class:"ring"})));
+  const edgeLayer=el("g"),nodeLayer=el("g");svg.append(edgeLayer,nodeLayer);
+  const q=search.value.trim().toLowerCase();
+  const matched=new Set(data.nodes.filter(n=>!q||`${n.label} ${n.text||""}`.toLowerCase().includes(q)).map(n=>n.id));
+  data.edges.forEach(edge=>{const a=positions[edge.source],b=positions[edge.target];if(!a||!b)return;const visible=enabled.has(node(edge.source).type)&&enabled.has(node(edge.target).type);const active=selected&&(edge.source===selected||edge.target===selected);const line=el("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y,class:`edge${active?" active":""}`});if(!visible||q&&(!matched.has(edge.source)&&!matched.has(edge.target)))line.style.display="none";line.appendChild(el("title"));line.firstChild.textContent=edge.relation;edgeLayer.appendChild(line)});
+  data.nodes.forEach(item=>{const p=positions[item.id],visible=enabled.has(item.type),isMatch=matched.has(item.id),g=el("g",{class:`node${q&&!isMatch?" dim":""}${selected===item.id?" active":""}`,transform:`translate(${p.x} ${p.y})`});if(!visible)g.style.display="none";const circle=el("circle",{r:sizes[item.type]||10,fill:colors[item.type]||"#889"});const title=el("title");title.textContent=`${names[item.type]||item.type}: ${item.label}`;circle.appendChild(title);g.appendChild(circle);if(item.type==="Law"||item.type==="Offense"||selected===item.id){const text=el("text",{class:`label ${item.type==="Law"?"":"minor"}`,y:(sizes[item.type]||10)+15});text.textContent=short(item.label,item.type==="Law"?12:18);g.appendChild(text)}g.addEventListener("click",()=>select(item.id));nodeLayer.appendChild(g)});
+}
+function node(id){return data.nodes.find(n=>n.id===id)||{}}
+function select(id){selected=id;const item=node(id),related=data.edges.filter(e=>e.source===id||e.target===id);details.className="";details.innerHTML=`<span class="badge">${names[item.type]||item.type}</span><div class="detail-title">${item.label}</div>${item.text?`<div class="detail-text">${item.text}</div>`:""}<div class="meta">${item.wiki?`Wiki: ${item.wiki}<br>`:""}${item.value?`Source: ${item.value}<br>`:""}URI: ${item.id}</div><div class="relations">${related.map(e=>{const other=node(e.source===id?e.target:e.source);return `<button data-id="${other.id}">${e.relation} · ${other.label}</button>`}).join("")}</div>`;details.querySelectorAll("button").forEach(b=>b.onclick=()=>select(b.dataset.id));render()}
+function controls(){const filters=document.getElementById("filters"),legend=document.getElementById("legend");Object.keys(colors).forEach(type=>{const label=document.createElement("label");label.className="filter";label.innerHTML=`<input type="checkbox" checked data-type="${type}"><i class="dot" style="background:${colors[type]}"></i>${names[type]}`;filters.appendChild(label);label.querySelector("input").onchange=e=>{e.target.checked?enabled.add(type):enabled.delete(type);render()};const item=document.createElement("span");item.innerHTML=`<i class="dot" style="background:${colors[type]}"></i>${names[type]}`;legend.appendChild(item)});search.addEventListener("input",render)}
+fetch(DATA_URL).then(r=>{if(!r.ok)throw new Error(`${r.status} ${r.statusText}`);return r.json()}).then(payload=>{data=payload;prepare();controls();render();const s=data.stats;document.getElementById("stats").textContent=`법률 ${s.laws||0} · 조문 ${s.articles||0} · 형벌 ${s.penalties||0} · 관계 ${s.edges||0}`}).catch(error=>{svg.outerHTML=`<div class="error">온톨로지를 불러오지 못했습니다.<br>${error.message}<br><br><code>python build_ontology.py</code> 실행 후 HTTP 서버로 여세요.</div>`;document.getElementById("stats").textContent="load failed"});
+</script>
+</body>
+</html>

@@ -8,6 +8,7 @@
     "start": "node dist/backend/server.js",
     "build": "tsc -p backend/tsconfig.build.json",
     "test": "npm run test:backend",
+    "test:legal": "python -m pytest -q backend/legal/tests",
     "typecheck": "tsc -p backend/tsconfig.json --noEmit",
     "backend": "tsx backend/src/server.ts",
     "searxng:up": "tsx backend/src/cli/searxng-container.ts up",

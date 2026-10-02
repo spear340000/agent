@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "fingerprint": "89495eb84b0e71c5afbd3f738ddcbbe71b0d7a085b2587df79b90cf737ddfad9",
+  "source_files": 33,
+  "generated_at": "2026-09-16T06:47:04.985992+00:00",
+  "stats": {
+    "laws": 9,
+    "articles": 52,
+    "offenses": 3,
+    "instruments": 0,
+    "penalties": 5,
+    "sources": 18,
+    "documents": 9,
+    "nodes": 87,
+    "edges": 81
+  }
+}

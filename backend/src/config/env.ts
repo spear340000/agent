@@ -18,11 +18,16 @@ function positiveInteger(name: string, fallback: number): number {
   return parsed;
 }
 
-const LEGAL_ROOT = (process.env.LEGAL_RAG_ROOT ?? 'C:/Users/spear/project/testA').replace(/[/\\]+$/, '');
+const LEGAL_HOME = path.resolve('backend/legal');
+const LEGAL_RUNTIME_ROOT = path.resolve(process.env.LEGAL_RUNTIME_ROOT ?? LEGAL_HOME);
+const LEGAL_ROOT = path.resolve(
+  process.env.LEGAL_DATA_ROOT ??
+    (process.env.LEGAL_RAG_ROOT ? path.join(process.env.LEGAL_RAG_ROOT, 'data') : path.join(LEGAL_HOME, 'data'))
+);
 const LEGAL_PYTHON_FALLBACK =
   process.platform === 'win32'
-    ? path.join(LEGAL_ROOT, '.mcp-venv', 'Scripts', 'python.exe')
-    : path.join(LEGAL_ROOT, '.venv', 'bin', 'python');
+    ? path.join(LEGAL_HOME, '.venv', 'Scripts', 'python.exe')
+    : path.join(LEGAL_HOME, '.venv', 'bin', 'python');
 
 export const LEGAL_ROUTING_DEFAULTS = {
   multiIssueThreshold: 2,
@@ -57,13 +62,14 @@ export const env = {
   legal: {
     enabled: process.env.LEGAL_ENABLED !== 'false',
     root: LEGAL_ROOT,
+    runtimeRoot: LEGAL_RUNTIME_ROOT,
     python: process.env.LEGAL_PYTHON ?? LEGAL_PYTHON_FALLBACK,
-    script: process.env.LEGAL_MCP_SCRIPT ?? path.join(LEGAL_ROOT, 'rag_mcp_server.py'),
-    graphPath: process.env.LEGAL_GRAPH_PATH ?? path.join(LEGAL_ROOT, 'data', 'legal_graph.sqlite3'),
-    ontologyPath: process.env.LEGAL_ONTOLOGY_PATH ?? path.join(LEGAL_ROOT, 'ontology', 'legal-wiki.ttl'),
-    okfPath: process.env.OKF_BUNDLE_PATH ?? path.join(LEGAL_ROOT, 'okf', 'korea-legal'),
-    qdrantPath: process.env.QDRANT_PATH ?? path.join(LEGAL_ROOT, 'data', 'qdrant'),
-    vectorMemmapPath: process.env.VECTOR_MEMMAP_PATH ?? path.join(LEGAL_ROOT, 'data', 'vector_memmap'),
+    script: process.env.LEGAL_MCP_SCRIPT ?? path.join(LEGAL_RUNTIME_ROOT, 'rag_mcp_server.py'),
+    graphPath: process.env.LEGAL_GRAPH_PATH ?? path.join(LEGAL_ROOT, 'legal_graph.sqlite3'),
+    ontologyPath: process.env.LEGAL_ONTOLOGY_PATH ?? path.join(LEGAL_HOME, 'ontology', 'legal-wiki.ttl'),
+    okfPath: process.env.OKF_BUNDLE_PATH ?? path.join(LEGAL_HOME, 'okf', 'korea-legal'),
+    qdrantPath: process.env.QDRANT_PATH ?? path.join(LEGAL_ROOT, 'qdrant'),
+    vectorMemmapPath: process.env.VECTOR_MEMMAP_PATH ?? path.join(LEGAL_ROOT, 'vector_memmap'),
     useQdrant: process.env.USE_QDRANT === 'true' || process.env.LEGAL_VECTOR_SEARCH !== 'false',
     vectorBackend: process.env.QDRANT_BACKEND ?? 'memmap',
     embedModel: process.env.NVIDIA_EMBED_MODEL,
