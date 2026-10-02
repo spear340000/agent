@@ -4,9 +4,11 @@
 
 ## 데이터 번들
 
-색인 데이터는 Git에 포함하지 않습니다. testA의 데이터 전체가 약 8.2GB이고, SQLite FTS 인덱스만으로도 약 784MB이며, 판례 원문 색인은 별도 원문 파일 경로를 참조합니다. 다른 환경에 배포할 때는 동일한 읽기 전용 번들을 별도 전달한 뒤 `LEGAL_DATA_ROOT`를 그 안의 `data` 디렉터리로 지정해야 합니다. 번들의 파일을 복사하거나 다시 색인할 때는 이 프로젝트가 원본 testA 데이터를 변경하지 않습니다.
+검색에 필요한 법령·판례 FTS 인덱스, 그래프, 사용 중인 벡터 메모리맵, OKF·온톨로지·Wiki와 판례 원문 번들을 이 프로젝트에 포함합니다. 대용량 바이너리와 압축 원문은 Git LFS로 관리합니다. 구형 2.27GB JSON 벡터 덤프와 중복 Qdrant 저장소는 런타임에서 사용하지 않아 제외했습니다. 원본 testA 자료는 복사만 하며 수정·재색인하지 않습니다.
 
-현재 testA 번들 사용 예시(PowerShell):
+새 PC에는 Git LFS를 설치한 뒤 저장소를 받은 다음 `npm run legal:data`를 실행하세요. 명령은 LFS 데이터 포인터를 실제 파일로 받고 판례 원문 ZIP을 `backend/legal/data/legal/precedent`에 안전하게 풀어 둡니다. Git LFS를 쓰지 않는 ZIP 다운로드는 LFS 포인터만 포함할 수 있으므로 이 명령이 필요합니다.
+
+저장소에 포함된 번들이 기본값입니다. 기존 testA 원본을 바로 참조하는 개발 예시(PowerShell):
 
 ```powershell
 $env:LEGAL_DATA_ROOT = 'C:\Users\spear\project\testA\data'
@@ -24,6 +26,6 @@ python -m venv backend/legal/.venv
 backend/legal/.venv/Scripts/python.exe -m pip install -r backend/legal/requirements.txt
 ```
 
-Then set `LEGAL_PYTHON` to `backend/legal/.venv/Scripts/python.exe` (Windows) or `backend/legal/.venv/bin/python` (Linux/macOS). The Python entrypoint and runtime modules live directly in `backend/legal/`; `LEGAL_RUNTIME_ROOT` is only needed if they are relocated. Install `requirements-dev.txt` to run `npm run test:legal`. NVIDIA credentials are supplied only through the local ignored `.env` or process environment; never put them in the corpus or Git.
+Then set `LEGAL_PYTHON` to `backend/legal/.venv/Scripts/python.exe` (Windows) or `backend/legal/.venv/bin/python` (Linux/macOS) in the local `.env`. Run `npm run legal:data` to fetch LFS assets and extract precedent source files. The Python entrypoint and runtime modules live directly in `backend/legal/`; `LEGAL_RUNTIME_ROOT` is only needed if they are relocated. Install `requirements-dev.txt` to run `npm run test:legal`. NVIDIA credentials are supplied only through the local ignored `.env` or process environment; never put them in the corpus or Git.
 
-The MCP server verifies prebuilt law and precedent indexes and does not construct or modify them. Missing indexes are reported as unavailable. Vector retrieval remains dependent on the configured embedding endpoint and the matching local vector bundle. Graph, ontology, and OKF readiness are reported independently.
+The MCP server verifies prebuilt law and precedent indexes and does not construct or modify them. Missing indexes or unpacked precedent sources are reported as unavailable. Vector retrieval remains dependent on the configured embedding endpoint and the included matching vector bundle. Graph, ontology, and OKF readiness are reported independently.

@@ -21,12 +21,15 @@
 /build
 /dist/
 /data/
-/backend/legal/data/
 /backend/legal/.venv/
 /backend/legal/runtime/__pycache__/
 /backend/legal/tests/.pytest_cache/
 **/__pycache__/
 **/.pytest_cache/
+/backend/legal/data/*.log
+/backend/legal/data/legal/precedent/
+/backend/legal/data/*.sqlite3-shm
+/backend/legal/data/*.sqlite3-wal
 
 # misc
 .DS_Store

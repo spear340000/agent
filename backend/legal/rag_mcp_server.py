@@ -130,13 +130,15 @@ _KNOWLEDGE_READY = threading.Event()
 def load_knowledge() -> None:
     """Verify prebuilt indexes; never mutate or rebuild the legal corpus."""
     from legal_fts import index_ready as laws_ready
-    from precedent_fts import index_ready as precedents_ready
+    from precedent_fts import PRECEDENT_ROOT, index_ready as precedents_ready
 
     missing = []
     if not laws_ready():
         missing.append("law FTS index")
     if not precedents_ready():
         missing.append("precedent FTS index")
+    if not PRECEDENT_ROOT.is_dir():
+        missing.append("precedent source documents")
     if missing:
         raise RuntimeError("read-only legal indexes are missing: " + ", ".join(missing))
 
@@ -397,7 +399,7 @@ def get_legal_relations(
 
 def get_knowledge_status() -> dict[str, Any]:
     from legal_fts import index_status as legal_status
-    from precedent_fts import index_status as precedent_status
+    from precedent_fts import PRECEDENT_ROOT, index_status as precedent_status
     from legal_graph import graph_status
     from legal_ontology import ontology_contract, validate_graph_types
     from legal_vector import vector_status
@@ -431,9 +433,13 @@ def get_knowledge_status() -> dict[str, Any]:
             "reason": "disabled by USE_QDRANT=false (safe default)",
         }
 
+    precedents = precedent_status()
+    if not PRECEDENT_ROOT.is_dir():
+        precedents = {**precedents, "ready": False, "reason": "precedent source documents are missing"}
+
     return {
         "server": SERVER_INFO,
-        "lexical": {"laws": legal_status(), "precedents": precedent_status()},
+        "lexical": {"laws": legal_status(), "precedents": precedents},
         "vector": vector,
         "graph": graph,
         "ontology": {
