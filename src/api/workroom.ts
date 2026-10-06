@@ -224,8 +224,17 @@ export function getLegalWikiPage(
   connection: Connection = defaultConnection,
   fetcher: Fetcher = fetch
 ): Promise<LegalWikiPageChunk> {
-  const params = new URLSearchParams({ name, offset: String(offset), limit: String(limit) })
-  return request(connection, `/api/legal/wiki/page?${params.toString()}`, {}, fetcher)
+  const params = new URLSearchParams({
+    name,
+    offset: String(offset),
+    limit: String(limit)
+  })
+  return request(
+    connection,
+    `/api/legal/wiki/page?${params.toString()}`,
+    {},
+    fetcher
+  )
 }
 export type LegalLayerUse = {
   id:

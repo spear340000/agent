@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   ArrowRight,
@@ -88,6 +88,75 @@ function excerptText(value: string): string {
     .trim()
 }
 
+function parseWikiDocument(content: string): {
+  body: string
+  metadata: Array<{ label: string; value: string }>
+} {
+  const lines = content.replace(/^\uFEFF/u, '').split(/\r?\n/u)
+  if (lines[0] !== '---') return { body: content, metadata: [] }
+  const end = lines.findIndex(
+    (line, index) => index > 0 && line.trim() === '---'
+  )
+  if (end < 0) return { body: content, metadata: [] }
+
+  const labels: Record<string, string> = {
+    type: '자료 유형',
+    title: '원문 제목',
+    sources: '출처 파일',
+    status: '상태'
+  }
+  const fields: Array<{
+    key: string
+    label: string
+    value: string
+    items: number
+  }> = []
+  for (const line of lines.slice(1, end)) {
+    const field = line.match(/^([\w-]+):\s*(.*)$/u)
+    if (field) {
+      fields.push({
+        key: field[1],
+        label: labels[field[1]] ?? field[1],
+        value: field[2].trim(),
+        items: 0
+      })
+    } else if (line.trim() && fields.length) {
+      const last = fields[fields.length - 1]
+      if (last.key === 'sources' && /^\s*-\s+/u.test(line)) last.items += 1
+      else last.value = [last.value, line.trim()].filter(Boolean).join(' ')
+    }
+  }
+  const cleanValue = (value: string) => {
+    if (value.startsWith('"') && value.endsWith('"')) {
+      try {
+        return JSON.parse(value) as string
+      } catch {
+        return value.slice(1, -1)
+      }
+    }
+    return value.replace(/^'(.*)'$/u, '$1')
+  }
+  return {
+    body: lines
+      .slice(end + 1)
+      .join('\n')
+      .trimStart(),
+    metadata: fields
+      .map((field) => ({
+        label: field.label,
+        value:
+          field.key === 'sources'
+            ? `${field.items || (field.value && field.value !== '[]' ? 1 : 0)}개`
+            : field.key === 'type' && field.value === 'Document'
+              ? '문서'
+              : field.key === 'status' && field.value === 'active'
+                ? '사용 중'
+                : cleanValue(field.value)
+      }))
+      .filter((field) => field.value)
+  }
+}
+
 const GRAPH_RELATION_LABELS: Record<string, string> = {
   RELATES_TO: '개념 연결',
   CITES_ARTICLE: '조문 인용',
@@ -129,7 +198,7 @@ function groupGraphItems(items: LegalLibraryItem[]): GraphResultGroup[] {
 
     let category = '관계'
     let name = edge
-      ? GRAPH_RELATION_LABELS[edge.relation] ?? edge.relation
+      ? (GRAPH_RELATION_LABELS[edge.relation] ?? edge.relation)
       : item.title
 
     if (node) {
@@ -146,9 +215,7 @@ function groupGraphItems(items: LegalLibraryItem[]): GraphResultGroup[] {
       else if (node === document) category = '출처'
 
       name =
-        category === '법률'
-          ? node.label.replace(/^법률\s*/u, '')
-          : node.label
+        category === '법률' ? node.label.replace(/^법률\s*/u, '') : node.label
     }
 
     const key = `${category}:${name.trim().toLocaleLowerCase()}`
@@ -174,31 +241,71 @@ function LegalGraphCanvas({
   onSelectNode: (label: string) => void
   includeContext: boolean
 }) {
-  const edges = items.flatMap(item => item.graphRelation ? [item.graphRelation] : [])
-    .filter(edge => includeContext || !['DERIVED_FROM', 'DECIDED_BY'].includes(edge.relation))
+  const edges = items
+    .flatMap((item) => (item.graphRelation ? [item.graphRelation] : []))
+    .filter(
+      (edge) =>
+        includeContext ||
+        !['DERIVED_FROM', 'DECIDED_BY'].includes(edge.relation)
+    )
   if (!edges.length) return null
 
-  const sources = [...new Map(edges.map(edge => [edge.sourceId, { id: edge.sourceId, label: edge.sourceLabel, type: edge.sourceType }])).values()]
-  const targets = [...new Map(edges.map(edge => [edge.targetId, { id: edge.targetId, label: edge.targetLabel, type: edge.targetType }])).values()]
+  const sources = [
+    ...new Map(
+      edges.map((edge) => [
+        edge.sourceId,
+        { id: edge.sourceId, label: edge.sourceLabel, type: edge.sourceType }
+      ])
+    ).values()
+  ]
+  const targets = [
+    ...new Map(
+      edges.map((edge) => [
+        edge.targetId,
+        { id: edge.targetId, label: edge.targetLabel, type: edge.targetType }
+      ])
+    ).values()
+  ]
+  const nodes = [
+    ...new Map([...sources, ...targets].map((node) => [node.id, node])).values()
+  ]
+  const nodeKey = (node: (typeof nodes)[number]) =>
+    `${node.type}:${node.label.trim().toLocaleLowerCase()}`
+  const duplicateTotals = new Map<string, number>()
+  for (const node of nodes)
+    duplicateTotals.set(
+      nodeKey(node),
+      (duplicateTotals.get(nodeKey(node)) ?? 0) + 1
+    )
+  const duplicatePositions = new Map<string, number>()
   const rowHeight = 100
   const height = Math.max(300, edges.length * rowHeight + 70)
-  const nodeLabel = (label: string) => [...label].length > 34 ? `${[...label].slice(0, 33).join('')}…` : label
-  const nodeColor = (type: string) => type === 'LegalConcept'
-    ? '#e4eee6'
-    : type === 'Precedent'
-      ? '#e8ece5'
-      : type === 'Article'
-        ? '#f2ecdc'
-        : '#edeae2'
+  const nodeLabel = (label: string) =>
+    [...label].length > 34 ? `${[...label].slice(0, 33).join('')}…` : label
+  const nodeColor = (type: string) =>
+    type === 'LegalConcept'
+      ? '#e4eee6'
+      : type === 'Precedent'
+        ? '#e8ece5'
+        : type === 'Article'
+          ? '#f2ecdc'
+          : '#edeae2'
 
   return (
-    <section className="system-explorer__graph-panel" aria-labelledby="legal-graph-title">
+    <section
+      className="system-explorer__graph-panel"
+      aria-labelledby="legal-graph-title"
+    >
       <div className="system-explorer__graph-heading">
         <div>
           <h3 id="legal-graph-title">실제 관계 경로</h3>
-          <p>검색어와 일치한 그래프 노드에서 읽기 전용으로 확인한 관계입니다.</p>
+          <p>
+            검색어와 일치한 그래프 노드에서 읽기 전용으로 확인한 관계입니다.
+          </p>
         </div>
-        <span>{edges.length}개 관계 · {new Set([...sources, ...targets].map(node => node.id)).size}개 노드</span>
+        <span>
+          {edges.length}개 관계 · {nodes.length}개 노드
+        </span>
       </div>
       <div className="system-explorer__graph-scroll">
         <svg
@@ -208,46 +315,140 @@ function LegalGraphCanvas({
           aria-labelledby="legal-graph-title"
         >
           <defs>
-            <marker id="legal-graph-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <marker
+              id="legal-graph-arrow"
+              markerWidth="8"
+              markerHeight="8"
+              refX="7"
+              refY="4"
+              orient="auto"
+            >
               <path d="M0,0 L8,4 L0,8 z" fill="#789183" />
             </marker>
           </defs>
           {edges.map((edge, index) => {
             const y = 42 + index * rowHeight
-            const source = { id: edge.sourceId, label: edge.sourceLabel, type: edge.sourceType }
-            const target = { id: edge.targetId, label: edge.targetLabel, type: edge.targetType }
+            const source = {
+              id: edge.sourceId,
+              label: edge.sourceLabel,
+              type: edge.sourceType
+            }
+            const target = {
+              id: edge.targetId,
+              label: edge.targetLabel,
+              type: edge.targetType
+            }
             return (
               <g key={`${edge.sourceId}:${edge.relation}:${edge.targetId}`}>
-                <title>{source.label} —{edge.relation}→ {target.label}</title>
-                <path d={`M 322 ${y + 34} C 440 ${y + 34}, 560 ${y + 34}, 678 ${y + 34}`} fill="none" stroke="#91a397" strokeWidth="1.5" markerEnd="url(#legal-graph-arrow)" />
-                <text x="500" y={y + 28} textAnchor="middle" className="system-explorer__graph-edge-label">
+                <title>
+                  {source.label} —{edge.relation}→ {target.label}
+                </title>
+                <path
+                  d={`M 322 ${y + 34} C 440 ${y + 34}, 560 ${y + 34}, 678 ${y + 34}`}
+                  fill="none"
+                  stroke="#91a397"
+                  strokeWidth="1.5"
+                  markerEnd="url(#legal-graph-arrow)"
+                />
+                <text
+                  x="500"
+                  y={y + 28}
+                  textAnchor="middle"
+                  className="system-explorer__graph-edge-label"
+                >
                   {GRAPH_RELATION_LABELS[edge.relation] ?? edge.relation}
                 </text>
                 <g>
-                  <title>{source.label} · {source.type} · {source.id}</title>
-                  <rect x="28" y={y} width="294" height="68" rx="5" fill={nodeColor(source.type)} stroke="#cbd5cc" />
-                  <text x="46" y={y + 27} className="system-explorer__graph-node-label">{nodeLabel(source.label)}</text>
-                  <text x="46" y={y + 49} className="system-explorer__graph-node-type">{source.type}</text>
+                  <title>
+                    {source.label} · {source.type} · {source.id}
+                  </title>
+                  <rect
+                    x="28"
+                    y={y}
+                    width="294"
+                    height="68"
+                    rx="5"
+                    fill={nodeColor(source.type)}
+                    stroke="#cbd5cc"
+                  />
+                  <text
+                    x="46"
+                    y={y + 27}
+                    className="system-explorer__graph-node-label"
+                  >
+                    {nodeLabel(source.label)}
+                  </text>
+                  <text
+                    x="46"
+                    y={y + 49}
+                    className="system-explorer__graph-node-type"
+                  >
+                    {source.type}
+                  </text>
                 </g>
                 <g>
-                  <title>{target.label} · {target.type} · {target.id}</title>
-                  <rect x="678" y={y} width="294" height="68" rx="5" fill={nodeColor(target.type)} stroke="#cbd5cc" />
-                  <text x="696" y={y + 27} className="system-explorer__graph-node-label">{nodeLabel(target.label)}</text>
-                  <text x="696" y={y + 49} className="system-explorer__graph-node-type">{target.type}</text>
+                  <title>
+                    {target.label} · {target.type} · {target.id}
+                  </title>
+                  <rect
+                    x="678"
+                    y={y}
+                    width="294"
+                    height="68"
+                    rx="5"
+                    fill={nodeColor(target.type)}
+                    stroke="#cbd5cc"
+                  />
+                  <text
+                    x="696"
+                    y={y + 27}
+                    className="system-explorer__graph-node-label"
+                  >
+                    {nodeLabel(target.label)}
+                  </text>
+                  <text
+                    x="696"
+                    y={y + 49}
+                    className="system-explorer__graph-node-type"
+                  >
+                    {target.type}
+                  </text>
                 </g>
               </g>
             )
           })}
         </svg>
       </div>
-      <ul className="system-explorer__graph-node-actions" aria-label="관계 그래프 노드">
-        {[...new Map([...sources, ...targets].map(node => [node.id, node])).values()].map(node => (
-          <li key={node.id}>
-            <button type="button" onClick={() => onSelectNode(node.label)}>
-              {node.label}<small>{node.type} · 노드 검색어로 사용</small>
-            </button>
-          </li>
-        ))}
+      <ul
+        className="system-explorer__graph-node-actions"
+        aria-label="관계 그래프 노드"
+      >
+        {nodes.map((node) => {
+          const key = nodeKey(node)
+          const total = duplicateTotals.get(key) ?? 1
+          const position = (duplicatePositions.get(key) ?? 0) + 1
+          duplicatePositions.set(key, position)
+          const shortId =
+            node.id.length > 20
+              ? `${node.id.slice(0, 10)}…${node.id.slice(-7)}`
+              : node.id
+          return (
+            <li key={node.id}>
+              <button
+                type="button"
+                title={`${node.label} · ${node.type} · ${node.id}`}
+                onClick={() => onSelectNode(node.label)}
+              >
+                {node.label}
+                <small>
+                  {node.type}
+                  {total > 1 ? ` ${position}/${total} · ID ${shortId}` : ''}
+                  {' · 노드 검색어로 사용'}
+                </small>
+              </button>
+            </li>
+          )
+        })}
       </ul>
     </section>
   )
@@ -323,8 +524,7 @@ function WorkflowCanvas({ task }: { task: Task }) {
       !planningSteps.includes(step)
   )
   const otherSteps = task.steps.filter(
-    (step) =>
-      !planningSteps.includes(step) && !collectionSteps.includes(step)
+    (step) => !planningSteps.includes(step) && !collectionSteps.includes(step)
   )
   const citations = task.legal?.citations ?? []
   const taskLabel =
@@ -555,15 +755,20 @@ export default function SystemExplorer({
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [libraryError, setLibraryError] = useState('')
   const [librarySearchKey, setLibrarySearchKey] = useState('')
-  const [precedentPages, setPrecedentPages] = useState<Record<string, {
-    excerpt: string
-    offset: number
-    nextOffset: number
-    total?: number
-    hasMore: boolean
-    loading: boolean
-    error?: string
-  }>>({})
+  const [precedentPages, setPrecedentPages] = useState<
+    Record<
+      string,
+      {
+        excerpt: string
+        offset: number
+        nextOffset: number
+        total?: number
+        hasMore: boolean
+        loading: boolean
+        error?: string
+      }
+    >
+  >({})
   const autoLoadedTopics = useRef(new Set<string>())
   const [catalogItems, setCatalogItems] = useState<LegalCatalogEntry[]>([])
   const [catalogError, setCatalogError] = useState('')
@@ -578,10 +783,16 @@ export default function SystemExplorer({
   const [wikiFilter, setWikiFilter] = useState('')
   const [selectedWikiPage, setSelectedWikiPage] = useState('')
   const [wikiContent, setWikiContent] = useState('')
-  const [wikiPageChunk, setWikiPageChunk] = useState<LegalWikiPageChunk | null>(null)
+  const [wikiPageChunk, setWikiPageChunk] = useState<LegalWikiPageChunk | null>(
+    null
+  )
   const [wikiPageLoading, setWikiPageLoading] = useState(false)
   const [wikiPageError, setWikiPageError] = useState('')
   const wikiPageRequest = useRef(0)
+  const wikiDocument = useMemo(
+    () => parseWikiDocument(wikiContent),
+    [wikiContent]
+  )
   const [selectedTaskId, setSelectedTaskId] = useState('')
   const healthLabel =
     backendStatus === 'online'
@@ -740,20 +951,37 @@ export default function SystemExplorer({
   const visibleLibraryItems = libraryLoaded ? libraryItems : []
   const visibleGraphItems = includeGraphContext
     ? visibleLibraryItems
-    : visibleLibraryItems.filter(item => !['DERIVED_FROM', 'DECIDED_BY'].includes(item.graphRelation?.relation ?? ''))
+    : visibleLibraryItems.filter(
+        (item) =>
+          !['DERIVED_FROM', 'DECIDED_BY'].includes(
+            item.graphRelation?.relation ?? ''
+          )
+      )
   const loadPrecedentPage = async (item: LegalLibraryItem, offset = 0) => {
     const key = `${item.corpus}:${item.recordId}`
-    setPrecedentPages(current => ({
+    setPrecedentPages((current) => ({
       ...current,
-      [key]: { ...(current[key] ?? { excerpt: '', offset: 0, nextOffset: 0, hasMore: true }), loading: true, error: undefined }
+      [key]: {
+        ...(current[key] ?? {
+          excerpt: '',
+          offset: 0,
+          nextOffset: 0,
+          hasMore: true
+        }),
+        loading: true,
+        error: undefined
+      }
     }))
     try {
-      const identifier = item.caseNumber ?? item.precedentSerial ?? item.caseName ?? item.title
+      const identifier =
+        item.caseNumber ?? item.precedentSerial ?? item.caseName ?? item.title
       const result = await getLegalPrecedent(identifier, offset, connection)
-      setPrecedentPages(current => ({
+      setPrecedentPages((current) => ({
         ...current,
         [key]: {
-          excerpt: offset ? `${current[key]?.excerpt ?? ''}${result.item.excerpt}` : result.item.excerpt,
+          excerpt: offset
+            ? `${current[key]?.excerpt ?? ''}${result.item.excerpt}`
+            : result.item.excerpt,
           offset: result.paging.offset ?? offset,
           nextOffset: result.nextOffset,
           total: result.paging.total,
@@ -762,10 +990,15 @@ export default function SystemExplorer({
         }
       }))
     } catch {
-      setPrecedentPages(current => ({
+      setPrecedentPages((current) => ({
         ...current,
         [key]: {
-          ...(current[key] ?? { excerpt: '', offset: 0, nextOffset: offset, hasMore: false }),
+          ...(current[key] ?? {
+            excerpt: '',
+            offset: 0,
+            nextOffset: offset,
+            hasMore: false
+          }),
           loading: false,
           error: '판례 원문을 불러오지 못했습니다. 다시 시도해 주세요.'
         }
@@ -835,21 +1068,25 @@ export default function SystemExplorer({
           </span>
           {item.date ? (
             <span>
-              {item.date.kind === 'decision' ? '선고' : '개정'} {item.date.value}
+              {item.date.kind === 'decision' ? '선고' : '개정'}{' '}
+              {item.date.value}
             </span>
           ) : null}
         </div>
         <h3>
           {item.officialUrl ? (
-            <a href={item.officialUrl} target="_blank" rel="noreferrer noopener">
+            <a
+              href={item.officialUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
               {item.title}
             </a>
           ) : (
             item.title
           )}
         </h3>
-        {(item.kind === 'law-article' &&
-          (item.lawName || item.articleLabel)) ||
+        {(item.kind === 'law-article' && (item.lawName || item.articleLabel)) ||
         item.caseNumber ||
         item.court ? (
           <p className="system-explorer__record-detail">
@@ -873,18 +1110,50 @@ export default function SystemExplorer({
           <summary>색인 식별자·검색 근거 보기</summary>
           <dl className="system-explorer__record-fields">
             <dt>레코드 ID</dt>
-            <dd><code>{item.recordId}</code></dd>
-            {item.indexPath ? <><dt>색인 출처</dt><dd><code>{item.indexPath}</code></dd></> : null}
-            {item.relevance !== undefined ? <><dt>코퍼스 어절 일치</dt><dd>{Math.round(item.relevance * 100)}%{item.termMatches?.length ? ` · ${item.termMatches.join(', ')}` : ''}</dd></> : null}
-            {item.relatedArticles?.length ? <><dt>참조 조문</dt><dd>{item.relatedArticles.join(' · ')}</dd></> : null}
-            {item.statusMarkers?.length ? <><dt>상태 표기</dt><dd>{item.statusMarkers.join(' · ')}</dd></> : null}
+            <dd>
+              <code>{item.recordId}</code>
+            </dd>
+            {item.indexPath ? (
+              <>
+                <dt>색인 출처</dt>
+                <dd>
+                  <code>{item.indexPath}</code>
+                </dd>
+              </>
+            ) : null}
+            {item.relevance !== undefined ? (
+              <>
+                <dt>코퍼스 어절 일치</dt>
+                <dd>
+                  {Math.round(item.relevance * 100)}%
+                  {item.termMatches?.length
+                    ? ` · ${item.termMatches.join(', ')}`
+                    : ''}
+                </dd>
+              </>
+            ) : null}
+            {item.relatedArticles?.length ? (
+              <>
+                <dt>참조 조문</dt>
+                <dd>{item.relatedArticles.join(' · ')}</dd>
+              </>
+            ) : null}
+            {item.statusMarkers?.length ? (
+              <>
+                <dt>상태 표기</dt>
+                <dd>{item.statusMarkers.join(' · ')}</dd>
+              </>
+            ) : null}
           </dl>
         </details>
         {item.kind === 'precedent' ? (
           <details
             className="system-explorer__record-full"
             onToggle={(event) => {
-              if (event.currentTarget.open && !precedentPages[`${item.corpus}:${item.recordId}`])
+              if (
+                event.currentTarget.open &&
+                !precedentPages[`${item.corpus}:${item.recordId}`]
+              )
                 void loadPrecedentPage(item)
             }}
           >
@@ -894,16 +1163,43 @@ export default function SystemExplorer({
               if (!page) return <p>원문을 불러올 준비가 되었습니다.</p>
               return (
                 <>
-                  {page.loading ? <p role="status">판례 원문 조회 중…</p> : null}
-                  {page.error ? <p className="system-explorer__library-error" role="alert">{page.error}</p> : null}
+                  {page.loading ? (
+                    <p role="status">판례 원문 조회 중…</p>
+                  ) : null}
+                  {page.error ? (
+                    <p className="system-explorer__library-error" role="alert">
+                      {page.error}
+                    </p>
+                  ) : null}
                   {page.excerpt ? <pre>{page.excerpt}</pre> : null}
-                  {page.total !== undefined ? <small>원문 {page.total.toLocaleString()}자 · 현재 {page.nextOffset.toLocaleString()}자까지</small> : null}
+                  {page.total !== undefined ? (
+                    <small>
+                      원문 {page.total.toLocaleString()}자 · 현재{' '}
+                      {page.nextOffset.toLocaleString()}자까지
+                    </small>
+                  ) : null}
                   {page.hasMore ? (
-                    <button type="button" disabled={page.loading} onClick={() => void loadPrecedentPage(item, page.nextOffset)}>
+                    <button
+                      type="button"
+                      disabled={page.loading}
+                      onClick={() =>
+                        void loadPrecedentPage(item, page.nextOffset)
+                      }
+                    >
                       {page.loading ? '불러오는 중…' : '원문 이어서 읽기'}
                     </button>
                   ) : null}
-                  {page.error ? <button type="button" disabled={page.loading} onClick={() => void loadPrecedentPage(item, page.nextOffset)}>다시 시도</button> : null}
+                  {page.error ? (
+                    <button
+                      type="button"
+                      disabled={page.loading}
+                      onClick={() =>
+                        void loadPrecedentPage(item, page.nextOffset)
+                      }
+                    >
+                      다시 시도
+                    </button>
+                  ) : null}
                 </>
               )
             })()}
@@ -913,124 +1209,142 @@ export default function SystemExplorer({
     )
 
     return (
-    <>
-      <form
-        className="system-explorer__library-search"
-        onSubmit={(event) => void runLibrarySearch(event)}
-      >
-        {!fixedCorpus ? (
-          <select
-            aria-label="자료 종류"
-            value={allowed.includes(libraryCorpus) ? libraryCorpus : allowed[0]}
-            onChange={(event) =>
-              setLibraryCorpus(event.target.value as 'law' | 'precedent' | 'graph' | 'all')
-            }
-          >
-            {allowed.map((item) => (
-              <option value={item} key={item}>
-                {item === 'law'
-                  ? '법령'
-                  : item === 'precedent'
-                    ? '판례'
-                    : item === 'all'
-                      ? '법령 + 판례'
-                      : '관계 그래프'}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="system-explorer__fixed-filter">관계 그래프</span>
-        )}
-        <input
-          aria-label="자료 검색어"
-          value={libraryQuery}
-          onChange={(event) => setLibraryQuery(event.target.value)}
-          placeholder={
-            (allowed.includes(libraryCorpus) ? libraryCorpus : allowed[0]) ===
-            'precedent'
-              ? '사건명 또는 사건번호'
-              : '법령명, 조문 또는 관계 검색어'
-          }
-        />
-        <button
-          type="submit"
-          disabled={libraryLoading || backendStatus !== 'online'}
+      <>
+        <form
+          className="system-explorer__library-search"
+          onSubmit={(event) => void runLibrarySearch(event)}
         >
-          {libraryLoading ? '검색 중…' : '자료 검색'}
-        </button>
-      </form>
-      {fixedCorpus && topic === 'ontology' && libraryLoaded ? (
-        <>
-          <div className="system-explorer__graph-filter">
-            <p>개념·조문 관계를 우선 표시합니다. 원문 출처와 판결 법원 연결은 문맥 정보에 있습니다.</p>
-            <button type="button" aria-pressed={includeGraphContext} onClick={() => setIncludeGraphContext(value => !value)}>
-              {includeGraphContext ? '문맥 관계 숨기기' : '출처·법원 관계 포함'}
-            </button>
-          </div>
-          <LegalGraphCanvas
-            items={visibleLibraryItems}
-            onSelectNode={setLibraryQuery}
-            includeContext={includeGraphContext}
+          {!fixedCorpus ? (
+            <select
+              aria-label="자료 종류"
+              value={
+                allowed.includes(libraryCorpus) ? libraryCorpus : allowed[0]
+              }
+              onChange={(event) =>
+                setLibraryCorpus(
+                  event.target.value as 'law' | 'precedent' | 'graph' | 'all'
+                )
+              }
+            >
+              {allowed.map((item) => (
+                <option value={item} key={item}>
+                  {item === 'law'
+                    ? '법령'
+                    : item === 'precedent'
+                      ? '판례'
+                      : item === 'all'
+                        ? '법령 + 판례'
+                        : '관계 그래프'}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="system-explorer__fixed-filter">관계 그래프</span>
+          )}
+          <input
+            aria-label="자료 검색어"
+            value={libraryQuery}
+            onChange={(event) => setLibraryQuery(event.target.value)}
+            placeholder={
+              (allowed.includes(libraryCorpus) ? libraryCorpus : allowed[0]) ===
+              'precedent'
+                ? '사건명 또는 사건번호'
+                : '법령명, 조문 또는 관계 검색어'
+            }
           />
-        </>
-      ) : null}
-      {libraryError ? (
-        <p className="system-explorer__library-error" role="alert">
-          {libraryError}
-        </p>
-      ) : null}
-      {libraryLoading ? (
-        <p className="system-explorer__note" role="status">
-          선택한 인덱스에서 실제 자료를 찾고 있습니다.
-        </p>
-      ) : null}
-      {!libraryLoading &&
-      libraryLoaded &&
-      (topic === 'ontology' ? visibleGraphItems.length : visibleLibraryItems.length) === 0 &&
-      !libraryError ? (
-        <p className="system-explorer__note">
-          {librarySearchKey.split(':')[1] === 'graph'
-            ? visibleLibraryItems.length > 0
-              ? '개념·조문 관계는 찾지 못했습니다. 출처·법원 연결을 포함하면 구조 관계를 확인할 수 있습니다.'
-              : '검색 서버가 이 질의에서 검증 가능한 관계 경로를 반환하지 않았습니다. 노드 ID만으로는 관계 근거를 만들지 않습니다.'
-            : '이 검색어와 일치하는 자료가 없습니다. 다른 표현으로 검색해 보세요.'}
-        </p>
-      ) : null}
-      <div
-        className={`system-explorer__records${topic === 'ontology' ? ' system-explorer__records--grouped' : ''}`}
-        aria-live="polite"
-      >
-        {topic === 'ontology'
-          ? graphGroups.map((group) => (
-              <details className="system-explorer__graph-category" key={group.key}>
-                <summary>
-                  <span className="system-explorer__graph-category-label">
-                    {group.category} {group.index}
-                  </span>
-                  <strong className="system-explorer__graph-category-name">
-                    {group.name}
-                  </strong>
-                  <span className="system-explorer__graph-category-count">
-                    {group.items.length}건
-                  </span>
-                </summary>
-                <div className="system-explorer__graph-category-records">
-                  {group.items.map(renderRecord)}
-                </div>
-              </details>
-            ))
-          : visibleLibraryItems.map(renderRecord)}
-      </div>
-      {libraryLoaded && visibleLibraryItems.length > 0 ? (
-        <p className="system-explorer__note">
+          <button
+            type="submit"
+            disabled={libraryLoading || backendStatus !== 'online'}
+          >
+            {libraryLoading ? '검색 중…' : '자료 검색'}
+          </button>
+        </form>
+        {fixedCorpus && topic === 'ontology' && libraryLoaded ? (
+          <>
+            <div className="system-explorer__graph-filter">
+              <p>
+                개념·조문 관계를 우선 표시합니다. 원문 출처와 판결 법원 연결은
+                문맥 정보에 있습니다.
+              </p>
+              <button
+                type="button"
+                aria-pressed={includeGraphContext}
+                onClick={() => setIncludeGraphContext((value) => !value)}
+              >
+                {includeGraphContext
+                  ? '문맥 관계 숨기기'
+                  : '출처·법원 관계 포함'}
+              </button>
+            </div>
+            <LegalGraphCanvas
+              items={visibleLibraryItems}
+              onSelectNode={setLibraryQuery}
+              includeContext={includeGraphContext}
+            />
+          </>
+        ) : null}
+        {libraryError ? (
+          <p className="system-explorer__library-error" role="alert">
+            {libraryError}
+          </p>
+        ) : null}
+        {libraryLoading ? (
+          <p className="system-explorer__note" role="status">
+            선택한 인덱스에서 실제 자료를 찾고 있습니다.
+          </p>
+        ) : null}
+        {!libraryLoading &&
+        libraryLoaded &&
+        (topic === 'ontology'
+          ? visibleGraphItems.length
+          : visibleLibraryItems.length) === 0 &&
+        !libraryError ? (
+          <p className="system-explorer__note">
+            {librarySearchKey.split(':')[1] === 'graph'
+              ? visibleLibraryItems.length > 0
+                ? '개념·조문 관계는 찾지 못했습니다. 출처·법원 연결을 포함하면 구조 관계를 확인할 수 있습니다.'
+                : '검색 서버가 이 질의에서 검증 가능한 관계 경로를 반환하지 않았습니다. 노드 ID만으로는 관계 근거를 만들지 않습니다.'
+              : '이 검색어와 일치하는 자료가 없습니다. 다른 표현으로 검색해 보세요.'}
+          </p>
+        ) : null}
+        <div
+          className={`system-explorer__records${topic === 'ontology' ? 'system-explorer__records--grouped' : ''}`}
+          aria-live="polite"
+        >
           {topic === 'ontology'
-            ? `표시 ${visibleGraphItems.length}건 / 전체 관계 ${visibleLibraryItems.length}건`
-            : `검색 결과 ${visibleLibraryItems.length}건${libraryCorpus === 'all' ? ` · 법령 ${visibleLibraryItems.filter(item => item.corpus === 'law').length}건 · 판례 ${visibleLibraryItems.filter(item => item.corpus === 'precedent').length}건` : ''}`}
-          {' '}· 총 검색 건수는 인덱스가 제공하지 않아 표시하지 않습니다.
-        </p>
-      ) : null}
-    </>
-  )
+            ? graphGroups.map((group) => (
+                <details
+                  className="system-explorer__graph-category"
+                  key={group.key}
+                >
+                  <summary>
+                    <span className="system-explorer__graph-category-label">
+                      {group.category} {group.index}
+                    </span>
+                    <strong className="system-explorer__graph-category-name">
+                      {group.name}
+                    </strong>
+                    <span className="system-explorer__graph-category-count">
+                      {group.items.length}건
+                    </span>
+                  </summary>
+                  <div className="system-explorer__graph-category-records">
+                    {group.items.map(renderRecord)}
+                  </div>
+                </details>
+              ))
+            : visibleLibraryItems.map(renderRecord)}
+        </div>
+        {libraryLoaded && visibleLibraryItems.length > 0 ? (
+          <p className="system-explorer__note">
+            {topic === 'ontology'
+              ? `표시 ${visibleGraphItems.length}건 / 전체 관계 ${visibleLibraryItems.length}건`
+              : `검색 결과 ${visibleLibraryItems.length}건${libraryCorpus === 'all' ? ` · 법령 ${visibleLibraryItems.filter((item) => item.corpus === 'law').length}건 · 판례 ${visibleLibraryItems.filter((item) => item.corpus === 'precedent').length}건` : ''}`}{' '}
+            · 총 검색 건수는 인덱스가 제공하지 않아 표시하지 않습니다.
+          </p>
+        ) : null}
+      </>
+    )
   }
 
   return (
@@ -1131,8 +1445,8 @@ export default function SystemExplorer({
         <div className="system-explorer__content" id="system-flow">
           <h2>에이전틱 플로우</h2>
           <p className="system-explorer__lead">
-            요청부터 자료 검색, 분석, 문서 결과까지 저장된 실행 단계와 실제
-            도구 호출을 한눈에 확인합니다.
+            요청부터 자료 검색, 분석, 문서 결과까지 저장된 실행 단계와 실제 도구
+            호출을 한눈에 확인합니다.
           </p>
           {tasks.length ? (
             <label className="system-explorer__task-select">
@@ -1163,18 +1477,57 @@ export default function SystemExplorer({
               {selectedTask.legal ? (
                 <>
                   <p className="system-explorer__note">
-                    실행 경로: {selectedTask.legal.path === 'orchestrated' ? '플래너 계획 사용' : '직접 조회'} · 플래너 호출 {selectedTask.legal.plannerCalls}회 · 검색 도구 {selectedTask.legal.toolCalls}회 · 검색 결과 {selectedTask.legal.sourceStatus.retrieved}건 · 인용 {selectedTask.legal.citations.length}건
+                    실행 경로:{' '}
+                    {selectedTask.legal.path === 'orchestrated'
+                      ? '플래너 계획 사용'
+                      : '직접 조회'}{' '}
+                    · 플래너 호출 {selectedTask.legal.plannerCalls}회 · 검색
+                    도구 {selectedTask.legal.toolCalls}회 · 검색 결과{' '}
+                    {selectedTask.legal.sourceStatus.retrieved}건 · 인용{' '}
+                    {selectedTask.legal.citations.length}건
                   </p>
                   {selectedTask.legal.sourceStatus.failures.length ? (
                     <div className="system-explorer__run-materials">
                       <h3>검색 중 확인된 제한</h3>
-                      {selectedTask.legal.sourceStatus.failures.map((failure, index) => <p key={`${failure.step}:${index}`}>{failure.step} · {failure.message}</p>)}
+                      {selectedTask.legal.sourceStatus.failures.map(
+                        (failure, index) => (
+                          <p key={`${failure.step}:${index}`}>
+                            {failure.step} · {failure.message}
+                          </p>
+                        )
+                      )}
                     </div>
                   ) : null}
                 </>
               ) : null}
               <WorkflowCanvas task={selectedTask} />
-              {selectedTask.legal?.citations.length ? <div className="system-explorer__run-materials"><h3>답변에 실제 인용된 자료</h3>{selectedTask.legal.citations.map(citation => <article key={`${citation.corpus}:${citation.recordId}`}><strong>[{citation.citationId}] {citation.label}</strong><span>{citation.corpus}{citation.date ? ` · ${citation.date.kind === 'decision' ? '선고' : '개정'} ${citation.date.value}` : ''}</span>{citation.officialUrl ? <a href={citation.officialUrl} target="_blank" rel="noreferrer noopener">공식 출처 열기</a> : null}</article>)}</div> : null}
+              {selectedTask.legal?.citations.length ? (
+                <div className="system-explorer__run-materials">
+                  <h3>답변에 실제 인용된 자료</h3>
+                  {selectedTask.legal.citations.map((citation) => (
+                    <article key={`${citation.corpus}:${citation.recordId}`}>
+                      <strong>
+                        [{citation.citationId}] {citation.label}
+                      </strong>
+                      <span>
+                        {citation.corpus}
+                        {citation.date
+                          ? ` · ${citation.date.kind === 'decision' ? '선고' : '개정'} ${citation.date.value}`
+                          : ''}
+                      </span>
+                      {citation.officialUrl ? (
+                        <a
+                          href={citation.officialUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                        >
+                          공식 출처 열기
+                        </a>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              ) : null}
             </>
           ) : (
             <p className="system-explorer__note">
@@ -1247,11 +1600,14 @@ export default function SystemExplorer({
         <div className="system-explorer__content" id="system-wiki">
           <h2>LLM Wiki · 법률 자료</h2>
           <p className="system-explorer__lead">
-            로컬 읽기 전용 Wiki 원문과 검색 인덱스 결과를 함께 확인합니다. 원문은
-            페이지 구간으로 불러오며 코퍼스 파일은 수정하지 않습니다.
+            로컬 읽기 전용 Wiki 원문과 검색 인덱스 결과를 함께 확인합니다.
+            원문은 페이지 구간으로 불러오며 코퍼스 파일은 수정하지 않습니다.
           </p>
           <div className="system-explorer__wiki-browser">
-            <aside className="system-explorer__wiki-list" aria-label="읽기 전용 Wiki 문서 목록">
+            <aside
+              className="system-explorer__wiki-list"
+              aria-label="읽기 전용 Wiki 문서 목록"
+            >
               <div className="system-explorer__wiki-list-heading">
                 <h3>읽기 전용 Wiki 문서</h3>
                 <span>{wikiPages.length.toLocaleString()}개</span>
@@ -1263,11 +1619,16 @@ export default function SystemExplorer({
                 value={wikiFilter}
                 onChange={(event) => setWikiFilter(event.target.value)}
               />
-              {wikiListLoading ? <p role="status">Wiki 페이지 목록을 읽는 중입니다.</p> : null}
+              {wikiListLoading ? (
+                <p role="status">Wiki 페이지 목록을 읽는 중입니다.</p>
+              ) : null}
               {wikiListError ? (
                 <div role="alert" className="system-explorer__library-error">
                   <p>{wikiListError}</p>
-                  <button type="button" onClick={() => setWikiRetryKey((value) => value + 1)}>
+                  <button
+                    type="button"
+                    onClick={() => setWikiRetryKey((value) => value + 1)}
+                  >
                     다시 불러오기
                   </button>
                 </div>
@@ -1282,7 +1643,9 @@ export default function SystemExplorer({
               <ul>
                 {wikiPages
                   .filter((page) =>
-                    page.title.toLocaleLowerCase().includes(wikiFilter.trim().toLocaleLowerCase())
+                    page.title
+                      .toLocaleLowerCase()
+                      .includes(wikiFilter.trim().toLocaleLowerCase())
                   )
                   .map((page) => (
                     <li key={page.name}>
@@ -1298,45 +1661,89 @@ export default function SystemExplorer({
                   ))}
               </ul>
             </aside>
-            <section className="system-explorer__wiki-reader" aria-label="Wiki 원문">
+            <section
+              className="system-explorer__wiki-reader"
+              aria-label="Wiki 원문"
+            >
               {selectedWikiPage ? (
                 <>
                   <header>
                     <div>
-                      <h3>{wikiPages.find((page) => page.name === selectedWikiPage)?.title ?? selectedWikiPage}</h3>
+                      <h3>
+                        {wikiPages.find(
+                          (page) => page.name === selectedWikiPage
+                        )?.title ?? selectedWikiPage}
+                      </h3>
                       <code>{selectedWikiPage}</code>
                     </div>
                     {wikiPageChunk ? (
                       <small>
-                        {wikiPageChunk.nextOffset.toLocaleString()} / {wikiPageChunk.totalCharacters.toLocaleString()}자
+                        {wikiPageChunk.nextOffset.toLocaleString()} /{' '}
+                        {wikiPageChunk.totalCharacters.toLocaleString()}자
                       </small>
                     ) : null}
                   </header>
-                  {wikiPageLoading && !wikiContent ? <p role="status">Wiki 원문을 읽는 중입니다.</p> : null}
-                  {wikiPageError ? <p role="alert" className="system-explorer__library-error">{wikiPageError}</p> : null}
-                  {wikiContent ? <MarkdownView value={wikiContent} /> : null}
+                  {wikiPageLoading && !wikiContent ? (
+                    <p role="status">Wiki 원문을 읽는 중입니다.</p>
+                  ) : null}
+                  {wikiPageError ? (
+                    <p role="alert" className="system-explorer__library-error">
+                      {wikiPageError}
+                    </p>
+                  ) : null}
+                  {wikiDocument.metadata.length > 0 ? (
+                    <details className="system-explorer__wiki-metadata">
+                      <summary>문서 정보</summary>
+                      <dl>
+                        {wikiDocument.metadata.map((field, index) => (
+                          <React.Fragment key={`${field.label}-${index}`}>
+                            <dt>{field.label}</dt>
+                            <dd>{field.value}</dd>
+                          </React.Fragment>
+                        ))}
+                      </dl>
+                    </details>
+                  ) : null}
+                  {wikiDocument.body ? (
+                    <MarkdownView value={wikiDocument.body} />
+                  ) : null}
                   {wikiPageChunk?.hasMore ? (
                     <button
                       type="button"
                       className="system-explorer__wiki-more"
                       disabled={wikiPageLoading}
-                      onClick={() => void loadWikiPage(selectedWikiPage, wikiPageChunk.nextOffset, true)}
+                      onClick={() =>
+                        void loadWikiPage(
+                          selectedWikiPage,
+                          wikiPageChunk.nextOffset,
+                          true
+                        )
+                      }
                     >
                       {wikiPageLoading ? '원문을 불러오는 중…' : '원문 더 보기'}
                     </button>
                   ) : null}
-                  {!wikiPageLoading && !wikiPageError && wikiPageChunk && !wikiPageChunk.hasMore ? (
-                    <p className="system-explorer__note">문서 끝까지 표시했습니다.</p>
+                  {!wikiPageLoading &&
+                  !wikiPageError &&
+                  wikiPageChunk &&
+                  !wikiPageChunk.hasMore ? (
+                    <p className="system-explorer__note">
+                      문서 끝까지 표시했습니다.
+                    </p>
                   ) : null}
                 </>
               ) : (
-                <p className="system-explorer__note">목록에서 Wiki 페이지를 선택하면 원문을 읽기 전용으로 표시합니다.</p>
+                <p className="system-explorer__note">
+                  목록에서 Wiki 페이지를 선택하면 원문을 읽기 전용으로
+                  표시합니다.
+                </p>
               )}
             </section>
           </div>
           <h3 className="system-explorer__subheading">법령·판례 색인 검색</h3>
           <p className="system-explorer__note">
-            아래 검색은 모델 호출 없이 인덱스에서 관련 레코드를 찾습니다. 전체 원문은 위 Wiki 브라우저에서 페이지를 골라 확인하세요.
+            아래 검색은 모델 호출 없이 인덱스에서 관련 레코드를 찾습니다. 전체
+            원문은 위 Wiki 브라우저에서 페이지를 골라 확인하세요.
           </p>
           {materialBrowser(['all', 'law', 'precedent'])}
           <p className="system-explorer__note">

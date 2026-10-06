@@ -1254,6 +1254,31 @@
 .system-explorer__wiki-reader > header code {
   overflow-wrap: anywhere;
 }
+.system-explorer__wiki-metadata {
+  margin: 0 0 16px;
+  border: 1px solid var(--wf-line);
+  border-radius: 6px;
+  background: var(--wf-surface);
+  color: var(--wf-ink);
+}
+.system-explorer__wiki-metadata summary {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.system-explorer__wiki-metadata dl {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 7px 12px;
+  margin: 0;
+  border-top: 1px solid var(--wf-line);
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.system-explorer__wiki-metadata dt { color: var(--wf-muted); }
+.system-explorer__wiki-metadata dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .system-explorer__wiki-more {
   min-height: 36px;
   margin: 12px 0;

@@ -183,9 +183,12 @@ export default function FileToolsWorkspace({
     disabled: !online,
     run
   }
+  const visibleFiles = files.filter((file) =>
+    file.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
+  )
   return (
     <section
-      className={`workfolio-tools${draggingFiles ? ' is-dragging' : ''}`}
+      className={`workfolio-tools${draggingFiles ? 'is-dragging' : ''}`}
       aria-labelledby="workfolio-tools-title"
       onDragEnter={(event) => {
         if (!hasDraggedFiles(event.dataTransfer)) return
@@ -315,55 +318,68 @@ export default function FileToolsWorkspace({
                   onChange={(event) => setSearch(event.target.value)}
                 />
               </label>
+              {search.trim() && (
+                <button
+                  type="button"
+                  className="workfolio-file-library__clear-search"
+                  onClick={() => {
+                    setSearch('')
+                    setSearchQuery('')
+                  }}
+                >
+                  검색어 지우기
+                </button>
+              )}
               <span>
                 DOCX · XLSX · PDF · PPTX · TXT · CSV <i>파일당 최대 10 MiB</i>
               </span>
             </div>
             <ul>
-              {files
-                .filter((file) =>
-                  file.name
-                    .toLocaleLowerCase()
-                    .includes(search.toLocaleLowerCase())
-                )
-                .map((file) => (
-                  <li key={file.id}>
-                    <div>
-                      <strong>{file.name}</strong>
-                      <small>
-                        {(file.bytes / 1024).toFixed(1)} KiB ·{' '}
-                        {new Date(file.createdAt).toLocaleDateString('ko-KR')}
-                      </small>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`${file.name} 다운로드`}
-                      onClick={() =>
-                        void downloadFile(file.id, file.name, connection).catch(
-                          (cause) =>
-                            setError(
-                              cause instanceof Error
-                                ? cause.message
-                                : '다운로드 실패'
-                            )
-                        )
-                      }
-                    >
-                      <Download size={16} />
-                    </button>
-                  </li>
-                ))}
+              {visibleFiles.map((file) => (
+                <li key={file.id}>
+                  <div>
+                    <strong>{file.name}</strong>
+                    <small>
+                      {(file.bytes / 1024).toFixed(1)} KiB ·{' '}
+                      {new Date(file.createdAt).toLocaleDateString('ko-KR')}
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`${file.name} 다운로드`}
+                    onClick={() =>
+                      void downloadFile(file.id, file.name, connection).catch(
+                        (cause) =>
+                          setError(
+                            cause instanceof Error
+                              ? cause.message
+                              : '다운로드 실패'
+                          )
+                      )
+                    }
+                  >
+                    <Download size={16} />
+                  </button>
+                </li>
+              ))}
             </ul>
-            {!files.length && !loadingFiles && online && searchQuery && (
-              <div className="workfolio-file-library__empty">
-                <p>검색 결과가 없습니다.</p>
-              </div>
-            )}
-            {!files.length && !loadingFiles && online && !searchQuery && (
-              <div className="workfolio-file-library__empty">
-                <p>아직 업로드한 파일이 없습니다.</p>
-              </div>
-            )}
+            {!visibleFiles.length &&
+              !loadingFiles &&
+              online &&
+              searchQuery.length > 0 &&
+              search.trim() === searchQuery && (
+                <div className="workfolio-file-library__empty">
+                  <p>“{searchQuery}”에 맞는 파일이 없습니다.</p>
+                </div>
+              )}
+            {!visibleFiles.length &&
+              !loadingFiles &&
+              online &&
+              !search.trim() && (
+                <div className="workfolio-file-library__empty">
+                  <p>아직 업로드한 파일이 없습니다.</p>
+                </div>
+              )}
           </section>
         )}
         {tool === 'word' && <WordTools {...props} />}

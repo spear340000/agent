@@ -66,7 +66,8 @@ export function getDocumentOutline(markdown: string): DocumentHeading[] {
   return headings
 }
 
-const NON_DOCUMENT_SECTIONS = /^(?:요청|요청 내용|사용자 요청|초안 구조(?: 예시)?|문서 구조(?: 예시)?|구성 예시)$/iu
+const NON_DOCUMENT_SECTIONS =
+  /^(?:요청|요청 내용|사용자 요청|초안 구조(?: 예시)?|문서 구조(?: 예시)?|구성 예시)$/iu
 
 export function prepareFinalDocument(markdown: string, title: string): string {
   const lines = markdown.split(/\r\n|\n|\r/u)

@@ -852,7 +852,6 @@ export default function Workroom() {
                   mobileOpen={mobileContextOpen}
                   onMobileOpenChange={setMobileContextOpen}
                   onCancel={() => void cancelActiveTask()}
-                  onRerun={() => void rerunActiveTask()}
                   onFollowup={submitTaskRequest}
                   onDraftFromAnswer={
                     active.legal
@@ -950,7 +949,8 @@ export default function Workroom() {
               ) : null}
               {loaded && capabilities?.model.configured === false ? (
                 <p className="workfolio-start__warning" role="status">
-                  모델 제공자 API 키가 설정되지 않아 법률 답변을 시작할 수 없습니다.
+                  모델 제공자 API 키가 설정되지 않아 법률 답변을 시작할 수
+                  없습니다.
                 </p>
               ) : null}
               {loaded &&

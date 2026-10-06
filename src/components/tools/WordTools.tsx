@@ -43,8 +43,7 @@ export default function WordTools({
   const compareFiles = files.filter((file) => file.id !== fileId)
   const readyForRequiredFiles =
     operation === 'markdown' ||
-    (inputFiles.length > 0 &&
-      (operation !== 'compare' || files.length > 1))
+    (inputFiles.length > 0 && (operation !== 'compare' || files.length > 1))
   return (
     <form
       className="workfolio-tool-form"

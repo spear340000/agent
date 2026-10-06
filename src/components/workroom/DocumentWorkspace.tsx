@@ -397,11 +397,18 @@ export default function DocumentWorkspace({
               {previewMode ? (
                 <>
                   {previewLoading ? (
-                    <p className="document-format-preview__message" role="status">
-                      {formatLabels[previewFormat]} 미리보기를 준비하고 있습니다…
+                    <p
+                      className="document-format-preview__message"
+                      role="status"
+                    >
+                      {formatLabels[previewFormat]} 미리보기를 준비하고
+                      있습니다…
                     </p>
                   ) : previewError ? (
-                    <p className="document-format-preview__message" role="alert">
+                    <p
+                      className="document-format-preview__message"
+                      role="alert"
+                    >
                       {previewError}
                     </p>
                   ) : (

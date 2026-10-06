@@ -263,7 +263,9 @@ test('a legal answer event supplies citations, source status, and the retrieval 
             retrieved: 2,
             degraded: ['vector'],
             currentness: 'record-dated',
-            notes: ['벡터 검색을 사용하지 못해 키워드·그래프 검색 결과만 사용했습니다.'],
+            notes: [
+              '벡터 검색을 사용하지 못해 키워드·그래프 검색 결과만 사용했습니다.'
+            ],
             failures: []
           }
         }
@@ -280,10 +282,7 @@ test('a legal answer event supplies citations, source status, and the retrieval 
     task.legal?.citations.map((citation) => citation.citationId),
     ['L1', 'P1']
   )
-  assert.equal(
-    task.legal?.citations[0]?.date?.kind,
-    'amendment'
-  )
+  assert.equal(task.legal?.citations[0]?.date?.kind, 'amendment')
   assert.equal(task.legal?.sourceStatus.currentness, 'record-dated')
   assert.deepEqual(task.legal?.sourceStatus.degraded, ['vector'])
   assert.deepEqual(
@@ -344,21 +343,57 @@ test('a degraded or malformed legal event never invents a source status', () => 
 test('a failed task still exposes the persisted retrieval tool ledger', () => {
   const task = toWorkroomTask({
     task: {
-      id: 'task_retrieval_only', title: '검색 후 웹 실패', prompt: '현재 법령과 공식 링크를 확인해 주세요.',
-      sourceFileIds: [], sourceUrls: [], status: 'failed', steps: [], createdAt: '', updatedAt: ''
+      id: 'task_retrieval_only',
+      title: '검색 후 웹 실패',
+      prompt: '현재 법령과 공식 링크를 확인해 주세요.',
+      sourceFileIds: [],
+      sourceUrls: [],
+      status: 'failed',
+      steps: [],
+      createdAt: '',
+      updatedAt: ''
     },
-    events: [{
-      id: 1, taskId: 'task_retrieval_only', type: 'legal.retrieval', title: '법령·판례 검색 완료',
-      message: '1건의 실제 검색 근거를 확보했습니다.', status: 'completed', createdAt: '',
-      metadata: {
-        intent: 'legal-question', path: 'direct', plannerCalls: 0, toolCalls: 1,
-        sourceStatus: {
-          corpusReady: true, retrieved: 1, cited: 0, degraded: [], currentness: 'unverified', notes: [], failures: [],
-          ledger: { layers: [], toolCalls: 1, maxToolCalls: 8, planner: { calls: 0, mode: 'not-used' },
-            tools: [{ tool: 'search_laws', label: '법령 검색', query: '현재 법령과 공식 링크를 확인해 주세요.', results: 1 }] }
+    events: [
+      {
+        id: 1,
+        taskId: 'task_retrieval_only',
+        type: 'legal.retrieval',
+        title: '법령·판례 검색 완료',
+        message: '1건의 실제 검색 근거를 확보했습니다.',
+        status: 'completed',
+        createdAt: '',
+        metadata: {
+          intent: 'legal-question',
+          path: 'direct',
+          plannerCalls: 0,
+          toolCalls: 1,
+          sourceStatus: {
+            corpusReady: true,
+            retrieved: 1,
+            cited: 0,
+            degraded: [],
+            currentness: 'unverified',
+            notes: [],
+            failures: [],
+            ledger: {
+              layers: [],
+              toolCalls: 1,
+              maxToolCalls: 8,
+              planner: { calls: 0, mode: 'not-used' },
+              tools: [
+                {
+                  tool: 'search_laws',
+                  label: '법령 검색',
+                  query: '현재 법령과 공식 링크를 확인해 주세요.',
+                  results: 1
+                }
+              ]
+            }
+          }
         }
       }
-    }], artifacts: []
+    ],
+    artifacts: []
   })
   assert.equal(task.legal?.toolCalls, 1)
   assert.equal(task.legal?.sourceStatus.ledger?.tools[0]?.tool, 'search_laws')

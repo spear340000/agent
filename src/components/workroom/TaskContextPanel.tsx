@@ -5,7 +5,6 @@ import {
   ChevronDown,
   FileText,
   LoaderCircle,
-  Play,
   X
 } from 'lucide-react'
 import Composer from './Composer'
@@ -23,7 +22,6 @@ export type TaskContextPanelProps = {
   mobileOpen: boolean
   onMobileOpenChange: (open: boolean) => void
   onCancel: () => void
-  onRerun: () => void
   onFollowup: (
     request: string,
     kind?: 'revision' | 'followup',
@@ -241,7 +239,6 @@ export default function TaskContextPanel({
   mobileOpen,
   onMobileOpenChange,
   onCancel,
-  onRerun,
   onFollowup,
   onDraftFromAnswer
 }: TaskContextPanelProps) {
@@ -422,15 +419,6 @@ export default function TaskContextPanel({
               >
                 <X aria-hidden="true" size={14} />
                 <span>작업 취소</span>
-              </button>
-            ) : task.state === 'failed' ? (
-              <button
-                className="task-context__action"
-                type="button"
-                onClick={onRerun}
-              >
-                <Play aria-hidden="true" size={14} />
-                <span>다시 실행</span>
               </button>
             ) : null}
           </div>

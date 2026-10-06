@@ -78,10 +78,40 @@ export default function SpreadsheetTools({
   const [editingOperationIndex, setEditingOperationIndex] = useState<
     number | null
   >(null)
+  const [pendingSwitch, setPendingSwitch] = useState<
+    | { kind: 'mode'; value: typeof mode }
+    | { kind: 'file'; value: string }
+    | null
+  >(null)
   const [inputError, setInputError] = useState('')
   const excelFiles = files.filter((file) =>
     file.name.toLowerCase().endsWith('.xlsx')
   )
+
+  function changeMode(next: typeof mode) {
+    setMode(next)
+    setOperations([])
+    setQueueWasCleared(false)
+    setEditingOperationIndex(null)
+    setKind(next === 'create' ? 'addSheet' : 'setCell')
+    setInspection(null)
+    setPendingSwitch(null)
+  }
+
+  function changeFile(next: string) {
+    setFileId(next)
+    setInspection(null)
+    setOperations([])
+    setQueueWasCleared(false)
+    setEditingOperationIndex(null)
+    setPendingSwitch(null)
+  }
+
+  function requestSwitch(next: NonNullable<typeof pendingSwitch>) {
+    if (operations.length > 0) setPendingSwitch(next)
+    else if (next.kind === 'mode') changeMode(next.value)
+    else changeFile(next.value)
+  }
 
   function currentOperation(): SpreadsheetOperation {
     if (!sheet.trim()) throw new Error('시트 이름을 입력하세요.')
@@ -154,12 +184,7 @@ export default function SpreadsheetTools({
           value={mode}
           onChange={(event) => {
             const next = event.target.value as typeof mode
-            setMode(next)
-            setOperations([])
-            setQueueWasCleared(false)
-            setEditingOperationIndex(null)
-            setKind(next === 'create' ? 'addSheet' : 'setCell')
-            setInspection(null)
+            requestSwitch({ kind: 'mode', value: next })
           }}
         >
           <option value="inspect">시트·셀 조회</option>
@@ -174,13 +199,37 @@ export default function SpreadsheetTools({
           loading={filesLoading}
           emptyMessage="Excel 통합 문서(.xlsx)가 없습니다. 상단에서 .xlsx 파일을 업로드해 주세요."
           onChange={(id) => {
-            setFileId(id)
-            setInspection(null)
-            setOperations([])
-            setQueueWasCleared(false)
-            setEditingOperationIndex(null)
+            requestSwitch({ kind: 'file', value: id })
           }}
         />
+      )}
+      {pendingSwitch && (
+        <div
+          className="workfolio-operation-switch"
+          role="group"
+          aria-label="변경 목록 전환 확인"
+        >
+          <p>
+            변경 목록 {operations.length}개가 있습니다.{' '}
+            {pendingSwitch.kind === 'mode' ? '작업 방식을' : '파일을'} 바꾸면
+            목록이 삭제됩니다.
+          </p>
+          <div>
+            <button type="button" onClick={() => setPendingSwitch(null)}>
+              계속 편집
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                pendingSwitch.kind === 'mode'
+                  ? changeMode(pendingSwitch.value)
+                  : changeFile(pendingSwitch.value)
+              }
+            >
+              목록 삭제하고 전환
+            </button>
+          </div>
+        </div>
       )}
       {mode !== 'inspect' && (
         <label>
@@ -286,7 +335,10 @@ export default function SpreadsheetTools({
           )}
           <button
             type="button"
-            disabled={busy || (operations.length >= 500 && editingOperationIndex === null)}
+            disabled={
+              busy ||
+              (operations.length >= 500 && editingOperationIndex === null)
+            }
             onClick={() => {
               try {
                 const nextOperation = currentOperation()
@@ -324,9 +376,14 @@ export default function SpreadsheetTools({
             </button>
           )}
           {!!operations.length && (
-            <section className="workfolio-operation-queue" aria-label="Excel 변경 목록">
+            <section
+              className="workfolio-operation-queue"
+              aria-label="Excel 변경 목록"
+            >
               <header>
-                <h3>변경 목록 <span>{operations.length}</span></h3>
+                <h3>
+                  변경 목록 <span>{operations.length}</span>
+                </h3>
                 <button
                   type="button"
                   disabled={busy}
@@ -346,10 +403,14 @@ export default function SpreadsheetTools({
                   return (
                     <li
                       key={index}
-                      className={editingOperationIndex === index ? 'is-editing' : ''}
+                      className={
+                        editingOperationIndex === index ? 'is-editing' : ''
+                      }
                     >
                       <div className="workfolio-operation-list__description">
-                        <strong>{index + 1}. {summary.title}</strong>
+                        <strong>
+                          {index + 1}. {summary.title}
+                        </strong>
                         <small>{summary.detail}</small>
                       </div>
                       <div className="workfolio-operation-list__actions">
@@ -358,7 +419,11 @@ export default function SpreadsheetTools({
                           disabled={busy}
                           onClick={() => {
                             setEditingOperationIndex(index)
-                            setSheet('sheet' in operation ? operation.sheet : operation.name)
+                            setSheet(
+                              'sheet' in operation
+                                ? operation.sheet
+                                : operation.name
+                            )
                             setKind(operation.kind)
                             setInputError('')
                             if (operation.kind === 'setCell') {
@@ -372,7 +437,11 @@ export default function SpreadsheetTools({
                                       ? 'boolean'
                                       : 'text'
                               setValueType(nextValueType)
-                              setValue(operation.value == null ? '' : String(operation.value))
+                              setValue(
+                                operation.value == null
+                                  ? ''
+                                  : String(operation.value)
+                              )
                             } else if (operation.kind === 'setFormula') {
                               setCell(operation.cell)
                               setValue(operation.formula)
@@ -394,7 +463,9 @@ export default function SpreadsheetTools({
                             if (operations.length === 1)
                               setQueueWasCleared(true)
                             setOperations((current) =>
-                              current.filter((_, itemIndex) => itemIndex !== index)
+                              current.filter(
+                                (_, itemIndex) => itemIndex !== index
+                              )
                             )
                             setEditingOperationIndex((current) =>
                               current === index
@@ -416,7 +487,8 @@ export default function SpreadsheetTools({
           )}
           {queueWasCleared && !operations.length && (
             <p className="workfolio-operation-queue__empty" role="status">
-              변경 목록이 비었습니다. 파일로 저장하려면 변경 내용을 목록에 추가하세요.
+              변경 목록이 비었습니다. 파일로 저장하려면 변경 내용을 목록에
+              추가하세요.
             </p>
           )}
         </>

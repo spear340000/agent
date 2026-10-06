@@ -47,17 +47,16 @@ function renderPanel(state: Task['state']): string {
       mobileOpen: false,
       onMobileOpenChange: () => undefined,
       onCancel: () => undefined,
-      onRerun: () => undefined,
       onFollowup: async () => true
     })
   )
 }
 
-test('showsActionsForActionableTaskStates', () => {
+test('showsCancelOnlyForActiveTaskStates', () => {
   for (const state of ['queued', 'running'] as const) {
     assert.match(renderPanel(state), /작업 취소/)
   }
-  assert.match(renderPanel('failed'), /다시 실행/)
+  assert.doesNotMatch(renderPanel('failed'), /다시 실행/)
   assert.doesNotMatch(renderPanel('completed'), /작업 취소|다시 실행/)
   for (const state of [
     'queued',
@@ -123,7 +122,6 @@ test('shows the steps that actually ran instead of a fixed stage list', () => {
       mobileOpen: false,
       onMobileOpenChange: () => undefined,
       onCancel: () => undefined,
-      onRerun: () => undefined,
       onFollowup: async () => true
     })
   )
@@ -157,7 +155,9 @@ test('renders legal citations, currentness, and the draft action', () => {
             retrieved: 1,
             degraded: ['vector'],
             currentness: 'record-dated',
-            notes: ['벡터 검색을 사용하지 못해 키워드·그래프 검색 결과만 사용했습니다.'],
+            notes: [
+              '벡터 검색을 사용하지 못해 키워드·그래프 검색 결과만 사용했습니다.'
+            ],
             failures: []
           },
           plannerCalls: 0,
@@ -167,7 +167,6 @@ test('renders legal citations, currentness, and the draft action', () => {
       mobileOpen: false,
       onMobileOpenChange: () => undefined,
       onCancel: () => undefined,
-      onRerun: () => undefined,
       onFollowup: async () => true,
       onDraftFromAnswer: () => {
         drafted += 1
@@ -210,7 +209,6 @@ test('states plainly when no legal record was confirmed', () => {
       mobileOpen: false,
       onMobileOpenChange: () => undefined,
       onCancel: () => undefined,
-      onRerun: () => undefined,
       onFollowup: async () => true
     })
   )
@@ -302,7 +300,6 @@ test('the technology ledger shows which retrieval layers actually ran', () => {
       mobileOpen: false,
       onMobileOpenChange: () => undefined,
       onCancel: () => undefined,
-      onRerun: () => undefined,
       onFollowup: async () => true
     })
   )

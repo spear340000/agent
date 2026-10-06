@@ -18,7 +18,9 @@ test('read-only Wiki browser lists source pages and requests bounded original-te
   const list = await listLegalWikiPages(connection, async (url) => {
     assert.equal(String(url), 'http://127.0.0.1:8787/api/legal/wiki')
     return Response.json({
-      items: [{ name: 'privacy-law-core.md', title: 'privacy law core', bytes: 1024 }]
+      items: [
+        { name: 'privacy-law-core.md', title: 'privacy law core', bytes: 1024 }
+      ]
     })
   })
   assert.equal(list.items[0]?.name, 'privacy-law-core.md')
@@ -96,11 +98,26 @@ test('graph library requests the expanded bounded edge set and preserves typed r
       return Response.json({
         query: '민법 제750조',
         corpus: 'graph',
-        items: [{
-          citationId: 'G1', kind: 'graph', corpus: 'graph', recordId: 'case:1:CITES_ARTICLE:article:750',
-          title: '판례 —CITES_ARTICLE→ 민법 제750조', excerpt: '관계 출처',
-          graphRelation: { sourceId: 'case:1', sourceLabel: '판례', sourceType: 'Precedent', relation: 'CITES_ARTICLE', targetId: 'article:750', targetLabel: '민법 제750조', targetType: 'Article', sourcePath: 'case.md' }
-        }]
+        items: [
+          {
+            citationId: 'G1',
+            kind: 'graph',
+            corpus: 'graph',
+            recordId: 'case:1:CITES_ARTICLE:article:750',
+            title: '판례 —CITES_ARTICLE→ 민법 제750조',
+            excerpt: '관계 출처',
+            graphRelation: {
+              sourceId: 'case:1',
+              sourceLabel: '판례',
+              sourceType: 'Precedent',
+              relation: 'CITES_ARTICLE',
+              targetId: 'article:750',
+              targetLabel: '민법 제750조',
+              targetType: 'Article',
+              sourcePath: 'case.md'
+            }
+          }
+        ]
       })
     }
   )

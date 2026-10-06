@@ -633,6 +633,19 @@
   width: min(100%, 430px);
 }
 
+.workfolio-file-library__clear-search {
+  border: 0;
+  background: transparent;
+  padding: 8px 0;
+  color: var(--wf-accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.workfolio-file-library__clear-search:hover {
+  text-decoration: underline;
+}
+
 .workfolio-file-library__filters > span {
   padding-bottom: 10px;
   color: #707b72;
@@ -846,6 +859,30 @@
   font-size: 12px;
   font-weight: 400;
   line-height: 1.5;
+}
+.workfolio-operation-switch {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--wf-line);
+  border-radius: 6px;
+  padding: 12px;
+  background: var(--wf-accent-soft);
+  color: var(--wf-ink);
+}
+.workfolio-operation-switch p { margin: 0; font-size: 13px; line-height: 1.5; }
+.workfolio-operation-switch > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.workfolio-operation-switch button {
+  border: 1px solid var(--wf-line);
+  border-radius: 5px;
+  background: var(--wf-paper);
+  padding: 7px 10px;
+  color: var(--wf-ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+.workfolio-operation-switch button:last-child {
+  border-color: var(--wf-accent);
+  color: var(--wf-accent);
 }
 .workfolio-operation-queue {
   border-top: 1px solid #deded6;

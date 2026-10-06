@@ -43,9 +43,9 @@ async function readZipEntry(
       const compressed = bytes.slice(dataOffset, dataOffset + compressedSize)
       if (method === 0) return decoder.decode(compressed)
       if (method !== 8) throw new Error('지원하지 않는 Excel 압축 형식입니다.')
-      const stream = new Blob([compressed]).stream().pipeThrough(
-        new DecompressionStream('deflate-raw')
-      )
+      const stream = new Blob([compressed])
+        .stream()
+        .pipeThrough(new DecompressionStream('deflate-raw'))
       return decoder.decode(await new Response(stream).arrayBuffer())
     }
     cursor += 46 + nameLength + extraLength + commentLength
@@ -55,10 +55,12 @@ async function readZipEntry(
 
 function columnIndex(reference: string): number {
   const letters = reference.match(/^[A-Z]+/i)?.[0]?.toUpperCase() ?? 'A'
-  return [...letters].reduce(
-    (value, letter) => value * 26 + letter.charCodeAt(0) - 64,
-    0
-  ) - 1
+  return (
+    [...letters].reduce(
+      (value, letter) => value * 26 + letter.charCodeAt(0) - 64,
+      0
+    ) - 1
+  )
 }
 
 async function readWorkbook(blob: Blob): Promise<Sheet[]> {
@@ -108,9 +110,9 @@ async function readWorkbook(blob: Blob): Promise<Sheet[]> {
           const type = cell.getAttribute('t')
           cells[index] =
             type === 's'
-              ? sharedStrings[Number(value)] ?? ''
+              ? (sharedStrings[Number(value)] ?? '')
               : type === 'inlineStr'
-                ? cell.getElementsByTagName('is')[0]?.textContent ?? ''
+                ? (cell.getElementsByTagName('is')[0]?.textContent ?? '')
                 : value
         }
         return cells
