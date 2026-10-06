@@ -19,13 +19,13 @@ $env:VECTOR_MEMMAP_PATH = 'C:\Users\spear\project\testA\data\vector_memmap'
 $env:QDRANT_PATH = 'C:\Users\spear\project\testA\data\qdrant'
 ```
 
-Install the Python runtime once:
+Install the Python runtime once. From the repository root, run `npm run setup:legal`; it creates a repository-local `backend/legal/.venv` and installs the listed packages. It does not edit `.env`, download corpus data, or write to an external `LEGAL_RAG_ROOT`. To do the same steps manually:
 
 ```powershell
 python -m venv backend/legal/.venv
 backend/legal/.venv/Scripts/python.exe -m pip install -r backend/legal/requirements.txt
 ```
 
-Then set `LEGAL_PYTHON` to `backend/legal/.venv/Scripts/python.exe` (Windows) or `backend/legal/.venv/bin/python` (Linux/macOS) in the local `.env`. Run `npm run legal:data` to fetch LFS assets and extract precedent source files. The Python entrypoint and runtime modules live directly in `backend/legal/`; `LEGAL_RUNTIME_ROOT` is only needed if they are relocated. Install `requirements-dev.txt` to run `npm run test:legal`. NVIDIA credentials are supplied only through the local ignored `.env` or process environment; never put them in the corpus or Git.
+Then set `LEGAL_PYTHON` to `backend/legal/.venv/Scripts/python.exe` (Windows) or `backend/legal/.venv/bin/python` (Linux/macOS) in the local `.env` if needed. Run `npm run legal:data` separately to fetch LFS assets and extract precedent source files. The Python entrypoint and runtime modules live directly in `backend/legal/`; `LEGAL_RUNTIME_ROOT` is only needed if they are relocated. Install `requirements-dev.txt` to run `npm run test:legal`. NVIDIA credentials are supplied only through the local ignored `.env` or process environment; never put them in the corpus or Git.
 
 The MCP server verifies prebuilt law and precedent indexes and does not construct or modify them. Missing indexes or unpacked precedent sources are reported as unavailable. Vector retrieval remains dependent on the configured embedding endpoint and the included matching vector bundle. Graph, ontology, and OKF readiness are reported independently.

@@ -9,6 +9,7 @@
     "build": "tsc -p backend/tsconfig.build.json",
     "test": "npm run test:backend",
     "test:legal": "python -m pytest -q backend/legal/tests",
+    "setup:legal": "tsx backend/src/cli/setup-legal-runtime.ts",
     "legal:data": "tsx backend/legal/provision-data.ts",
     "typecheck": "tsc -p backend/tsconfig.json --noEmit",
     "backend": "tsx backend/src/server.ts",

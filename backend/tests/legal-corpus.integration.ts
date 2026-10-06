@@ -9,6 +9,13 @@ import { parseKnowledgeStatus } from '../src/infrastructure/legal/legal-normaliz
 
 const corpusRoot = process.env.LEGAL_CORPUS_ROOT ?? env.legal.root;
 const corpusReady = existsSync(`${corpusRoot}/legal_fts.sqlite3`) && existsSync(`${corpusRoot}/precedent_fts.sqlite3`);
+const legalRuntimeReady = existsSync(process.env.LEGAL_PYTHON ?? env.legal.python)
+  && existsSync(process.env.LEGAL_MCP_SCRIPT ?? env.legal.script);
+const legalIntegrationSkipReason = !corpusReady
+  ? `corpus not available at ${corpusRoot}`
+  : !legalRuntimeReady
+    ? "legal Python runtime is not installed; run npm run setup:legal"
+    : false;
 
 test('read-only knowledge status parsing classifies every layer', () => {
   const status = parseKnowledgeStatus(
@@ -34,7 +41,7 @@ test('read-only knowledge status parsing classifies every layer', () => {
   assert.deepEqual(status.degraded, ['vector']);
 });
 
-test('the supplied corpus answers law, precedent, and graph lookups read-only', { skip: corpusReady ? false : `corpus not available at ${corpusRoot}` }, async () => {
+test('the supplied corpus answers law, precedent, and graph lookups read-only', { skip: legalIntegrationSkipReason }, async () => {
   const client = new McpStdioClient({
     command: process.env.LEGAL_PYTHON ?? env.legal.python,
     args: buildLegalMcpLaunchArgs(process.env.LEGAL_MCP_SCRIPT ?? env.legal.script, `${process.cwd()}/data/legal-rag-mcp-test.log`),
@@ -123,7 +130,7 @@ test('the supplied corpus answers law, precedent, and graph lookups read-only', 
   }
 });
 
-test('an exact article lookup that does not exist is a not-found result, not a transport failure', { skip: corpusReady ? false : `corpus not available at ${corpusRoot}` }, async () => {
+test('an exact article lookup that does not exist is a not-found result, not a transport failure', { skip: legalIntegrationSkipReason }, async () => {
   const client = new McpStdioClient({
     command: process.env.LEGAL_PYTHON ?? env.legal.python,
     args: buildLegalMcpLaunchArgs(process.env.LEGAL_MCP_SCRIPT ?? env.legal.script, `${process.cwd()}/data/legal-rag-mcp-test.log`),
