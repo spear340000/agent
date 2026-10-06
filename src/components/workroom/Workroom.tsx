@@ -47,7 +47,7 @@ import type { Source, Task, TaskState } from './types'
 import { stageMeta } from './types'
 
 type SaveFailure = { taskId: string; message: string }
-type ExportFormat = 'md' | 'docx'
+type ExportFormat = 'md' | 'docx' | 'xlsx' | 'pdf'
 type ColorTheme = 'light' | 'dark'
 const THEME_STORAGE_KEY = 'workfolio-color-theme-v1'
 
@@ -637,8 +637,20 @@ export default function Workroom() {
           markdown: finalDocument
         })
         await downloadFile(file.id, file.name, connection)
-      } else {
+      } else if (
+        (format === 'xlsx' || format === 'pdf') &&
+        backendStatus === 'online'
+      ) {
+        const { file } = await officeApi.exportMarkdown(connection, {
+          outputName: active.title,
+          markdown: finalDocument,
+          format
+        })
+        await downloadFile(file.id, file.name, connection)
+      } else if (format === 'md' || format === 'docx') {
         await downloadDocument(finalTask, format)
+      } else {
+        throw new Error('Excel 및 PDF 내보내기에는 백엔드 연결이 필요합니다.')
       }
       setNotice(`${format.toUpperCase()} 파일을 다운로드했습니다.`)
     } catch (error) {
@@ -720,7 +732,9 @@ export default function Workroom() {
         <button
           className="workfolio-header__theme"
           type="button"
-          aria-label={theme === 'dark' ? '화이트 모드로 전환' : '다크 모드로 전환'}
+          aria-label={
+            theme === 'dark' ? '화이트 모드로 전환' : '다크 모드로 전환'
+          }
           title={theme === 'dark' ? '화이트 모드로 전환' : '다크 모드로 전환'}
           onClick={toggleTheme}
         >
@@ -891,15 +905,13 @@ export default function Workroom() {
                   백엔드와 작업 목록을 확인하고 있습니다.
                 </p>
               ) : null}
-              {loaded &&
-              backendStatus === 'offline' ? (
+              {loaded && backendStatus === 'offline' ? (
                 <p className="workfolio-start__warning" role="alert">
                   {connectionError || '백엔드에 연결되지 않았습니다.'} 자동으로
                   다시 확인합니다.
                 </p>
               ) : null}
-              {loaded &&
-              capabilities?.model.configured === false ? (
+              {loaded && capabilities?.model.configured === false ? (
                 <p className="workfolio-start__warning" role="status">
                   백엔드는 연결됐지만 모델 제공자 API 키가 설정되지 않았습니다.
                 </p>

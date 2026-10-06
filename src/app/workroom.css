@@ -1145,6 +1145,110 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.system-explorer__wiki-browser {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  min-height: 360px;
+  margin: 18px 0 28px;
+  overflow: hidden;
+  border: 1px solid var(--wf-line);
+  border-radius: 9px;
+  background: #fffefa;
+}
+.system-explorer__wiki-list {
+  min-width: 0;
+  max-height: 720px;
+  overflow: auto;
+  border-right: 1px solid var(--wf-line);
+  padding: 13px;
+  background: #f7f5ef;
+}
+.system-explorer__wiki-list-heading,
+.system-explorer__wiki-reader > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.system-explorer__wiki-list-heading h3,
+.system-explorer__wiki-reader h3 {
+  margin: 2px 0 9px;
+  font-size: 14px;
+}
+.system-explorer__wiki-list-heading > span,
+.system-explorer__wiki-reader > header small {
+  color: var(--wf-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.system-explorer__wiki-list > input {
+  width: 100%;
+  min-height: 36px;
+  margin: 4px 0 10px;
+  border: 1px solid var(--wf-line);
+  border-radius: 6px;
+  background: #fffefa;
+  padding: 0 9px;
+}
+.system-explorer__wiki-list ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.system-explorer__wiki-list li button {
+  display: grid;
+  width: 100%;
+  gap: 3px;
+  border-radius: 6px;
+  padding: 8px;
+  color: var(--wf-ink);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.system-explorer__wiki-list li button:hover,
+.system-explorer__wiki-list li button[aria-pressed='true'] {
+  background: #eae6dc;
+}
+.system-explorer__wiki-list li button small,
+.system-explorer__wiki-reader code {
+  color: var(--wf-muted);
+  font-size: 10px;
+}
+.system-explorer__wiki-reader {
+  min-width: 0;
+  max-height: 720px;
+  overflow: auto;
+  padding: 20px;
+}
+.system-explorer__wiki-reader > header {
+  position: sticky;
+  z-index: 1;
+  top: -20px;
+  margin: -20px -20px 14px;
+  border-bottom: 1px solid var(--wf-line);
+  background: #fffefa;
+  padding: 14px 20px 11px;
+}
+.system-explorer__wiki-reader > header h3 {
+  margin: 0 0 3px;
+}
+.system-explorer__wiki-reader > header code {
+  overflow-wrap: anywhere;
+}
+.system-explorer__wiki-more {
+  min-height: 36px;
+  margin: 12px 0;
+  border: 1px solid var(--wf-line);
+  border-radius: 6px;
+  background: #f7f5ef;
+  padding: 0 12px;
+  color: var(--wf-ink);
+}
+.system-explorer__wiki-more:hover:not(:disabled) {
+  border-color: var(--wf-accent);
+}
 .system-explorer__tool-list {
   display: grid;
   gap: 8px;
@@ -4011,6 +4115,10 @@
 .workfolio[data-theme='dark'] .system-explorer__status-list,
 .workfolio[data-theme='dark'] .system-explorer__graph,
 .workfolio[data-theme='dark'] .system-explorer__catalog-entry,
+.workfolio[data-theme='dark'] .system-explorer__wiki-browser,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list,
+.workfolio[data-theme='dark'] .system-explorer__wiki-reader > header,
+.workfolio[data-theme='dark'] .system-explorer__wiki-more,
 .workfolio[data-theme='dark'] .system-explorer__record {
   border-color: #39342f;
   background: #292724;
@@ -4018,6 +4126,7 @@
 }
 
 .workfolio[data-theme='dark'] .system-explorer__library-search input,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list > input,
 .workfolio[data-theme='dark'] .system-explorer__library-error,
 .workfolio[data-theme='dark'] .system-explorer__graph-filter button,
 .workfolio[data-theme='dark'] .system-explorer__graph-node-actions button,
@@ -4026,6 +4135,26 @@
   border-color: #49423a;
   background: #211f1d;
   color: #e3dbd0;
+}
+
+@media (max-width: 760px) {
+  .system-explorer__wiki-browser {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .system-explorer__wiki-list {
+    max-height: 260px;
+    border-right: 0;
+    border-bottom: 1px solid var(--wf-line);
+  }
+  .system-explorer__wiki-reader {
+    max-height: 70vh;
+    padding: 14px;
+  }
+  .system-explorer__wiki-reader > header {
+    top: -14px;
+    margin: -14px -14px 12px;
+    padding: 11px 14px 9px;
+  }
 }
 
 .workfolio[data-theme='dark'] .system-explorer__graph-node-actions button:hover,

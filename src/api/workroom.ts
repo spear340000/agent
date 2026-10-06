@@ -182,6 +182,19 @@ export type LegalMcpTool = {
   inputSchema?: unknown
 }
 export type LegalCatalogEntry = { name: string; content: string }
+export type LegalWikiPageSummary = {
+  name: string
+  title: string
+  bytes: number
+}
+export type LegalWikiPageChunk = {
+  name: string
+  content: string
+  offset: number
+  nextOffset: number
+  totalCharacters: number
+  hasMore: boolean
+}
 
 export function listLegalTools(
   connection: Connection = defaultConnection,
@@ -195,6 +208,24 @@ export function getLegalCatalog(
   fetcher: Fetcher = fetch
 ): Promise<{ items: LegalCatalogEntry[] }> {
   return request(connection, '/api/legal/catalog', {}, fetcher)
+}
+
+export function listLegalWikiPages(
+  connection: Connection = defaultConnection,
+  fetcher: Fetcher = fetch
+): Promise<{ items: LegalWikiPageSummary[] }> {
+  return request(connection, '/api/legal/wiki', {}, fetcher)
+}
+
+export function getLegalWikiPage(
+  name: string,
+  offset = 0,
+  limit = 12_000,
+  connection: Connection = defaultConnection,
+  fetcher: Fetcher = fetch
+): Promise<LegalWikiPageChunk> {
+  const params = new URLSearchParams({ name, offset: String(offset), limit: String(limit) })
+  return request(connection, `/api/legal/wiki/page?${params.toString()}`, {}, fetcher)
 }
 export type LegalLayerUse = {
   id:
@@ -303,7 +334,11 @@ export async function request<T>(
   }
   let response: Response
   const timeout = AbortSignal.timeout(
-    options.method === 'POST' ? 120_000 : 15_000
+    options.method === 'POST'
+      ? 120_000
+      : path === '/api/capabilities'
+        ? 45_000
+        : 15_000
   )
   const signal = options.signal
     ? AbortSignal.any([options.signal, timeout])

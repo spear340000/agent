@@ -18,14 +18,19 @@ import {
 import {
   getLegalCatalog,
   getLegalPrecedent,
+  getLegalWikiPage,
   listLegalTools,
+  listLegalWikiPages,
   searchLegalLibrary,
   type Connection,
   type LegalCatalogEntry,
   type LegalLibraryItem,
   type LegalMcpTool,
+  type LegalWikiPageChunk,
+  type LegalWikiPageSummary,
   type RuntimeCapabilities
 } from '@/api/workroom'
+import MarkdownView from './MarkdownView'
 import { legalIntentLabels, stageMeta, type Task } from './types'
 
 type Props = {
@@ -194,7 +199,7 @@ function FlowNode({
     >
       <span className="system-flow__node-kind">
         {kind === 'start'
-          ? '입력'
+          ? '사용자 요청'
           : kind === 'planner'
             ? '플래너'
             : kind === 'tool'
@@ -290,7 +295,7 @@ function WorkflowCanvas({ task }: { task: Task }) {
       node: {
         kind: 'start',
         title: intent,
-        detail: `${task.sources.length}개 참고 자료 · ${task.sources.filter((source) => source.kind === 'file').length}개 파일 · ${task.sources.filter((source) => source.kind === 'link').length}개 링크`,
+        detail: `${task.request} · 참고 자료 ${task.sources.length}개 (파일 ${task.sources.filter((source) => source.kind === 'file').length}, 링크 ${task.sources.filter((source) => source.kind === 'link').length})`,
         status: 'complete'
       }
     },
@@ -484,6 +489,17 @@ export default function SystemExplorer({
   const [tools, setTools] = useState<LegalMcpTool[]>([])
   const [toolsError, setToolsError] = useState('')
   const [toolsLoading, setToolsLoading] = useState(false)
+  const [wikiPages, setWikiPages] = useState<LegalWikiPageSummary[]>([])
+  const [wikiListLoading, setWikiListLoading] = useState(false)
+  const [wikiListError, setWikiListError] = useState('')
+  const [wikiRetryKey, setWikiRetryKey] = useState(0)
+  const [wikiFilter, setWikiFilter] = useState('')
+  const [selectedWikiPage, setSelectedWikiPage] = useState('')
+  const [wikiContent, setWikiContent] = useState('')
+  const [wikiPageChunk, setWikiPageChunk] = useState<LegalWikiPageChunk | null>(null)
+  const [wikiPageLoading, setWikiPageLoading] = useState(false)
+  const [wikiPageError, setWikiPageError] = useState('')
+  const wikiPageRequest = useRef(0)
   const [selectedTaskId, setSelectedTaskId] = useState('')
   const healthLabel =
     backendStatus === 'online'
@@ -589,6 +605,29 @@ export default function SystemExplorer({
   }, [backendStatus, catalogItems.length, connection, topic])
 
   useEffect(() => {
+    if (topic !== 'wiki' || backendStatus !== 'online') return
+    let cancelled = false
+    setWikiListLoading(true)
+    setWikiListError('')
+    void listLegalWikiPages(connection)
+      .then(({ items }) => {
+        if (!cancelled) setWikiPages(items)
+      })
+      .catch((error: unknown) => {
+        if (!cancelled)
+          setWikiListError(
+            error instanceof Error ? error.message : 'Wiki 목록을 불러오지 못했습니다.'
+          )
+      })
+      .finally(() => {
+        if (!cancelled) setWikiListLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [backendStatus, connection, topic, wikiRetryKey])
+
+  useEffect(() => {
     if (topic !== 'mcp' || backendStatus !== 'online' || tools.length) return
     let cancelled = false
     setToolsLoading(true)
@@ -653,6 +692,34 @@ export default function SystemExplorer({
           error: error instanceof Error ? error.message : '판례 원문을 불러오지 못했습니다.'
         }
       }))
+    }
+  }
+
+  const loadWikiPage = async (
+    name: string,
+    offset = 0,
+    append = false
+  ) => {
+    const requestId = ++wikiPageRequest.current
+    setSelectedWikiPage(name)
+    if (!append) {
+      setWikiContent('')
+      setWikiPageChunk(null)
+    }
+    setWikiPageLoading(true)
+    setWikiPageError('')
+    try {
+      const chunk = await getLegalWikiPage(name, offset, 12_000, connection)
+      if (requestId !== wikiPageRequest.current) return
+      setWikiContent((current) => (append ? current + chunk.content : chunk.content))
+      setWikiPageChunk(chunk)
+    } catch (error) {
+      if (requestId !== wikiPageRequest.current) return
+      setWikiPageError(
+        error instanceof Error ? error.message : 'Wiki 원문을 불러오지 못했습니다.'
+      )
+    } finally {
+      if (requestId === wikiPageRequest.current) setWikiPageLoading(false)
     }
   }
 
@@ -1069,8 +1136,96 @@ export default function SystemExplorer({
         <div className="system-explorer__content" id="system-wiki">
           <h2>LLM Wiki · 법률 자료</h2>
           <p className="system-explorer__lead">
-            읽기 전용 법령·판례 코퍼스에서 실제 레코드를 검색해 보여줍니다.
-            검색은 모델 호출 없이 백엔드 인덱스에서 실행됩니다.
+            로컬 읽기 전용 Wiki 원문과 검색 인덱스 결과를 함께 확인합니다. 원문은
+            페이지 구간으로 불러오며 코퍼스 파일은 수정하지 않습니다.
+          </p>
+          <div className="system-explorer__wiki-browser">
+            <aside className="system-explorer__wiki-list" aria-label="읽기 전용 Wiki 문서 목록">
+              <div className="system-explorer__wiki-list-heading">
+                <h3>읽기 전용 Wiki 문서</h3>
+                <span>{wikiPages.length.toLocaleString()}개</span>
+              </div>
+              <input
+                type="search"
+                aria-label="Wiki 문서 필터"
+                placeholder="문서 이름으로 찾기"
+                value={wikiFilter}
+                onChange={(event) => setWikiFilter(event.target.value)}
+              />
+              {wikiListLoading ? <p role="status">Wiki 페이지 목록을 읽는 중입니다.</p> : null}
+              {wikiListError ? (
+                <div role="alert" className="system-explorer__library-error">
+                  <p>{wikiListError}</p>
+                  <button type="button" onClick={() => setWikiRetryKey((value) => value + 1)}>
+                    다시 불러오기
+                  </button>
+                </div>
+              ) : null}
+              {!wikiListLoading && !wikiListError && wikiPages.length === 0 ? (
+                <p className="system-explorer__note">
+                  {backendStatus === 'online'
+                    ? '읽을 수 있는 Markdown Wiki 페이지가 없습니다.'
+                    : '백엔드에 연결하면 실제 Wiki 문서 목록이 표시됩니다.'}
+                </p>
+              ) : null}
+              <ul>
+                {wikiPages
+                  .filter((page) =>
+                    page.title.toLocaleLowerCase().includes(wikiFilter.trim().toLocaleLowerCase())
+                  )
+                  .map((page) => (
+                    <li key={page.name}>
+                      <button
+                        type="button"
+                        aria-pressed={selectedWikiPage === page.name}
+                        onClick={() => void loadWikiPage(page.name)}
+                      >
+                        <span>{page.title}</span>
+                        <small>{page.bytes.toLocaleString()} bytes</small>
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            </aside>
+            <section className="system-explorer__wiki-reader" aria-label="Wiki 원문">
+              {selectedWikiPage ? (
+                <>
+                  <header>
+                    <div>
+                      <h3>{wikiPages.find((page) => page.name === selectedWikiPage)?.title ?? selectedWikiPage}</h3>
+                      <code>{selectedWikiPage}</code>
+                    </div>
+                    {wikiPageChunk ? (
+                      <small>
+                        {wikiPageChunk.nextOffset.toLocaleString()} / {wikiPageChunk.totalCharacters.toLocaleString()}자
+                      </small>
+                    ) : null}
+                  </header>
+                  {wikiPageLoading && !wikiContent ? <p role="status">Wiki 원문을 읽는 중입니다.</p> : null}
+                  {wikiPageError ? <p role="alert" className="system-explorer__library-error">{wikiPageError}</p> : null}
+                  {wikiContent ? <MarkdownView value={wikiContent} /> : null}
+                  {wikiPageChunk?.hasMore ? (
+                    <button
+                      type="button"
+                      className="system-explorer__wiki-more"
+                      disabled={wikiPageLoading}
+                      onClick={() => void loadWikiPage(selectedWikiPage, wikiPageChunk.nextOffset, true)}
+                    >
+                      {wikiPageLoading ? '원문을 불러오는 중…' : '원문 더 보기'}
+                    </button>
+                  ) : null}
+                  {!wikiPageLoading && !wikiPageError && wikiPageChunk && !wikiPageChunk.hasMore ? (
+                    <p className="system-explorer__note">문서 끝까지 표시했습니다.</p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="system-explorer__note">목록에서 Wiki 페이지를 선택하면 원문을 읽기 전용으로 표시합니다.</p>
+              )}
+            </section>
+          </div>
+          <h3 className="system-explorer__subheading">법령·판례 색인 검색</h3>
+          <p className="system-explorer__note">
+            아래 검색은 모델 호출 없이 인덱스에서 관련 레코드를 찾습니다. 전체 원문은 위 Wiki 브라우저에서 페이지를 골라 확인하세요.
           </p>
           {materialBrowser(['all', 'law', 'precedent'])}
           <p className="system-explorer__note">

@@ -43,7 +43,7 @@ export type DocumentWorkspaceProps = {
   previewMode?: boolean
   onChange: (value: string) => void
   onSave: () => Promise<void>
-  onExport: (format: 'md' | 'docx') => void
+  onExport: (format: 'md' | 'docx' | 'xlsx' | 'pdf') => void
   onPreviewModeChange?: (preview: boolean) => void
 }
 
@@ -244,6 +244,22 @@ export default function DocumentWorkspace({
           >
             <FileDown aria-hidden="true" size={15} />
             <span>DOCX</span>
+          </button>
+          <button
+            className="document-workspace__button document-workspace__button--quiet"
+            type="button"
+            onClick={() => onExport('xlsx')}
+          >
+            <FileDown aria-hidden="true" size={15} />
+            <span>Excel</span>
+          </button>
+          <button
+            className="document-workspace__button document-workspace__button--quiet"
+            type="button"
+            onClick={() => onExport('pdf')}
+          >
+            <FileDown aria-hidden="true" size={15} />
+            <span>PDF</span>
           </button>
           {!previewMode ? (
             <div className="document-workspace__save-group">

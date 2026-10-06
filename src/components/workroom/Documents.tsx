@@ -3,6 +3,7 @@ import React from 'react'
 import { ExternalLink, FileText, Link2 } from 'lucide-react'
 import type { Source, Task } from './types'
 import { prepareFinalDocument } from './documentModel'
+import { markdownToDocxBlocks } from './markdownDocx'
 export function DocumentPreview({ text }: { text: string }) {
   return (
     <article className="document-text">
@@ -71,16 +72,32 @@ export async function downloadDocument(task: Task, format: 'md' | 'docx') {
   if (format === 'md')
     blob = new Blob([finalDocument], { type: 'text/markdown;charset=utf-8' })
   else {
-    const { Document, Packer, Paragraph, HeadingLevel } = await import('docx')
-    const children = finalDocument.split('\n').map(
-      (line) =>
-        new Paragraph({
-          text: line.replace(/^#{1,2} |^> |^- /, ''),
-          ...(line.startsWith('# ') ? { heading: HeadingLevel.HEADING_1 } : {}),
-          ...(line.startsWith('## ') ? { heading: HeadingLevel.HEADING_2 } : {})
-        })
+    const { Document, Packer } = await import('docx')
+    blob = await Packer.toBlob(
+      new Document({
+        numbering: {
+          config: [
+            {
+              reference: 'report-numbering',
+              levels: [
+                { level: 0, format: 'decimal', text: '%1.', alignment: 'left' }
+              ]
+            }
+          ]
+        },
+        sections: [
+          {
+            properties: {
+              page: {
+                size: { width: 11906, height: 16838 },
+                margin: { top: 1200, right: 1080, bottom: 1200, left: 1080 }
+              }
+            },
+            children: markdownToDocxBlocks(finalDocument)
+          }
+        ]
+      })
     )
-    blob = await Packer.toBlob(new Document({ sections: [{ children }] }))
   }
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')

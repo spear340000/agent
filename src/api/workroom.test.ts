@@ -4,11 +4,51 @@ import {
   createTask,
   checkConnection,
   searchLegalLibrary,
+  listLegalWikiPages,
+  getLegalWikiPage,
   reviseTask,
+  request,
   watchTask,
   type Connection,
   type TaskDetails
 } from './workroom.js'
+
+test('read-only Wiki browser lists source pages and requests bounded original-text ranges', async () => {
+  const connection: Connection = { baseUrl: 'http://127.0.0.1:8787', token: '' }
+  const list = await listLegalWikiPages(connection, async (url) => {
+    assert.equal(String(url), 'http://127.0.0.1:8787/api/legal/wiki')
+    return Response.json({
+      items: [{ name: 'privacy-law-core.md', title: 'privacy law core', bytes: 1024 }]
+    })
+  })
+  assert.equal(list.items[0]?.name, 'privacy-law-core.md')
+  assert.equal(list.items[0]?.bytes, 1024)
+
+  const page = await getLegalWikiPage(
+    'privacy-law-core.md',
+    12000,
+    8000,
+    connection,
+    async (url) => {
+      const parsed = new URL(String(url))
+      assert.equal(parsed.pathname, '/api/legal/wiki/page')
+      assert.equal(parsed.searchParams.get('name'), 'privacy-law-core.md')
+      assert.equal(parsed.searchParams.get('offset'), '12000')
+      assert.equal(parsed.searchParams.get('limit'), '8000')
+      return Response.json({
+        name: 'privacy-law-core.md',
+        content: '본문 구간',
+        offset: 12000,
+        nextOffset: 12005,
+        totalCharacters: 20000,
+        hasMore: true
+      })
+    }
+  )
+  assert.equal(page.content, '본문 구간')
+  assert.equal(page.nextOffset, 12005)
+  assert.equal(page.hasMore, true)
+})
 
 test('legal library displays backend corpus records and passes the chosen query unchanged', async () => {
   let requestUrl = ''
@@ -85,6 +125,32 @@ test('cancelled connection checks do not continue into capability requests', asy
   )
   await assert.rejects(() => checking, /connection check cancelled/)
   assert.equal(calls, 1)
+})
+
+test('capability probes allow the cold legal-index status check to finish', async () => {
+  const originalTimeout = AbortSignal.timeout
+  const observedTimeouts: number[] = []
+  Object.defineProperty(AbortSignal, 'timeout', {
+    configurable: true,
+    value: (milliseconds: number) => {
+      observedTimeouts.push(milliseconds)
+      return originalTimeout(60_000)
+    }
+  })
+  try {
+    await request(
+      { baseUrl: 'http://127.0.0.1:8787', token: '' },
+      '/api/capabilities',
+      {},
+      async () => Response.json({ legalRetrieval: { state: 'ready' } })
+    )
+    assert.deepEqual(observedTimeouts, [45_000])
+  } finally {
+    Object.defineProperty(AbortSignal, 'timeout', {
+      configurable: true,
+      value: originalTimeout
+    })
+  }
 })
 
 test('createTask sends source ids and URLs to the real backend task endpoint', async () => {

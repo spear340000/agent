@@ -95,6 +95,10 @@ export const officeApi = {
     connection: Connection,
     input: { outputName: string; markdown: string }
   ) => post<FileResult>(connection, '/api/documents/markdown', input),
+  exportMarkdown: (
+    connection: Connection,
+    input: { outputName: string; markdown: string; format: 'xlsx' | 'pdf' }
+  ) => post<FileResult>(connection, '/api/documents/export', input),
   extract: (connection: Connection, fileId: string) =>
     post<ExtractedDocument>(connection, '/api/documents/extract', { fileId }),
   compare: (connection: Connection, leftFileId: string, rightFileId: string) =>

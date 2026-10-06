@@ -33,6 +33,8 @@ test('rendersSupportedToolbarAndSaveStates', () => {
   assert.match(markup, /저장/)
   assert.match(markup, /Markdown/)
   assert.match(markup, /DOCX/)
+  assert.match(markup, /Excel/)
+  assert.match(markup, /PDF/)
   assert.match(markup, /저장됨/)
   assert.match(renderWorkspace({ dirty: true }), /저장되지 않음/)
   assert.match(renderWorkspace({ dirty: true, saving: true }), /저장 중/)
@@ -84,14 +86,21 @@ test('the document opens in a rendered view instead of raw markdown', () => {
   assert.match(markup, /<ol>/)
   assert.match(markup, /<cite class="md-citation"[^>]*>L1<\/cite>/)
   assert.match(markup, /<h3[^>]*>사용한 검색 계층<\/h3>/)
-  assert.match(markup, /<div class="md-table-wrap" role="region" aria-label="문서 표" tabindex="0"><table>/)
+  assert.match(
+    markup,
+    /<div class="md-table-wrap" role="region" aria-label="문서 표" tabindex="0"><table>/
+  )
   assert.match(markup, /<th scope="col">항목<\/th>/)
   assert.match(markup, /<td>책임<\/td>/)
   assert.match(markup, /<cite class="md-citation"[^>]*>P1<\/cite>/)
   assert.doesNotMatch(markup, /\| 항목 \| 요약 \| 근거 \|/)
   assert.match(markup, /href="https:\/\/www\.law\.go\.kr\/"/)
   assert.doesNotMatch(markup, /<textarea/)
-  assert.doesNotMatch(markup, />## 답변</, 'raw markdown markers must not be shown as text')
+  assert.doesNotMatch(
+    markup,
+    />## 답변</,
+    'raw markdown markers must not be shown as text'
+  )
 })
 
 test('omitsEmptyOutline', () => {
