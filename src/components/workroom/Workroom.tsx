@@ -120,6 +120,7 @@ export default function Workroom() {
   const [sidebarSection, setSidebarSection] = useState<'chat' | 'system'>(
     'chat'
   )
+  const toolsActive = sidebarSection === 'chat' && view === 'tools'
   const [systemTopic, setSystemTopic] = useState<SystemTopic>('wiki')
   const initializedServer = useRef('')
   const uploadedFiles = useRef(new WeakMap<File, ManagedFile>())
@@ -704,10 +705,10 @@ export default function Workroom() {
           className="workfolio-header__action"
           type="button"
           aria-label="문서 도구 열기"
-          aria-pressed={view === 'tools'}
+          aria-pressed={toolsActive}
           onClick={() => {
             setSidebarSection('chat')
-            setView((current) => (current === 'tools' ? 'tasks' : 'tools'))
+            setView(toolsActive ? 'tasks' : 'tools')
           }}
         >
           <FolderOpen size={17} />
@@ -788,9 +789,9 @@ export default function Workroom() {
           section={sidebarSection}
           onSectionChange={(section) => {
             setSidebarSection(section)
-            if (section === 'chat') setView('tasks')
+            setView('tasks')
           }}
-          toolsActive={view === 'tools'}
+          toolsActive={toolsActive}
           onOpenTools={() => {
             setSidebarSection('chat')
             setView('tools')
@@ -816,7 +817,7 @@ export default function Workroom() {
               topic={systemTopic}
               onTopicChange={setSystemTopic}
             />
-          ) : view === 'tools' ? (
+          ) : toolsActive ? (
             <FileToolsWorkspace
               connection={connection}
               capabilities={capabilities}
@@ -913,7 +914,7 @@ export default function Workroom() {
               ) : null}
               {loaded && capabilities?.model.configured === false ? (
                 <p className="workfolio-start__warning" role="status">
-                  백엔드는 연결됐지만 모델 제공자 API 키가 설정되지 않았습니다.
+                  모델 제공자 API 키가 설정되지 않아 법률 답변을 시작할 수 없습니다.
                 </p>
               ) : null}
               {loaded &&
@@ -939,6 +940,7 @@ export default function Workroom() {
               <Composer
                 onSubmit={startTask}
                 disabled={!loaded || backendStatus !== 'online'}
+                legalUnavailable={capabilities?.model.configured === false}
               />
             </section>
           )}

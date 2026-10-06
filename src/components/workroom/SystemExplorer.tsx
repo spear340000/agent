@@ -533,10 +533,10 @@ export default function SystemExplorer({
         setLibrarySearchKey(searchKey)
         autoLoadedTopics.current.add(topic)
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (cancelled) return
         setLibraryError(
-          error instanceof Error ? error.message : '자료를 불러오지 못했습니다.'
+          '자료 검색을 완료하지 못했습니다. 백엔드 상태를 확인한 뒤 다시 시도해 주세요.'
         )
       })
       .finally(() => {
@@ -566,10 +566,10 @@ export default function SystemExplorer({
       )
       setLibraryItems(items)
       setLibrarySearchKey(`${topic}:${corpus}:${libraryQuery}`)
-    } catch (error) {
+    } catch {
       setLibraryItems([])
       setLibraryError(
-        error instanceof Error ? error.message : '자료를 불러오지 못했습니다.'
+        '자료 검색을 완료하지 못했습니다. 백엔드 상태를 확인한 뒤 다시 시도해 주세요.'
       )
     } finally {
       setLibraryLoading(false)
@@ -588,12 +588,10 @@ export default function SystemExplorer({
           setCatalogError('')
         }
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (!cancelled)
           setCatalogError(
-            error instanceof Error
-              ? error.message
-              : 'OKF 문서를 불러오지 못했습니다.'
+            'OKF 문서를 불러오지 못했습니다. 백엔드 상태를 확인해 주세요.'
           )
       })
       .finally(() => {
@@ -613,10 +611,10 @@ export default function SystemExplorer({
       .then(({ items }) => {
         if (!cancelled) setWikiPages(items)
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (!cancelled)
           setWikiListError(
-            error instanceof Error ? error.message : 'Wiki 목록을 불러오지 못했습니다.'
+            'Wiki 문서 목록을 불러오지 못했습니다. 백엔드의 Wiki 기능을 확인해 주세요.'
           )
       })
       .finally(() => {
@@ -638,12 +636,10 @@ export default function SystemExplorer({
           setToolsError('')
         }
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (!cancelled)
           setToolsError(
-            error instanceof Error
-              ? error.message
-              : '도구 목록을 불러오지 못했습니다.'
+            '도구 목록을 불러오지 못했습니다. 백엔드 상태를 확인해 주세요.'
           )
       })
       .finally(() => {
@@ -683,13 +679,13 @@ export default function SystemExplorer({
           loading: false
         }
       }))
-    } catch (error) {
+    } catch {
       setPrecedentPages(current => ({
         ...current,
         [key]: {
           ...(current[key] ?? { excerpt: '', offset: 0, nextOffset: offset, hasMore: false }),
           loading: false,
-          error: error instanceof Error ? error.message : '판례 원문을 불러오지 못했습니다.'
+          error: '판례 원문을 불러오지 못했습니다. 다시 시도해 주세요.'
         }
       }))
     }
@@ -713,11 +709,9 @@ export default function SystemExplorer({
       if (requestId !== wikiPageRequest.current) return
       setWikiContent((current) => (append ? current + chunk.content : chunk.content))
       setWikiPageChunk(chunk)
-    } catch (error) {
+    } catch {
       if (requestId !== wikiPageRequest.current) return
-      setWikiPageError(
-        error instanceof Error ? error.message : 'Wiki 원문을 불러오지 못했습니다.'
-      )
+      setWikiPageError('Wiki 원문을 불러오지 못했습니다. 다시 시도해 주세요.')
     } finally {
       if (requestId === wikiPageRequest.current) setWikiPageLoading(false)
     }

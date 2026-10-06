@@ -4181,7 +4181,8 @@
 .workfolio[data-theme='dark'] .workfolio-dialog p,
 .workfolio[data-theme='dark'] .workfolio-tools__heading p,
 .workfolio[data-theme='dark'] .workfolio-tool-form p,
-.workfolio[data-theme='dark'] .workfolio-file-library p {
+.workfolio[data-theme='dark'] .workfolio-file-library p,
+.workfolio[data-theme='dark'] .workfolio-file-library small {
   color: #aaa49a;
 }
 
@@ -4218,6 +4219,15 @@
 .workfolio[data-theme='dark'] .workfolio-tools__load-more {
   border-color: #49423a !important;
   color: #d2c9bd;
+}
+
+.workfolio[data-theme='dark'] .workfolio-tools__drop-hint,
+.workfolio[data-theme='dark'] .workfolio-tools__count {
+  color: #aaa49a;
+}
+
+.workfolio[data-theme='dark'] .workfolio-tools.is-dragging .workfolio-tools__drop-hint {
+  color: var(--wf-accent-dark);
 }
 
 .workfolio[data-theme='dark'] .workfolio-table-wrap table {

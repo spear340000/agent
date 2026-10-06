@@ -5,6 +5,7 @@ import { ArrowLeft, Download, RefreshCw, Upload } from 'lucide-react'
 import {
   downloadFile,
   uploadSourceFile,
+  validateSourceFile,
   type Connection,
   type ManagedFile,
   type RuntimeCapabilities
@@ -58,9 +59,11 @@ export default function FileToolsWorkspace({
   const [result, setResult] = useState<unknown>(null)
   const [search, setSearch] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [draggingFiles, setDraggingFiles] = useState(false)
   const mounted = useRef(true),
     running = useRef(false),
-    loadGeneration = useRef(0)
+    loadGeneration = useRef(0),
+    dragDepth = useRef(0)
   const upload = useRef<HTMLInputElement>(null)
   useEffect(() => {
     mounted.current = true
@@ -138,11 +141,68 @@ export default function FileToolsWorkspace({
     },
     [loadFiles, online]
   )
+  const uploadFiles = useCallback(
+    (selected: File[]) => {
+      if (!selected.length) return
+      if (!online) {
+        setError('백엔드에 연결된 뒤 파일을 업로드할 수 있습니다.')
+        return
+      }
+      if (running.current) {
+        setError('진행 중인 작업이 끝난 뒤 다시 업로드해 주세요.')
+        return
+      }
+      try {
+        selected.forEach(validateSourceFile)
+      } catch (cause) {
+        setError(
+          cause instanceof Error ? cause.message : '파일을 확인해 주세요.'
+        )
+        return
+      }
+      void run('파일 업로드', async () => {
+        const saved: ManagedFile[] = []
+        try {
+          for (const file of selected)
+            saved.push(await uploadSourceFile(file, connection))
+          return { files: saved }
+        } finally {
+          if (mounted.current) void loadFiles()
+        }
+      })
+    },
+    [connection, loadFiles, online, run]
+  )
+  const hasDraggedFiles = (transfer: DataTransfer) =>
+    transfer.types.includes('Files') || transfer.files.length > 0
   const props = { connection, files, busy, disabled: !online, run }
   return (
     <section
-      className="workfolio-tools"
+      className={`workfolio-tools${draggingFiles ? ' is-dragging' : ''}`}
       aria-labelledby="workfolio-tools-title"
+      onDragEnter={(event) => {
+        if (!hasDraggedFiles(event.dataTransfer)) return
+        event.preventDefault()
+        dragDepth.current += 1
+        setDraggingFiles(true)
+      }}
+      onDragOver={(event) => {
+        if (!hasDraggedFiles(event.dataTransfer)) return
+        event.preventDefault()
+        event.dataTransfer.dropEffect = online && !busy ? 'copy' : 'none'
+        setDraggingFiles(true)
+      }}
+      onDragLeave={() => {
+        dragDepth.current = Math.max(0, dragDepth.current - 1)
+        if (dragDepth.current === 0) setDraggingFiles(false)
+      }}
+      onDrop={(event) => {
+        if (!hasDraggedFiles(event.dataTransfer)) return
+        event.preventDefault()
+        dragDepth.current = 0
+        setDraggingFiles(false)
+        uploadFiles(Array.from(event.dataTransfer.files))
+      }}
     >
       <header className="workfolio-tools__heading">
         <button type="button" onClick={onClose}>
@@ -196,7 +256,14 @@ export default function FileToolsWorkspace({
         >
           <RefreshCw size={15} /> 목록 새로고침
         </button>
-        <span>
+        <span className="workfolio-tools__drop-hint" role="status">
+          {draggingFiles
+            ? online && !busy
+              ? '여기에 놓으면 파일을 업로드합니다.'
+              : '지금은 파일을 업로드할 수 없습니다.'
+            : '파일 탐색기에서 이 화면으로 끌어놓기'}
+        </span>
+        <span className="workfolio-tools__count">
           {files.length}개 파일{cursor ? ' · 일부 조회' : ''}
         </span>
         <input
@@ -208,17 +275,7 @@ export default function FileToolsWorkspace({
           onChange={(event) => {
             const selected = Array.from(event.currentTarget.files ?? [])
             event.currentTarget.value = ''
-            if (!selected.length) return
-            void run('파일 업로드', async () => {
-              const saved: ManagedFile[] = []
-              try {
-                for (const file of selected)
-                  saved.push(await uploadSourceFile(file, connection))
-                return { files: saved }
-              } finally {
-                if (mounted.current) void loadFiles()
-              }
-            })
+            uploadFiles(selected)
           }}
         />
       </div>

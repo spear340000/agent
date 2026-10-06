@@ -20,6 +20,7 @@ export default function Composer({
   onSubmit,
   compact = false,
   disabled = false,
+  legalUnavailable = false,
   placeholder,
   workflow: initialWorkflow = 'legal'
 }: {
@@ -30,6 +31,7 @@ export default function Composer({
   ) => void | boolean | Promise<void | boolean>
   compact?: boolean
   disabled?: boolean
+  legalUnavailable?: boolean
   placeholder?: string
   workflow?: 'legal' | 'document'
 }) {
@@ -41,6 +43,8 @@ export default function Composer({
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
+  const submissionBlocked =
+    disabled || (workflow === 'legal' && legalUnavailable)
   function addLink() {
     try {
       const url = new URL(link.trim())
@@ -87,7 +91,7 @@ export default function Composer({
         className={`composer ${compact ? 'composer-compact' : ''}`}
         onSubmit={async (event) => {
           event.preventDefault()
-          if (!request.trim() || submitting || disabled) return
+          if (!request.trim() || submitting || submissionBlocked) return
           setSubmitting(true)
           try {
             const accepted = await onSubmit(request, sources, workflow)
@@ -189,7 +193,7 @@ export default function Composer({
           </div>
           <button
             className="send-button"
-            disabled={!request.trim() || submitting || disabled}
+            disabled={!request.trim() || submitting || submissionBlocked}
             aria-label={compact ? '추가 요청 보내기' : '작업 시작'}
           >
             <ArrowUp size={17} />

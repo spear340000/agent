@@ -220,7 +220,9 @@ export default function WorkfolioSidebar({
         <nav className="workfolio-sidebar__sections" aria-label="주 메뉴">
           <button
             type="button"
-            aria-current={section === 'chat' ? 'page' : undefined}
+            aria-current={
+              section === 'chat' && !toolsActive ? 'page' : undefined
+            }
             title="채팅"
             onClick={() => onSectionChange('chat')}
           >
@@ -229,7 +231,9 @@ export default function WorkfolioSidebar({
           </button>
           <button
             type="button"
-            aria-current={section === 'system' ? 'page' : undefined}
+            aria-current={
+              section === 'system' && !toolsActive ? 'page' : undefined
+            }
             title="시스템 구성"
             onClick={() => onSectionChange('system')}
           >
@@ -248,8 +252,8 @@ export default function WorkfolioSidebar({
           </button>
         </nav>
 
-      {section === 'chat' ? (
-        <>
+        {section === 'chat' ? (
+          <>
             <div className="workfolio-sidebar__section-heading">채팅 내역</div>
             <nav className="workfolio-sidebar__filters" aria-label="채팅 필터">
               {(
@@ -290,10 +294,14 @@ export default function WorkfolioSidebar({
             <div className="workfolio-sidebar__history">
               {visibleTasks.map((task) => (
                 <button
-                  className={`workfolio-sidebar__task ${task.id === activeTaskId ? 'is-active' : ''}`}
+                  className={`workfolio-sidebar__task ${!toolsActive && task.id === activeTaskId ? 'is-active' : ''}`}
                   key={task.id}
                   type="button"
-                  aria-current={task.id === activeTaskId ? 'page' : undefined}
+                  aria-current={
+                    !toolsActive && task.id === activeTaskId
+                      ? 'page'
+                      : undefined
+                  }
                   aria-label={`${task.title} · ${stateLabel(task.state)}`}
                   title={`${task.title} · ${stateLabel(task.state)}`}
                   onClick={() => openTask(task.id)}
