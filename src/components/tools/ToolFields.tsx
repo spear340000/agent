@@ -8,6 +8,7 @@ export type RunTool = <T>(
 export type ToolProps = {
   connection: Connection
   files: ManagedFile[]
+  filesLoading?: boolean
   busy: boolean
   disabled?: boolean
   run: RunTool
@@ -18,6 +19,8 @@ export function FileField({
   value,
   onChange,
   label = '원본 파일',
+  emptyMessage = '작업에 필요한 파일이 없습니다. 상단에서 파일을 업로드해 주세요.',
+  loading = false,
   required = true,
   multiple = false
 }: {
@@ -25,9 +28,21 @@ export function FileField({
   value: string | string[]
   onChange: (value: string) => void
   label?: string
+  emptyMessage?: string
+  loading?: boolean
   required?: boolean
   multiple?: boolean
 }) {
+  if (!files.length)
+    return (
+      <div className="workfolio-file-field">
+        <span>{label}</span>
+        <p role="status">
+          {loading ? '파일 목록을 불러오는 중입니다.' : emptyMessage}
+        </p>
+      </div>
+    )
+
   return (
     <label>
       {label}

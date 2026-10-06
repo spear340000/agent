@@ -576,6 +576,19 @@ export async function downloadFile(
   connection: Connection = defaultConnection,
   fetcher: Fetcher = fetch
 ): Promise<void> {
+  const url = URL.createObjectURL(await getFileContent(id, connection, fetcher))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = name
+  anchor.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+export async function getFileContent(
+  id: string,
+  connection: Connection = defaultConnection,
+  fetcher: Fetcher = fetch
+): Promise<Blob> {
   let response: Response
   try {
     response = await fetcher(
@@ -593,13 +606,8 @@ export async function downloadFile(
     )
   }
   if (!response.ok)
-    throw new Error(`파일 다운로드에 실패했습니다. (${response.status})`)
-  const url = URL.createObjectURL(await response.blob())
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = name
-  anchor.click()
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    throw new Error(`파일 내용을 불러오지 못했습니다. (${response.status})`)
+  return response.blob()
 }
 
 export async function watchTask(

@@ -175,7 +175,14 @@ export default function FileToolsWorkspace({
   )
   const hasDraggedFiles = (transfer: DataTransfer) =>
     transfer.types.includes('Files') || transfer.files.length > 0
-  const props = { connection, files, busy, disabled: !online, run }
+  const props = {
+    connection,
+    files,
+    filesLoading: loadingFiles,
+    busy,
+    disabled: !online,
+    run
+  }
   return (
     <section
       className={`workfolio-tools${draggingFiles ? ' is-dragging' : ''}`}
@@ -288,19 +295,30 @@ export default function FileToolsWorkspace({
       )}
       <div className="workfolio-tools__content">
         {tool === 'files' && (
-          <section className="workfolio-file-library">
-            <label>
-              파일 이름 검색
-              <input
-                type="search"
-                maxLength={200}
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </label>
-            <p>
-              지원 업로드: DOCX, XLSX, PDF, PPTX, TXT, CSV · 파일당 최대 10 MiB
-            </p>
+          <section
+            className="workfolio-file-library"
+            aria-labelledby="workfolio-file-library-title"
+          >
+            <header className="workfolio-file-library__heading">
+              <div>
+                <h2 id="workfolio-file-library-title">파일 보관함</h2>
+                <p>업로드한 문서를 찾고 내려받을 수 있습니다.</p>
+              </div>
+            </header>
+            <div className="workfolio-file-library__filters">
+              <label>
+                파일 이름 검색
+                <input
+                  type="search"
+                  maxLength={200}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </label>
+              <span>
+                DOCX · XLSX · PDF · PPTX · TXT · CSV <i>파일당 최대 10 MiB</i>
+              </span>
+            </div>
             <ul>
               {files
                 .filter((file) =>
@@ -337,13 +355,14 @@ export default function FileToolsWorkspace({
                 ))}
             </ul>
             {!files.length && !loadingFiles && online && searchQuery && (
-              <p>일치하는 파일이 없습니다.</p>
+              <div className="workfolio-file-library__empty">
+                <p>검색 결과가 없습니다.</p>
+              </div>
             )}
             {!files.length && !loadingFiles && online && !searchQuery && (
-              <p>
-                아직 파일이 없습니다. 파일을 업로드하거나 Word·Excel 도구로 새
-                파일을 만드세요.
-              </p>
+              <div className="workfolio-file-library__empty">
+                <p>아직 업로드한 파일이 없습니다.</p>
+              </div>
             )}
           </section>
         )}

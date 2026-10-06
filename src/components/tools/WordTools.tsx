@@ -15,6 +15,7 @@ type Operation =
 export default function WordTools({
   connection,
   files,
+  filesLoading = false,
   busy,
   disabled,
   run
@@ -39,6 +40,11 @@ export default function WordTools({
   const inputFiles = ['replace', 'template'].includes(operation)
     ? files.filter((file) => file.name.toLowerCase().endsWith('.docx'))
     : files
+  const compareFiles = files.filter((file) => file.id !== fileId)
+  const readyForRequiredFiles =
+    operation === 'markdown' ||
+    (inputFiles.length > 0 &&
+      (operation !== 'compare' || files.length > 1))
   return (
     <form
       className="workfolio-tool-form"
@@ -115,14 +121,26 @@ export default function WordTools({
         </select>
       </label>
       {operation !== 'markdown' && (
-        <FileField files={inputFiles} value={fileId} onChange={setFileId} />
+        <FileField
+          files={inputFiles}
+          value={fileId}
+          onChange={setFileId}
+          loading={filesLoading}
+          emptyMessage={
+            ['replace', 'template'].includes(operation)
+              ? 'Word 문서(.docx)가 없습니다. 상단에서 DOCX 파일을 업로드해 주세요.'
+              : '작업할 문서가 없습니다. 상단에서 문서 파일을 업로드해 주세요.'
+          }
+        />
       )}
       {operation === 'compare' && (
         <FileField
-          files={files.filter((file) => file.id !== fileId)}
+          files={compareFiles}
           value={rightId}
           onChange={setRightId}
           label="비교할 파일"
+          loading={filesLoading}
+          emptyMessage="비교할 두 번째 파일이 없습니다. 문서 파일을 하나 더 업로드해 주세요."
         />
       )}
       {!['extract', 'compare'].includes(operation) && (
@@ -281,7 +299,7 @@ export default function WordTools({
           <p>설정된 모델 API를 사용하므로 비용이 발생할 수 있습니다.</p>
         </>
       )}
-      <ToolButton busy={busy} disabled={disabled} />
+      <ToolButton busy={busy} disabled={disabled || !readyForRequiredFiles} />
     </form>
   )
 }

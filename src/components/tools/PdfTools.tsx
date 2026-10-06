@@ -8,6 +8,7 @@ import { parsePages } from './toolInputs'
 export default function PdfTools({
   connection,
   files,
+  filesLoading = false,
   busy,
   disabled,
   run
@@ -82,6 +83,8 @@ export default function PdfTools({
         <FileField
           files={pdfs}
           value={fileId}
+          loading={filesLoading}
+          emptyMessage="PDF 파일이 없습니다. 상단에서 .pdf 파일을 업로드해 주세요."
           onChange={(id) => {
             setFileId(id)
             setInspection(null)
@@ -109,7 +112,13 @@ export default function PdfTools({
               {file.name}
             </label>
           ))}
-          {!pdfs.length && <p>먼저 PDF 파일을 업로드하세요.</p>}
+          {!pdfs.length && (
+            <p role="status">
+              {filesLoading
+                ? '파일 목록을 불러오는 중입니다.'
+                : 'PDF 파일이 없습니다. 상단에서 .pdf 파일을 업로드해 주세요.'}
+            </p>
+          )}
         </fieldset>
       )}
       {operation !== 'inspect' && (
@@ -146,7 +155,14 @@ export default function PdfTools({
           </select>
         </label>
       )}
-      <ToolButton busy={busy} disabled={disabled} />
+      <ToolButton
+        busy={busy}
+        disabled={
+          disabled ||
+          !pdfs.length ||
+          (operation === 'merge' && selected.length < 2)
+        }
+      />
       {inspection && (
         <section className="workfolio-table-wrap" aria-label="PDF 조회 결과">
           <p>{inspection.pageCount}페이지</p>

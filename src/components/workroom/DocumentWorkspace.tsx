@@ -29,6 +29,9 @@ import type {
   DocumentHeading
 } from './documentModel'
 import DocumentOutline from './DocumentOutline'
+import DocumentFormatPreview, {
+  type DocumentFormat
+} from './DocumentFormatPreview'
 import MarkdownView from './MarkdownView'
 
 export type DocumentWorkspaceProps = {
@@ -44,6 +47,7 @@ export type DocumentWorkspaceProps = {
   onChange: (value: string) => void
   onSave: () => Promise<void>
   onExport: (format: 'md' | 'docx' | 'xlsx' | 'pdf') => void
+  onFormatPreview: (format: 'xlsx' | 'pdf') => Promise<Blob>
   onPreviewModeChange?: (preview: boolean) => void
 }
 
@@ -66,6 +70,13 @@ const saveLabels = {
   saved: '저장됨'
 } as const
 
+const formatLabels: Record<DocumentFormat, string> = {
+  md: 'Markdown',
+  docx: 'DOCX',
+  xlsx: 'Excel',
+  pdf: 'PDF'
+}
+
 export default function DocumentWorkspace({
   title,
   value,
@@ -79,6 +90,7 @@ export default function DocumentWorkspace({
   onChange,
   onSave,
   onExport,
+  onFormatPreview,
   onPreviewModeChange
 }: DocumentWorkspaceProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null)
@@ -90,6 +102,11 @@ export default function DocumentWorkspace({
   const [highlightedHeadingLine, setHighlightedHeadingLine] = useState<
     number | null
   >(null)
+  const [previewFormat, setPreviewFormat] = useState<DocumentFormat>('md')
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState('')
+  const previewRequest = useRef(0)
   const finalDocument = useMemo(
     () => prepareFinalDocument(value, title),
     [title, value]
@@ -147,6 +164,31 @@ export default function DocumentWorkspace({
     editor.focus()
     editor.setSelectionRange(offset, offset)
     setHighlightedHeadingLine(null)
+  }
+
+  async function selectPreviewFormat(format: DocumentFormat) {
+    const request = ++previewRequest.current
+    setPreviewFormat(format)
+    setPreviewBlob(null)
+    setPreviewError('')
+    if (format !== 'pdf' && format !== 'xlsx') {
+      setPreviewLoading(false)
+      return
+    }
+    setPreviewLoading(true)
+    try {
+      const blob = await onFormatPreview(format)
+      if (request === previewRequest.current) setPreviewBlob(blob)
+    } catch (cause) {
+      if (request === previewRequest.current)
+        setPreviewError(
+          cause instanceof Error
+            ? cause.message
+            : `${formatLabels[format]} 미리보기를 불러오지 못했습니다.`
+        )
+    } finally {
+      if (request === previewRequest.current) setPreviewLoading(false)
+    }
   }
 
   return (
@@ -232,35 +274,73 @@ export default function DocumentWorkspace({
           <button
             className="document-workspace__button document-workspace__button--quiet"
             type="button"
-            onClick={() => onExport('md')}
+            aria-pressed={previewMode ? previewFormat === 'md' : undefined}
+            onClick={() =>
+              previewMode ? void selectPreviewFormat('md') : onExport('md')
+            }
           >
-            <Download aria-hidden="true" size={15} />
+            {previewMode ? (
+              <Eye aria-hidden="true" size={15} />
+            ) : (
+              <Download aria-hidden="true" size={15} />
+            )}
             <span>Markdown</span>
           </button>
           <button
             className="document-workspace__button document-workspace__button--quiet"
             type="button"
-            onClick={() => onExport('docx')}
+            aria-pressed={previewMode ? previewFormat === 'docx' : undefined}
+            onClick={() =>
+              previewMode ? void selectPreviewFormat('docx') : onExport('docx')
+            }
           >
-            <FileDown aria-hidden="true" size={15} />
+            {previewMode ? (
+              <Eye aria-hidden="true" size={15} />
+            ) : (
+              <FileDown aria-hidden="true" size={15} />
+            )}
             <span>DOCX</span>
           </button>
           <button
             className="document-workspace__button document-workspace__button--quiet"
             type="button"
-            onClick={() => onExport('xlsx')}
+            aria-pressed={previewMode ? previewFormat === 'xlsx' : undefined}
+            onClick={() =>
+              previewMode ? void selectPreviewFormat('xlsx') : onExport('xlsx')
+            }
           >
-            <FileDown aria-hidden="true" size={15} />
+            {previewMode ? (
+              <Eye aria-hidden="true" size={15} />
+            ) : (
+              <FileDown aria-hidden="true" size={15} />
+            )}
             <span>Excel</span>
           </button>
           <button
             className="document-workspace__button document-workspace__button--quiet"
             type="button"
-            onClick={() => onExport('pdf')}
+            aria-pressed={previewMode ? previewFormat === 'pdf' : undefined}
+            onClick={() =>
+              previewMode ? void selectPreviewFormat('pdf') : onExport('pdf')
+            }
           >
-            <FileDown aria-hidden="true" size={15} />
+            {previewMode ? (
+              <Eye aria-hidden="true" size={15} />
+            ) : (
+              <FileDown aria-hidden="true" size={15} />
+            )}
             <span>PDF</span>
           </button>
+          {previewMode ? (
+            <button
+              className="document-workspace__button document-workspace__button--quiet"
+              type="button"
+              onClick={() => onExport(previewFormat)}
+            >
+              <Download aria-hidden="true" size={15} />
+              <span>{formatLabels[previewFormat]} 다운로드</span>
+            </button>
+          ) : null}
           {!previewMode ? (
             <div className="document-workspace__save-group">
               {saveStatus !== 'saved' || hasPersistedDocument ? (
@@ -314,11 +394,31 @@ export default function DocumentWorkspace({
               className="document-workspace__preview"
               aria-label="문서 미리보기"
             >
-              <MarkdownView
-                value={previewMode ? finalDocument : value}
-                highlightedHeadingLine={highlightedHeadingLine}
-                onContentClick={() => setHighlightedHeadingLine(null)}
-              />
+              {previewMode ? (
+                <>
+                  {previewLoading ? (
+                    <p className="document-format-preview__message" role="status">
+                      {formatLabels[previewFormat]} 미리보기를 준비하고 있습니다…
+                    </p>
+                  ) : previewError ? (
+                    <p className="document-format-preview__message" role="alert">
+                      {previewError}
+                    </p>
+                  ) : (
+                    <DocumentFormatPreview
+                      format={previewFormat}
+                      markdown={finalDocument}
+                      file={previewBlob}
+                    />
+                  )}
+                </>
+              ) : (
+                <MarkdownView
+                  value={value}
+                  highlightedHeadingLine={highlightedHeadingLine}
+                  onContentClick={() => setHighlightedHeadingLine(null)}
+                />
+              )}
             </div>
           ) : (
             <>

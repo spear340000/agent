@@ -10,9 +10,50 @@ import {
 import { FileField, ToolButton, type ToolProps } from './ToolFields'
 import { parseRows } from './toolInputs'
 
+function serializeRows(rows: Scalar[][], delimiter: ',' | '\t'): string {
+  return rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const text = cell == null ? '' : String(cell)
+          return /["\r\n]/.test(text) || text.includes(delimiter)
+            ? `"${text.replace(/"/g, '""')}"`
+            : text
+        })
+        .join(delimiter)
+    )
+    .join('\n')
+}
+
+function operationSummary(operation: SpreadsheetOperation): {
+  title: string
+  detail: string
+} {
+  switch (operation.kind) {
+    case 'addSheet':
+      return { title: '시트 추가', detail: operation.name }
+    case 'setCell':
+      return {
+        title: operation.value === null ? '셀 비우기' : '셀 값 변경',
+        detail: `${operation.sheet}!${operation.cell} · ${String(operation.value ?? '빈 셀')}`
+      }
+    case 'setFormula':
+      return {
+        title: '수식 입력',
+        detail: `${operation.sheet}!${operation.cell} · =${operation.formula}`
+      }
+    case 'appendRows':
+      return {
+        title: '행 추가',
+        detail: `${operation.sheet} · ${operation.rows.length}행, ${operation.rows[0]?.length ?? 0}열`
+      }
+  }
+}
+
 export default function SpreadsheetTools({
   connection,
   files,
+  filesLoading = false,
   busy,
   disabled,
   run
@@ -33,7 +74,14 @@ export default function SpreadsheetTools({
     null
   )
   const [operations, setOperations] = useState<SpreadsheetOperation[]>([])
+  const [queueWasCleared, setQueueWasCleared] = useState(false)
+  const [editingOperationIndex, setEditingOperationIndex] = useState<
+    number | null
+  >(null)
   const [inputError, setInputError] = useState('')
+  const excelFiles = files.filter((file) =>
+    file.name.toLowerCase().endsWith('.xlsx')
+  )
 
   function currentOperation(): SpreadsheetOperation {
     if (!sheet.trim()) throw new Error('시트 이름을 입력하세요.')
@@ -71,7 +119,16 @@ export default function SpreadsheetTools({
             setInspection(result)
             return result
           }
-          const pending = operations.length ? operations : [currentOperation()]
+          const pending =
+            editingOperationIndex === null
+              ? operations.length
+                ? operations
+                : [currentOperation()]
+              : operations.map((operation, index) =>
+                  index === editingOperationIndex
+                    ? currentOperation()
+                    : operation
+                )
           if (mode === 'create' && pending[0]?.kind !== 'addSheet')
             throw new Error('새 Excel은 시트 추가 작업부터 시작하세요.')
           const result = await officeApi.spreadsheet(connection, {
@@ -80,6 +137,8 @@ export default function SpreadsheetTools({
             operations: pending
           })
           setOperations([])
+          setQueueWasCleared(true)
+          setEditingOperationIndex(null)
           return result
         })
       }}
@@ -97,6 +156,8 @@ export default function SpreadsheetTools({
             const next = event.target.value as typeof mode
             setMode(next)
             setOperations([])
+            setQueueWasCleared(false)
+            setEditingOperationIndex(null)
             setKind(next === 'create' ? 'addSheet' : 'setCell')
             setInspection(null)
           }}
@@ -108,14 +169,16 @@ export default function SpreadsheetTools({
       </label>
       {mode !== 'create' && (
         <FileField
-          files={files.filter((file) =>
-            file.name.toLowerCase().endsWith('.xlsx')
-          )}
+          files={excelFiles}
           value={fileId}
+          loading={filesLoading}
+          emptyMessage="Excel 통합 문서(.xlsx)가 없습니다. 상단에서 .xlsx 파일을 업로드해 주세요."
           onChange={(id) => {
             setFileId(id)
             setInspection(null)
             setOperations([])
+            setQueueWasCleared(false)
+            setEditingOperationIndex(null)
           }}
         />
       )}
@@ -223,10 +286,21 @@ export default function SpreadsheetTools({
           )}
           <button
             type="button"
-            disabled={busy || operations.length >= 500}
+            disabled={busy || (operations.length >= 500 && editingOperationIndex === null)}
             onClick={() => {
               try {
-                setOperations((current) => [...current, currentOperation()])
+                const nextOperation = currentOperation()
+                setOperations((current) =>
+                  editingOperationIndex === null
+                    ? [...current, nextOperation]
+                    : current.map((operation, index) =>
+                        index === editingOperationIndex
+                          ? nextOperation
+                          : operation
+                      )
+                )
+                setQueueWasCleared(false)
+                setEditingOperationIndex(null)
                 setInputError('')
               } catch (cause) {
                 setInputError(
@@ -235,32 +309,115 @@ export default function SpreadsheetTools({
               }
             }}
           >
-            편집 목록에 추가
+            {editingOperationIndex === null ? '편집 목록에 추가' : '변경 저장'}
           </button>
+          {editingOperationIndex !== null && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setEditingOperationIndex(null)
+                setInputError('')
+              }}
+            >
+              취소
+            </button>
+          )}
           {!!operations.length && (
-            <ol className="workfolio-operation-list">
-              {operations.map((operation, index) => (
-                <li key={index}>
-                  <span>
-                    {operation.kind} ·{' '}
-                    {'sheet' in operation ? operation.sheet : operation.name}
-                    {'cell' in operation ? `!${operation.cell}` : ''}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    aria-label={`편집 ${index + 1} 제거`}
-                    onClick={() =>
-                      setOperations((current) =>
-                        current.filter((_, i) => i !== index)
-                      )
-                    }
-                  >
-                    제거
-                  </button>
-                </li>
-              ))}
-            </ol>
+            <section className="workfolio-operation-queue" aria-label="Excel 변경 목록">
+              <header>
+                <h3>변경 목록 <span>{operations.length}</span></h3>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setOperations([])
+                    setEditingOperationIndex(null)
+                    setQueueWasCleared(true)
+                    setInputError('')
+                  }}
+                >
+                  전체 비우기
+                </button>
+              </header>
+              <ol className="workfolio-operation-list">
+                {operations.map((operation, index) => {
+                  const summary = operationSummary(operation)
+                  return (
+                    <li
+                      key={index}
+                      className={editingOperationIndex === index ? 'is-editing' : ''}
+                    >
+                      <div className="workfolio-operation-list__description">
+                        <strong>{index + 1}. {summary.title}</strong>
+                        <small>{summary.detail}</small>
+                      </div>
+                      <div className="workfolio-operation-list__actions">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            setEditingOperationIndex(index)
+                            setSheet('sheet' in operation ? operation.sheet : operation.name)
+                            setKind(operation.kind)
+                            setInputError('')
+                            if (operation.kind === 'setCell') {
+                              setCell(operation.cell)
+                              const nextValueType =
+                                operation.value === null
+                                  ? 'empty'
+                                  : typeof operation.value === 'number'
+                                    ? 'number'
+                                    : typeof operation.value === 'boolean'
+                                      ? 'boolean'
+                                      : 'text'
+                              setValueType(nextValueType)
+                              setValue(operation.value == null ? '' : String(operation.value))
+                            } else if (operation.kind === 'setFormula') {
+                              setCell(operation.cell)
+                              setValue(operation.formula)
+                            } else if (operation.kind === 'appendRows') {
+                              setDelimiter('\t')
+                              setValue(serializeRows(operation.rows, '\t'))
+                            } else {
+                              setValue('')
+                            }
+                          }}
+                        >
+                          수정
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          aria-label={`변경 ${index + 1} 삭제`}
+                          onClick={() => {
+                            if (operations.length === 1)
+                              setQueueWasCleared(true)
+                            setOperations((current) =>
+                              current.filter((_, itemIndex) => itemIndex !== index)
+                            )
+                            setEditingOperationIndex((current) =>
+                              current === index
+                                ? null
+                                : current !== null && current > index
+                                  ? current - 1
+                                  : current
+                            )
+                          }}
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ol>
+            </section>
+          )}
+          {queueWasCleared && !operations.length && (
+            <p className="workfolio-operation-queue__empty" role="status">
+              변경 목록이 비었습니다. 파일로 저장하려면 변경 내용을 목록에 추가하세요.
+            </p>
           )}
         </>
       )}
@@ -269,7 +426,15 @@ export default function SpreadsheetTools({
           {inputError}
         </p>
       )}
-      <ToolButton busy={busy} disabled={disabled}>
+      <ToolButton
+        busy={busy}
+        disabled={
+          disabled ||
+          (mode !== 'create' && !excelFiles.length) ||
+          editingOperationIndex !== null ||
+          (queueWasCleared && !operations.length)
+        }
+      >
         {mode === 'inspect' ? '조회' : '파일로 저장'}
       </ToolButton>
       {inspection && (

@@ -20,6 +20,7 @@ function renderWorkspace(
     onChange: () => undefined,
     onSave: async () => undefined,
     onExport: () => undefined,
+    onFormatPreview: async () => new Blob(),
     ...overrides
   }
   return renderToStaticMarkup(createElement(DocumentWorkspace, props))

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Activity,
   ArrowRight,
@@ -71,6 +71,12 @@ function Status({ ready, label }: { ready: boolean | null; label: string }) {
       {label} · {value}
     </span>
   )
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes.toLocaleString()} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function excerptText(value: string): string {
@@ -699,31 +705,43 @@ export default function SystemExplorer({
     }
   }
 
-  const loadWikiPage = async (
-    name: string,
-    offset = 0,
-    append = false
-  ) => {
-    const requestId = ++wikiPageRequest.current
-    setSelectedWikiPage(name)
-    if (!append) {
-      setWikiContent('')
-      setWikiPageChunk(null)
-    }
-    setWikiPageLoading(true)
-    setWikiPageError('')
-    try {
-      const chunk = await getLegalWikiPage(name, offset, 12_000, connection)
-      if (requestId !== wikiPageRequest.current) return
-      setWikiContent((current) => (append ? current + chunk.content : chunk.content))
-      setWikiPageChunk(chunk)
-    } catch {
-      if (requestId !== wikiPageRequest.current) return
-      setWikiPageError('Wiki 원문을 불러오지 못했습니다. 다시 시도해 주세요.')
-    } finally {
-      if (requestId === wikiPageRequest.current) setWikiPageLoading(false)
-    }
-  }
+  const loadWikiPage = useCallback(
+    async (name: string, offset = 0, append = false) => {
+      const requestId = ++wikiPageRequest.current
+      setSelectedWikiPage(name)
+      if (!append) {
+        setWikiContent('')
+        setWikiPageChunk(null)
+      }
+      setWikiPageLoading(true)
+      setWikiPageError('')
+      try {
+        const chunk = await getLegalWikiPage(name, offset, 12_000, connection)
+        if (requestId !== wikiPageRequest.current) return
+        setWikiContent((current) =>
+          append ? current + chunk.content : chunk.content
+        )
+        setWikiPageChunk(chunk)
+      } catch {
+        if (requestId !== wikiPageRequest.current) return
+        setWikiPageError('Wiki 원문을 불러오지 못했습니다. 다시 시도해 주세요.')
+      } finally {
+        if (requestId === wikiPageRequest.current) setWikiPageLoading(false)
+      }
+    },
+    [connection]
+  )
+
+  useEffect(() => {
+    if (
+      topic !== 'wiki' ||
+      selectedWikiPage ||
+      wikiListLoading ||
+      wikiPages.length === 0
+    )
+      return
+    void loadWikiPage(wikiPages[0].name)
+  }, [loadWikiPage, selectedWikiPage, topic, wikiListLoading, wikiPages])
 
   const materialBrowser = (
     allowed: Array<'law' | 'precedent' | 'graph' | 'all'>,
@@ -1182,7 +1200,7 @@ export default function SystemExplorer({
                         onClick={() => void loadWikiPage(page.name)}
                       >
                         <span>{page.title}</span>
-                        <small>{page.bytes.toLocaleString()} bytes</small>
+                        <small>{formatFileSize(page.bytes)}</small>
                       </button>
                     </li>
                   ))}

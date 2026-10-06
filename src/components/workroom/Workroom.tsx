@@ -14,6 +14,7 @@ import {
   cancelTask,
   createTask,
   downloadFile,
+  getFileContent,
   getTaskDetails,
   getFile,
   listTasks,
@@ -661,6 +662,24 @@ export default function Workroom() {
     }
   }
 
+  async function previewDocumentFormat(format: 'xlsx' | 'pdf'): Promise<Blob> {
+    if (!active?.document) throw new Error('미리볼 문서가 없습니다.')
+    if (backendStatus !== 'online')
+      throw new Error(
+        `${format === 'xlsx' ? 'Excel' : 'PDF'} 미리보기에는 백엔드 연결이 필요합니다.`
+      )
+    const markdown = prepareFinalDocument(
+      active.document,
+      documentHeading || active.title
+    )
+    const { file } = await officeApi.exportMarkdown(connection, {
+      outputName: active.title,
+      markdown,
+      format
+    })
+    return getFileContent(file.id, connection)
+  }
+
   function changeDocument(value: string) {
     if (!active) return
     setTasks((current) =>
@@ -871,6 +890,7 @@ export default function Workroom() {
                       onChange={changeDocument}
                       onSave={saveActiveDocument}
                       onExport={(format) => void exportDocument(format)}
+                      onFormatPreview={previewDocumentFormat}
                       onPreviewModeChange={setFinalPreview}
                     />
                   ) : (
@@ -883,6 +903,24 @@ export default function Workroom() {
                       </span>
                       <h1>{documentStatus(active).title}</h1>
                       <p>{documentStatus(active).detail}</p>
+                      {active.state === 'failed' ? (
+                        <div className="workfolio-document-state__actions">
+                          <button
+                            className="workfolio-primary"
+                            type="button"
+                            onClick={() => void rerunActiveTask()}
+                          >
+                            <RefreshCw size={15} />
+                            다시 실행
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConnectionOpen(true)}
+                          >
+                            연결 설정 확인
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   )}
                 </section>
