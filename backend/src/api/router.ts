@@ -38,6 +38,7 @@ import type { CapabilityService } from "../application/capability-service.js";
 import type { LegalRetrievalService } from "../infrastructure/legal/legal-retrieval-service.js";
 import { assignCitationIds } from "../infrastructure/legal/legal-retrieval-service.js";
 import type { LegalCatalogService } from "../application/legal/legal-catalog-service.js";
+import type { LegalWikiService } from "../application/legal/legal-wiki-service.js";
 
 const responseOrigin = (res: http.ServerResponse): string | undefined => {
   const value = res.getHeader("access-control-allow-origin");
@@ -61,6 +62,7 @@ export class ApiRouter {
       capabilities: CapabilityService;
       legalRetrieval?: LegalRetrievalService;
       legalCatalog?: LegalCatalogService;
+      legalWiki?: LegalWikiService;
       files: FileService;
       spreadsheets: SpreadsheetService;
       documents: DocumentService;
@@ -114,6 +116,42 @@ export class ApiRouter {
       if (!this.deps.legalCatalog)
         throw unavailable("OKF 카탈로그가 설정되지 않았습니다.");
       return sendJson(res, 200, { items: await this.deps.legalCatalog.list() });
+    }
+    if (req.method === "GET" && url.pathname === "/api/legal/wiki") {
+      if (!this.deps.legalWiki)
+        throw unavailable("읽기 전용 법률 Wiki가 설정되지 않았습니다.");
+      return sendJson(res, 200, { items: await this.deps.legalWiki.list() });
+    }
+    if (req.method === "GET" && url.pathname === "/api/legal/wiki/entries") {
+      if (!this.deps.legalWiki)
+        throw unavailable("읽기 전용 법률 Wiki가 설정되지 않았습니다.");
+      const name = url.searchParams.get("name");
+      if (name === null) throw badRequest("name is required");
+      return sendJson(
+        res,
+        200,
+        await this.deps.legalWiki.listEntries(
+          name,
+          url.searchParams.get("q") ?? "",
+          Number(url.searchParams.get("offset") ?? 0),
+          Number(url.searchParams.get("limit") ?? 50),
+        ),
+      );
+    }
+    if (req.method === "GET" && url.pathname === "/api/legal/wiki/page") {
+      if (!this.deps.legalWiki)
+        throw unavailable("읽기 전용 법률 Wiki가 설정되지 않았습니다.");
+      const name = url.searchParams.get("name");
+      if (name === null) throw badRequest("name is required");
+      return sendJson(
+        res,
+        200,
+        await this.deps.legalWiki.readPage(
+          name,
+          Number(url.searchParams.get("offset") ?? 0),
+          Number(url.searchParams.get("limit") ?? 12_000),
+        ),
+      );
     }
     if (req.method === "POST" && url.pathname === "/api/tasks")
       return this.createTask(req, res);
@@ -186,6 +224,8 @@ export class ApiRouter {
       return this.createDocument(req, res);
     if (req.method === "POST" && url.pathname === "/api/documents/markdown")
       return this.createMarkdown(req, res);
+    if (req.method === "POST" && url.pathname === "/api/documents/export")
+      return this.exportMarkdown(req, res);
     if (
       req.method === "POST" &&
       url.pathname === "/api/documents/template-fill"
@@ -371,9 +411,15 @@ export class ApiRouter {
     )
       throw badRequest("corpus must be law, precedent, graph, or all");
     const requestedLimit = Number(
-      url.searchParams.get("limit") ?? (corpus === "law" || corpus === "all" ? 20 : corpus === "graph" ? 30 : 10),
+      url.searchParams.get("limit") ??
+        (corpus === "law" || corpus === "all"
+          ? 20
+          : corpus === "graph"
+            ? 30
+            : 10),
     );
-    const maxLimit = corpus === "law" || corpus === "all" ? 20 : corpus === "graph" ? 30 : 10;
+    const maxLimit =
+      corpus === "law" || corpus === "all" ? 20 : corpus === "graph" ? 30 : 10;
     if (
       !Number.isSafeInteger(requestedLimit) ||
       requestedLimit < 1 ||
@@ -406,11 +452,7 @@ export class ApiRouter {
     if (!this.deps.legalRetrieval)
       throw unavailable("법률 자료 검색이 설정되지 않았습니다.");
     const identifier = url.searchParams.get("identifier");
-    if (
-      identifier === null ||
-      !identifier.trim() ||
-      identifier.length > 160
-    )
+    if (identifier === null || !identifier.trim() || identifier.length > 160)
       throw badRequest("identifier must contain 1 to 160 characters");
     const offset = Number(url.searchParams.get("offset") ?? 0);
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > 2_000_000)
@@ -495,6 +537,36 @@ export class ApiRouter {
         markdown,
       }),
     });
+  }
+  private async exportMarkdown(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+  ) {
+    const body = await readJson(req);
+    const format = asString(body.format, "format", true);
+    const outputName = asString(body.outputName, "outputName", true)!;
+    const markdown = asString(body.markdown, "markdown", true)!;
+    if (markdown.length > 200_000)
+      throw badRequest("markdown must not exceed 200000 characters");
+    if (format === "xlsx") {
+      sendJson(res, 201, {
+        file: await this.deps.spreadsheets.createMarkdownReport({
+          outputName,
+          markdown,
+        }),
+      });
+      return;
+    }
+    if (format === "pdf") {
+      sendJson(res, 201, {
+        file: await this.deps.pdfs.createMarkdownReport({
+          outputName,
+          markdown,
+        }),
+      });
+      return;
+    }
+    throw badRequest("format must be xlsx or pdf");
   }
   private async inspectSpreadsheet(
     req: http.IncomingMessage,

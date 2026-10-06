@@ -8,6 +8,7 @@ import { ApiRouter } from "../src/api/router.ts";
 let receivedQuery = "";
 let receivedGraphQuery = "";
 let receivedGraphLimit = 0;
+let receivedWikiEntryQuery = "";
 const receivedAllQueries: string[] = [];
 const record = {
   kind: "law",
@@ -59,6 +60,22 @@ const router = new ApiRouter({
   },
   legalCatalog: {
     list: async () => [{ name: "index.md", content: "# OKF catalog" }],
+  },
+  legalWiki: {
+    list: async () => [],
+    readPage: async () => ({ name: "법률.md", content: "", offset: 0, nextOffset: 0, totalCharacters: 0, hasMore: false }),
+    listEntries: async (name: string, query: string, offset: number, limit: number) => {
+      receivedWikiEntryQuery = query;
+      return {
+        name,
+        query,
+        offset,
+        limit,
+        total: 1,
+        hasMore: false,
+        items: [{ title: "민법", status: "시행", effectiveDate: "2024-07-03", offset: 10, endOffset: 100, excerpt: "제1조" }],
+      };
+    },
   },
 } as never);
 const server = http.createServer((request, response) => {
@@ -144,6 +161,19 @@ try {
   ).json()) as { items: { name: string; content: string }[] };
   assert.equal(catalogBody.items[0]?.name, "index.md");
   assert.match(catalogBody.items[0]?.content ?? "", /OKF catalog/);
+
+  const wikiEntriesResponse = await fetch(
+    `${baseUrl}/api/legal/wiki/entries?name=${encodeURIComponent("법률.md")}&q=${encodeURIComponent("민법")}&offset=0&limit=10`,
+  );
+  assert.equal(wikiEntriesResponse.status, 200);
+  const wikiEntriesBody = (await wikiEntriesResponse.json()) as {
+    total: number;
+    items: { title: string; offset: number; endOffset: number }[];
+  };
+  assert.equal(receivedWikiEntryQuery, "민법");
+  assert.equal(wikiEntriesBody.total, 1);
+  assert.equal(wikiEntriesBody.items[0]?.title, "민법");
+  assert.equal(wikiEntriesBody.items[0]?.endOffset, 100);
 
   assert.equal(
     (await fetch(`${baseUrl}/api/legal/library?corpus=unknown&q=test`)).status,

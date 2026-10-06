@@ -33,10 +33,8 @@ export function normalizeLegalCitations(text: string, validCitationIds: readonly
   );
 }
 
-export function findUnsupportedCurrentnessClaims(text: string, sources: readonly LegalSource[]): string[] {
-  const claims = [...new Set([...text.matchAll(CURRENTNESS_CLAIM)].map(match => match[0]))];
-  if (claims.length === 0) return [];
-  return sources.some(source => Boolean(source.date)) ? [] : claims;
+export function findUnsupportedCurrentnessClaims(text: string): string[] {
+  return [...new Set([...text.matchAll(CURRENTNESS_CLAIM)].map(match => match[0]))];
 }
 
 export function validateLegalAnswer(input: {
@@ -45,7 +43,7 @@ export function validateLegalAnswer(input: {
 }): LegalAnswerValidation {
   const validCitationIds = input.sources.map(source => source.citationId);
   const invalidCitations = findInvalidLegalCitations(input.text, validCitationIds);
-  const unsupportedCurrentness = findUnsupportedCurrentnessClaims(input.text, input.sources);
+  const unsupportedCurrentness = findUnsupportedCurrentnessClaims(input.text);
   return {
     invalidCitations,
     unsupportedCurrentness,

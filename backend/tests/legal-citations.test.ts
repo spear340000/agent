@@ -73,10 +73,16 @@ test('currentness claims are rejected when no record carries a date', () => {
   assert.equal(validateLegalAnswer({ text: '현재 시행 중인 조항입니다 [L1].', sources: undated }).valid, false);
 });
 
-test('currentness claims are allowed once a record carries an amendment or decision date', () => {
+test('an amendment date can be cited as a date without making currentness claims', () => {
   const dated = [source({ citationId: 'L1', date: { kind: 'amendment', value: '2010.1.22' } })];
-  assert.deepEqual(findUnsupportedCurrentnessClaims('개정 표기가 있는 조항입니다 [L1].', dated), []);
+  assert.deepEqual(findUnsupportedCurrentnessClaims('개정 표기가 있는 조항입니다 [L1].'), []);
   assert.equal(validateLegalAnswer({ text: '개정 표기 2010.1.22 조항입니다 [L1].', sources: dated }).valid, true);
+});
+
+test('an amendment date alone does not establish that a law is currently in force', () => {
+  const dated = [source({ citationId: 'L1', date: { kind: 'amendment', value: '2010.1.22' } })];
+  const claims = findUnsupportedCurrentnessClaims('현재 시행 중인 조항입니다 [L1].');
+  assert.deepEqual(claims, ['현재 시행']);
 });
 
 test('a no-evidence answer may omit citations but not invent them', () => {

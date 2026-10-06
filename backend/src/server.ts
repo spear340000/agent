@@ -39,6 +39,7 @@ import { LegalRequestRouter } from "./application/legal/legal-request-router.js"
 import { LegalWorkflow } from "./application/legal/legal-workflow.js";
 import { legalFailureMessage } from "./domain/legal-error.js";
 import { LegalCatalogService } from "./application/legal/legal-catalog-service.js";
+import { LegalWikiService } from "./application/legal/legal-wiki-service.js";
 
 validateRuntimeConfig();
 validateLegalConfig();
@@ -208,11 +209,12 @@ const router = new ApiRouter({
   capabilities,
   legalRetrieval,
   legalCatalog: new LegalCatalogService(env.legal.okfPath),
+  legalWiki: new LegalWikiService(path.join(env.legal.root, "wiki")),
   files: fileService,
   spreadsheets: new SpreadsheetService(files),
   documents,
   content,
-  pdfs: new PdfService(files),
+  pdfs: new PdfService(files, (html) => browser.renderPdf(html)),
   redaction: new RedactionService(files),
   documentAi: new DocumentAiService(model, content, documents),
   eventBus,

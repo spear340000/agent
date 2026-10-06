@@ -4,6 +4,7 @@ import PizZip from 'pizzip';
 import type { FileStorage, ManagedFile } from '../domain/managed-file.js';
 import { badRequest } from '../shared/app-error.js';
 import { replaceDocxXmlText } from './docx-xml.js';
+import { markdownToDocxChildren } from './markdown-docx.js';
 
 export class DocumentService {
   constructor(private readonly files: FileStorage) {}
@@ -13,19 +14,23 @@ export class DocumentService {
     return this.files.save({ name: this.docxName(input.outputName), mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', content: Buffer.from(await Packer.toBuffer(document)) });
   }
   async createMarkdownReport(input: { outputName: string; markdown: string }): Promise<ManagedFile> {
-    const lines = input.markdown.split(/\r?\n/);
-    const title = lines.find(line => line.trim())?.replace(/^#\s+/, '').trim() || 'Research report';
-    const children = lines.filter((line, index) => index > lines.findIndex(value => value.trim()) || !line.trim()).map(line => {
-      const heading = /^(#{1,3})\s+(.+)$/.exec(line);
-      if (heading) return new Paragraph({ text: heading[2], heading: heading[1].length === 1 ? 'Heading1' : heading[1].length === 2 ? 'Heading2' : 'Heading3' });
-      const bullet = /^\s*[-*]\s+(.+)$/.exec(line);
-      if (bullet) return new Paragraph({ text: bullet[1], bullet: { level: 0 } });
-      const numbered = /^\s*\d+[.)]\s+(.+)$/.exec(line);
-      if (numbered) return new Paragraph({ text: numbered[1], numbering: { reference: 'report-numbering', level: 0 } });
-      const clean = line.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\[(.+?)\]\((https?:\/\/[^)]+)\)/g, '$1 ($2)').replace(/`([^`]+)`/g, '$1');
-      return new Paragraph(clean);
+    const lines = input.markdown.replace(/\r\n?/g, '\n').split('\n');
+    const firstContentLine = lines.findIndex(line => line.trim());
+    const title = lines[firstContentLine]?.replace(/^#\s+/, '').trim() || 'Research report';
+    const body = lines.filter((_, index) => index !== firstContentLine).join('\n');
+    const children = markdownToDocxChildren(body);
+    const document = new Document({
+      numbering: { config: [{ reference: 'report-numbering', levels: [{ level: 0, format: 'decimal', text: '%1.', alignment: 'left' }] }, { reference: 'report-bullets', levels: [{ level: 0, format: 'bullet', text: '•', alignment: 'left' }] }] },
+      sections: [{
+        properties: {
+          page: {
+            size: { width: 11_906, height: 16_838 },
+            margin: { top: 1_200, right: 1_080, bottom: 1_200, left: 1_080 },
+          },
+        },
+        children: [new Paragraph({ children: [new TextRun({ text: title, bold: true, size: 34 })] }), ...children],
+      }],
     });
-    const document = new Document({ numbering: { config: [{ reference: 'report-numbering', levels: [{ level: 0, format: 'decimal', text: '%1.', alignment: 'left' }] }, { reference: 'report-bullets', levels: [{ level: 0, format: 'bullet', text: '•', alignment: 'left' }] }] }, sections: [{ children: [new Paragraph({ children: [new TextRun({ text: title, bold: true, size: 34 })] }), ...children] }] });
     return this.files.save({ name: this.docxName(input.outputName), mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', content: Buffer.from(await Packer.toBuffer(document)) });
   }
   async fillTemplate(input: { fileId: string; outputName: string; variables: Record<string, string | number | boolean> }): Promise<ManagedFile> {
