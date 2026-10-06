@@ -5272,3 +5272,120 @@
 .workfolio[data-theme='dark'] .workfolio-tool-form > button:not(.workfolio-primary) {
   background: transparent;
 }
+
+.system-explorer__records--grouped {
+  gap: 7px;
+}
+
+.system-explorer__graph-category {
+  overflow: hidden;
+  border: 1px solid var(--wf-line);
+  border-radius: 7px;
+  background: #faf9f6;
+}
+
+.system-explorer__graph-category > summary {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  color: var(--wf-ink);
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.system-explorer__graph-category > summary::marker {
+  color: var(--wf-accent);
+}
+
+.system-explorer__graph-category > summary:hover {
+  background: #f1f0eb;
+}
+
+.system-explorer__graph-category[open] > summary {
+  border-bottom: 1px solid var(--wf-line);
+  background: #f5f4ef;
+}
+
+.system-explorer__graph-category-label {
+  color: var(--wf-accent-dark);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.system-explorer__graph-category-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.system-explorer__graph-category-count {
+  color: var(--wf-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.system-explorer__graph-category-records {
+  padding: 3px 14px;
+}
+
+.system-explorer__graph-category-records .system-explorer__record {
+  border: 0;
+  border-bottom: 1px solid var(--wf-line);
+  border-radius: 0;
+  background: transparent;
+  padding: 12px 0;
+}
+
+.system-explorer__graph-category-records .system-explorer__record:last-child {
+  border-bottom: 0;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-category {
+  border-color: var(--system-line);
+  background: var(--system-panel);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-category > summary {
+  color: var(--system-ink);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-category > summary:hover,
+.workfolio[data-theme='dark'] .system-explorer__graph-category[open] > summary {
+  background: var(--system-panel-raised);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-category[open] > summary {
+  border-color: var(--system-line);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-category-label {
+  color: var(--system-accent);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-category-count {
+  color: var(--system-muted);
+}
+
+@media (max-width: 640px) {
+  .system-explorer__graph-category > summary {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    gap: 5px 10px;
+  }
+
+  .system-explorer__graph-category-label {
+    grid-column: 1;
+  }
+
+  .system-explorer__graph-category-name {
+    grid-column: 1;
+  }
+
+  .system-explorer__graph-category-count {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
