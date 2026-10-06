@@ -4357,3 +4357,365 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+.workfolio[data-theme='dark'] .system-explorer {
+  --system-panel: #2b2926;
+  --system-panel-raised: #302d29;
+  --system-panel-inset: #211f1d;
+  --system-line: #4a423a;
+  --system-ink: #f0e9e1;
+  --system-muted: #beb5aa;
+  --system-accent: #e3a087;
+  --system-accent-soft: #49362e;
+  --system-ready: #b4dfc2;
+  --system-ready-soft: #293b31;
+  --system-off: #f0b09c;
+  --system-off-soft: #472f2a;
+  --system-unknown: #f0d395;
+  --system-unknown-soft: #403923;
+  color: var(--system-ink);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__header,
+.workfolio[data-theme='dark'] .system-explorer__tabs {
+  border-color: var(--system-line);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__eyebrow,
+.workfolio[data-theme='dark'] .system-explorer__summary-grid article > svg,
+.workfolio[data-theme='dark'] .system-explorer__cards > button > svg,
+.workfolio[data-theme='dark'] .system-explorer__status-list li > svg {
+  color: var(--system-accent);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__header p,
+.workfolio[data-theme='dark'] .system-explorer__lead,
+.workfolio[data-theme='dark'] .system-explorer__summary-grid article > span,
+.workfolio[data-theme='dark'] .system-explorer__summary-grid article small,
+.workfolio[data-theme='dark'] .system-explorer__cards small,
+.workfolio[data-theme='dark'] .system-explorer__note,
+.workfolio[data-theme='dark'] .system-explorer__flow small,
+.workfolio[data-theme='dark'] .system-explorer__status-list small,
+.workfolio[data-theme='dark'] .system-explorer__wiki p,
+.workfolio[data-theme='dark'] .system-explorer__task-summary > span,
+.workfolio[data-theme='dark'] .system-explorer__task-summary small,
+.workfolio[data-theme='dark'] .system-explorer__run-materials code,
+.workfolio[data-theme='dark'] .system-explorer__run-materials span,
+.workfolio[data-theme='dark'] .system-explorer__run-steps small,
+.workfolio[data-theme='dark'] .system-explorer__catalog-entry summary span,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list-heading > span,
+.workfolio[data-theme='dark'] .system-explorer__wiki-reader > header small,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list li button small,
+.workfolio[data-theme='dark'] .system-explorer__wiki-reader code,
+.workfolio[data-theme='dark'] .system-explorer__graph-heading p,
+.workfolio[data-theme='dark'] .system-explorer__graph-heading > span,
+.workfolio[data-theme='dark'] .system-explorer__graph-node-actions small,
+.workfolio[data-theme='dark'] .system-explorer__record-meta,
+.workfolio[data-theme='dark'] .system-explorer__record-excerpt,
+.workfolio[data-theme='dark'] .system-explorer__record-fields dt,
+.workfolio[data-theme='dark'] .system-explorer__record-full > small,
+.workfolio[data-theme='dark'] .system-explorer__tool-list span {
+  color: var(--system-muted);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow: visible;
+  padding: 12px 0 14px;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__tabs button {
+  min-height: 36px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #c7beb3;
+  font-weight: 550;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__tabs button:hover {
+  border-color: #51483e;
+  background: var(--system-panel-raised);
+  color: var(--system-ink);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__tabs button[aria-pressed='true'] {
+  border-color: #795542;
+  background: var(--system-accent-soft);
+  color: #f2b29a;
+  box-shadow: inset 0 -2px var(--system-accent);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__content h2,
+.workfolio[data-theme='dark'] .system-explorer__subheading,
+.workfolio[data-theme='dark'] .system-explorer__summary-grid article strong,
+.workfolio[data-theme='dark'] .system-explorer__cards strong,
+.workfolio[data-theme='dark'] .system-explorer__status-list b,
+.workfolio[data-theme='dark'] .system-explorer__graph-heading h3,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list-heading h3,
+.workfolio[data-theme='dark'] .system-explorer__wiki-reader h3,
+.workfolio[data-theme='dark'] .system-explorer__record h3,
+.workfolio[data-theme='dark'] .system-explorer__tool-list code {
+  color: var(--system-ink);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__summary-grid article,
+.workfolio[data-theme='dark'] .system-explorer__cards > button,
+.workfolio[data-theme='dark'] .system-explorer__flow li,
+.workfolio[data-theme='dark'] .system-explorer__status-list,
+.workfolio[data-theme='dark'] .system-explorer__graph-panel,
+.workfolio[data-theme='dark'] .system-explorer__catalog-entry,
+.workfolio[data-theme='dark'] .system-explorer__wiki-browser,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list,
+.workfolio[data-theme='dark'] .system-explorer__wiki-reader > header,
+.workfolio[data-theme='dark'] .system-explorer__wiki-more,
+.workfolio[data-theme='dark'] .system-explorer__record,
+.workfolio[data-theme='dark'] .system-explorer__run-materials article,
+.workfolio[data-theme='dark'] .system-explorer__run-steps li {
+  border-color: var(--system-line);
+  background: var(--system-panel);
+  color: var(--system-ink);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__summary-grid article,
+.workfolio[data-theme='dark'] .system-explorer__cards > button {
+  box-shadow: inset 0 1px #ffffff08;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__cards > button:hover,
+.workfolio[data-theme='dark'] .system-explorer__wiki-more:hover:not(:disabled),
+.workfolio[data-theme='dark'] .system-explorer__record-full > button:hover {
+  border-color: #86604b;
+  background: #332e29;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__status {
+  background: #36322d;
+  color: #d8cbb9;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__status--ready {
+  background: var(--system-ready-soft);
+  color: var(--system-ready);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__status--off {
+  background: var(--system-off-soft);
+  color: var(--system-off);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__status--unknown {
+  background: var(--system-unknown-soft);
+  color: var(--system-unknown);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__status-list li,
+.workfolio[data-theme='dark'] .system-explorer__task-summary,
+.workfolio[data-theme='dark'] .system-explorer__tool-list li {
+  border-color: var(--system-line);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__run-steps li > span {
+  background: #40362f;
+  color: var(--system-accent);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__library-search select,
+.workfolio[data-theme='dark'] .system-explorer__library-search input,
+.workfolio[data-theme='dark'] .system-explorer__task-select select,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list > input,
+.workfolio[data-theme='dark'] .system-explorer__graph-filter button,
+.workfolio[data-theme='dark'] .system-explorer__graph-node-actions button,
+.workfolio[data-theme='dark'] .system-explorer__record-full > button {
+  border: 1px solid #51483e;
+  background: var(--system-panel-inset);
+  color: var(--system-ink);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__library-search input::placeholder,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list > input::placeholder {
+  color: #b4a99b;
+  opacity: 1;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__library-search input,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list > input {
+  caret-color: var(--system-accent);
+}
+
+.workfolio[data-theme='dark'] .system-explorer .system-explorer__library-search button {
+  border: 1px solid #a16a51;
+  background: #794a38 !important;
+  color: #fff1e9 !important;
+}
+
+.workfolio[data-theme='dark'] .system-explorer .system-explorer__library-search button:hover {
+  background: #8b5540 !important;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__fixed-filter {
+  border-color: var(--system-line);
+  background: var(--system-panel-raised);
+  color: #d5cbbf;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__library-error {
+  border: 1px solid #70473d;
+  border-radius: 7px;
+  background: #3b2925;
+  padding: 10px 12px;
+  color: #ffc0ad;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__library-error button,
+.workfolio[data-theme='dark'] .system-explorer__retry {
+  border-color: #70513f !important;
+  background: #302a25;
+  color: #f0b199;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__wiki-list {
+  border-right-color: var(--system-line);
+  background: var(--system-panel-inset);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__wiki-reader > header {
+  background: var(--system-panel-raised);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__wiki-list li button {
+  color: var(--system-ink);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__wiki-list li button:hover,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list li button[aria-pressed='true'] {
+  background: var(--system-accent-soft);
+  color: #f2b29a;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__wiki-more {
+  background: var(--system-panel-raised);
+  color: var(--system-ink);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-edge-label {
+  fill: #c4dfce;
+  stroke: var(--system-panel);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-node-label {
+  fill: var(--system-ink);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-node-type {
+  fill: #c1b5a7;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-svg > g > path {
+  stroke: #ba866c;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-svg marker path {
+  fill: var(--system-accent);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-svg rect[fill='#e4eee6'] {
+  fill: #2b3c31;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-svg rect[fill='#e8ece5'] {
+  fill: #303a33;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-svg rect[fill='#f2ecdc'] {
+  fill: #40372b;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-svg rect[fill='#edeae2'] {
+  fill: #34312c;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-svg rect {
+  stroke: #655548;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__catalog-entry pre,
+.workfolio[data-theme='dark'] .system-explorer__record-full pre,
+.workfolio[data-theme='dark'] .system-explorer__tool-list details pre {
+  border-color: var(--system-line);
+  background: var(--system-panel-inset);
+  color: #e7ddd0;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__catalog-entry summary,
+.workfolio[data-theme='dark'] .system-explorer__wiki-more,
+.workfolio[data-theme='dark'] .system-explorer__record-full summary,
+.workfolio[data-theme='dark'] .system-explorer__tool-list details summary,
+.workfolio[data-theme='dark'] .system-explorer__run-materials a,
+.workfolio[data-theme='dark'] .system-explorer__record h3 a {
+  color: var(--system-accent);
+}
+
+.workfolio[data-theme='dark'] .system-explorer__record-detail {
+  color: #c4d3c8;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-scroll,
+.workfolio[data-theme='dark'] .system-explorer__graph-node-actions,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list,
+.workfolio[data-theme='dark'] .system-explorer__wiki-reader,
+.workfolio[data-theme='dark'] .system-explorer__catalog-entry pre,
+.workfolio[data-theme='dark'] .system-explorer__record-full pre,
+.workfolio[data-theme='dark'] .system-explorer__tool-list details pre {
+  scrollbar-color: #66594c #242220;
+  scrollbar-width: thin;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-scroll::-webkit-scrollbar,
+.workfolio[data-theme='dark'] .system-explorer__graph-node-actions::-webkit-scrollbar,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list::-webkit-scrollbar,
+.workfolio[data-theme='dark'] .system-explorer__wiki-reader::-webkit-scrollbar,
+.workfolio[data-theme='dark'] .system-explorer__catalog-entry pre::-webkit-scrollbar,
+.workfolio[data-theme='dark'] .system-explorer__record-full pre::-webkit-scrollbar,
+.workfolio[data-theme='dark'] .system-explorer__tool-list details pre::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-scroll::-webkit-scrollbar-track,
+.workfolio[data-theme='dark'] .system-explorer__graph-node-actions::-webkit-scrollbar-track,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list::-webkit-scrollbar-track,
+.workfolio[data-theme='dark'] .system-explorer__wiki-reader::-webkit-scrollbar-track,
+.workfolio[data-theme='dark'] .system-explorer__catalog-entry pre::-webkit-scrollbar-track,
+.workfolio[data-theme='dark'] .system-explorer__record-full pre::-webkit-scrollbar-track,
+.workfolio[data-theme='dark'] .system-explorer__tool-list details pre::-webkit-scrollbar-track {
+  background: #242220;
+}
+
+.workfolio[data-theme='dark'] .system-explorer__graph-scroll::-webkit-scrollbar-thumb,
+.workfolio[data-theme='dark'] .system-explorer__graph-node-actions::-webkit-scrollbar-thumb,
+.workfolio[data-theme='dark'] .system-explorer__wiki-list::-webkit-scrollbar-thumb,
+.workfolio[data-theme='dark'] .system-explorer__wiki-reader::-webkit-scrollbar-thumb,
+.workfolio[data-theme='dark'] .system-explorer__catalog-entry pre::-webkit-scrollbar-thumb,
+.workfolio[data-theme='dark'] .system-explorer__record-full pre::-webkit-scrollbar-thumb,
+.workfolio[data-theme='dark'] .system-explorer__tool-list details pre::-webkit-scrollbar-thumb {
+  border: 2px solid #242220;
+  border-radius: 8px;
+  background: #66594c;
+}
+
+@media (max-width: 760px) {
+  .workfolio[data-theme='dark'] .system-explorer__tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 6px;
+  }
+
+  .workfolio[data-theme='dark'] .system-explorer__tabs button {
+    min-width: 0;
+    justify-content: flex-start;
+    padding-inline: 9px;
+    text-align: left;
+  }
+}
