@@ -21,6 +21,8 @@ export type SpreadsheetOperation =
   | { kind: 'appendRows'; sheet: string; rows: Scalar[][] }
 export type SpreadsheetInspection = {
   fileId: string
+  selectedSheet?: string
+  range?: string
   sheets: Array<{ name: string; rows: number; columns: number }>
   cells: Array<{ address: string; value: Scalar; formula?: string }>
   formulaCalculation: 'not-performed'
@@ -32,6 +34,15 @@ export type PdfInspection = {
     width: number
     height: number
     rotation: number
+  }>
+}
+export type PdfThumbnailBatch = {
+  pageCount: number
+  pages: Array<{
+    pageNumber: number
+    width: number
+    height: number
+    dataBase64: string
   }>
 }
 export type BrowserResult = {
@@ -171,6 +182,10 @@ export const officeApi = {
     post<SpreadsheetInspection>(connection, '/api/spreadsheets/inspect', input),
   inspectPdf: (connection: Connection, fileId: string) =>
     post<PdfInspection>(connection, '/api/pdfs/inspect', { fileId }),
+  pdfThumbnails: (
+    connection: Connection,
+    input: { fileId: string; pageNumbers: number[] }
+  ) => post<PdfThumbnailBatch>(connection, '/api/pdfs/thumbnails', input),
   mergePdf: (
     connection: Connection,
     input: { fileIds: string[]; outputName: string }

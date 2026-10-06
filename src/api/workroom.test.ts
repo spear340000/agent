@@ -6,6 +6,7 @@ import {
   searchLegalLibrary,
   listLegalWikiPages,
   getLegalWikiPage,
+  fetchFileContent,
   reviseTask,
   request,
   watchTask,
@@ -13,12 +14,57 @@ import {
   type TaskDetails
 } from './workroom.js'
 
+test('fetchFileContent retrieves the actual PDF bytes using the saved API token', async () => {
+  const connection: Connection = {
+    baseUrl: 'http://127.0.0.1:8787',
+    token: ' test-token '
+  }
+  let requestUrl = ''
+  let requestInit: RequestInit | undefined
+  const file = await fetchFileContent(
+    'folder/file-123',
+    connection,
+    async (url, init) => {
+      requestUrl = String(url)
+      requestInit = init
+      return new Response('%PDF-1.7\nreal bytes', {
+        headers: { 'content-type': 'application/pdf' }
+      })
+    }
+  )
+
+  assert.equal(
+    requestUrl,
+    'http://127.0.0.1:8787/api/files/folder%2Ffile-123/content'
+  )
+  assert.equal(
+    new Headers(requestInit?.headers).get('authorization'),
+    'Bearer test-token'
+  )
+  assert.equal(requestInit?.cache, 'no-store')
+  assert.equal(file.type, 'application/pdf')
+  assert.equal(await file.text(), '%PDF-1.7\nreal bytes')
+})
+
+test('fetchFileContent reports an unavailable source file instead of returning an empty preview', async () => {
+  await assert.rejects(
+    fetchFileContent(
+      'file-missing',
+      { baseUrl: 'http://127.0.0.1:8787', token: '' },
+      async () => new Response('not found', { status: 404 })
+    ),
+    /파일 다운로드에 실패했습니다\. \(404\)/
+  )
+})
+
 test('read-only Wiki browser lists source pages and requests bounded original-text ranges', async () => {
   const connection: Connection = { baseUrl: 'http://127.0.0.1:8787', token: '' }
   const list = await listLegalWikiPages(connection, async (url) => {
     assert.equal(String(url), 'http://127.0.0.1:8787/api/legal/wiki')
     return Response.json({
-      items: [{ name: 'privacy-law-core.md', title: 'privacy law core', bytes: 1024 }]
+      items: [
+        { name: 'privacy-law-core.md', title: 'privacy law core', bytes: 1024 }
+      ]
     })
   })
   assert.equal(list.items[0]?.name, 'privacy-law-core.md')
@@ -96,11 +142,26 @@ test('graph library requests the expanded bounded edge set and preserves typed r
       return Response.json({
         query: '민법 제750조',
         corpus: 'graph',
-        items: [{
-          citationId: 'G1', kind: 'graph', corpus: 'graph', recordId: 'case:1:CITES_ARTICLE:article:750',
-          title: '판례 —CITES_ARTICLE→ 민법 제750조', excerpt: '관계 출처',
-          graphRelation: { sourceId: 'case:1', sourceLabel: '판례', sourceType: 'Precedent', relation: 'CITES_ARTICLE', targetId: 'article:750', targetLabel: '민법 제750조', targetType: 'Article', sourcePath: 'case.md' }
-        }]
+        items: [
+          {
+            citationId: 'G1',
+            kind: 'graph',
+            corpus: 'graph',
+            recordId: 'case:1:CITES_ARTICLE:article:750',
+            title: '판례 —CITES_ARTICLE→ 민법 제750조',
+            excerpt: '관계 출처',
+            graphRelation: {
+              sourceId: 'case:1',
+              sourceLabel: '판례',
+              sourceType: 'Precedent',
+              relation: 'CITES_ARTICLE',
+              targetId: 'article:750',
+              targetLabel: '민법 제750조',
+              targetType: 'Article',
+              sourcePath: 'case.md'
+            }
+          }
+        ]
       })
     }
   )

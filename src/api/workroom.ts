@@ -55,7 +55,7 @@ export type ManagedFile = {
   createdAt: string
 }
 export type RuntimeCapabilities = {
-  model: { configured: boolean; provider: string | null }
+  model: { configured: boolean; provider: string | null; name: string }
   browserUse: { available: boolean }
   computerUse: { available: boolean; platform: string }
   legalRetrieval: LegalRetrievalCapability
@@ -224,8 +224,17 @@ export function getLegalWikiPage(
   connection: Connection = defaultConnection,
   fetcher: Fetcher = fetch
 ): Promise<LegalWikiPageChunk> {
-  const params = new URLSearchParams({ name, offset: String(offset), limit: String(limit) })
-  return request(connection, `/api/legal/wiki/page?${params.toString()}`, {}, fetcher)
+  const params = new URLSearchParams({
+    name,
+    offset: String(offset),
+    limit: String(limit)
+  })
+  return request(
+    connection,
+    `/api/legal/wiki/page?${params.toString()}`,
+    {},
+    fetcher
+  )
 }
 export type LegalLayerUse = {
   id:
@@ -570,12 +579,11 @@ export function rerunTask(
   )
 }
 
-export async function downloadFile(
+export async function fetchFileContent(
   id: string,
-  name: string,
   connection: Connection = defaultConnection,
   fetcher: Fetcher = fetch
-): Promise<void> {
+): Promise<Blob> {
   let response: Response
   try {
     response = await fetcher(
@@ -594,7 +602,17 @@ export async function downloadFile(
   }
   if (!response.ok)
     throw new Error(`파일 다운로드에 실패했습니다. (${response.status})`)
-  const url = URL.createObjectURL(await response.blob())
+  return response.blob()
+}
+
+export async function downloadFile(
+  id: string,
+  name: string,
+  connection: Connection = defaultConnection,
+  fetcher: Fetcher = fetch
+): Promise<void> {
+  const blob = await fetchFileContent(id, connection, fetcher)
+  const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
   anchor.download = name
