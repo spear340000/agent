@@ -894,11 +894,9 @@ export default function Workroom() {
               aria-labelledby="workfolio-start-title"
             >
               <div className="workfolio-start__heading">
-                <span>한국 법률 정보</span>
-                <h1 id="workfolio-start-title">무엇을 물어보시겠어요?</h1>
+                <h1 id="workfolio-start-title">법률 질문과 문서 초안</h1>
                 <p>
-                  질문과 참고 자료를 보내면 로컬 법령·판례 저장소를 찾아 인용과
-                  함께 답변하고, 필요한 경우 법률 문서 초안까지 작성합니다.
+                  법령·판례에서 근거를 찾고, 필요한 법률 문서 초안을 작성합니다.
                 </p>
               </div>
               {!loaded ? (

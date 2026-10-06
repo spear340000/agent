@@ -182,12 +182,14 @@ function LegalGraphCanvas({
 function FlowNode({
   title,
   detail,
+  meta,
   status,
   kind = 'step',
   listItem = true
 }: {
   title: string
   detail: string
+  meta?: string
   status: string
   kind?: 'start' | 'planner' | 'tool' | 'step' | 'result'
   listItem?: boolean
@@ -210,6 +212,7 @@ function FlowNode({
       </span>
       <strong>{title}</strong>
       <small>{detail}</small>
+      {meta ? <span className="system-flow__node-meta">{meta}</span> : null}
     </article>
   )
 }
@@ -283,6 +286,7 @@ function WorkflowCanvas({ task }: { task: Task }) {
         node: {
           title: string
           detail: string
+          meta?: string
           status: string
           kind?: 'start' | 'planner' | 'step' | 'result'
         }
@@ -295,7 +299,11 @@ function WorkflowCanvas({ task }: { task: Task }) {
       node: {
         kind: 'start',
         title: intent,
-        detail: `${task.request} · 참고 자료 ${task.sources.length}개 (파일 ${task.sources.filter((source) => source.kind === 'file').length}, 링크 ${task.sources.filter((source) => source.kind === 'link').length})`,
+        detail: task.request
+          .replace(/\s+/gu, ' ')
+          .trim()
+          .replace(/\s+(추가 요청:)/gu, '\n$1'),
+        meta: `참고 자료 ${task.sources.length}개 (파일 ${task.sources.filter((source) => source.kind === 'file').length}, 링크 ${task.sources.filter((source) => source.kind === 'link').length})`,
         status: 'complete'
       }
     },
@@ -922,7 +930,6 @@ export default function SystemExplorer({
     >
       <header className="system-explorer__header">
         <div>
-          <span className="system-explorer__eyebrow">WORKFOLIO SYSTEM</span>
           <h1 id="system-explorer-title">시스템 구성</h1>
           <p>
             작업을 처리하는 에이전트와 지식 기반의 구조 및 현재 준비 상태를

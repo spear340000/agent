@@ -15,9 +15,7 @@
   flex-direction: column;
   overflow: hidden;
   color: var(--wf-ink);
-  background:
-    radial-gradient(ellipse at 8% 0%, #eadfd430 0, transparent 38%),
-    linear-gradient(135deg, #f6f4ef 0%, var(--wf-canvas) 54%, #eeeae3 100%);
+  background: var(--wf-canvas);
   font-family: var(--font-geist-sans), 'Apple SD Gothic Neo', 'Malgun Gothic',
     sans-serif;
   font-size: 14px;
@@ -792,6 +790,7 @@
 }
 
 .system-flow {
+  container: system-flow / inline-size;
   overflow: hidden;
   margin: 18px 0;
   border: 1px solid #e3dcd2;
@@ -946,7 +945,8 @@
   color: #302b26;
   font-size: 12px;
   line-height: 1.45;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: keep-all;
 }
 
 .system-flow__node small {
@@ -955,9 +955,22 @@
   color: #70685f;
   font-size: 10px;
   line-height: 1.5;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: keep-all;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 5;
+}
+
+.system-flow__node-meta {
+  color: #8b766a;
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+}
+
+.system-flow__node--start small {
+  white-space: pre-line;
 }
 
 .system-flow__node--start,
@@ -1036,16 +1049,20 @@
   padding: 12px 0 0;
 }
 
-@media (max-width: 1000px) {
+@container system-flow (max-width: 960px) {
   .system-flow__canvas {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .system-flow__item:nth-child(n) {
+    grid-column: auto;
   }
 
   .system-flow__summary > div {
     padding-inline: 9px;
   }
 
-  .system-flow__item[data-row-end-three='true'] .system-flow__connector {
+  .system-flow__item[data-has-next='true'] .system-flow__connector {
     top: 50%;
     right: -30px;
     left: auto;
@@ -1076,7 +1093,7 @@
   }
 }
 
-@media (max-width: 620px) {
+@container system-flow (max-width: 590px) {
   .system-flow__canvas {
     grid-template-columns: minmax(0, 1fr);
     padding: 12px;
@@ -1711,15 +1728,31 @@
   display: none;
 }
 
+.workfolio-sidebar--collapsed .workfolio-sidebar__utility {
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 10px 0;
+}
+
+.workfolio-sidebar--collapsed .workfolio-sidebar__connection {
+  min-height: 14px;
+  justify-content: center;
+}
+
+.workfolio-sidebar--collapsed .workfolio-sidebar__utility-actions {
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
 .workfolio-main {
   min-width: 0;
   min-height: 0;
   height: 100%;
   flex: 1;
   overflow: auto;
-  background:
-    radial-gradient(ellipse at 54% 8%, #fffefa88 0, transparent 52%),
-    linear-gradient(145deg, #f4f2ed 0%, #efede7 100%);
+  background: var(--wf-canvas);
 }
 
 .workfolio-active-layout {
@@ -1770,10 +1803,7 @@
   height: 100%;
   flex-direction: column;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 100% 0%, #f2e7df70 0, transparent 38%),
-    linear-gradient(180deg, #fcfbf8 0%, #f8f6f1 100%);
-  box-shadow: inset 1px 0 #ffffffa6;
+  background: var(--wf-surface);
 }
 
 .task-context__scroll {
@@ -2176,12 +2206,12 @@
 }
 
 .workfolio-start {
-  width: min(100% - 48px, 780px);
-  margin: clamp(55px, 12vh, 140px) auto 64px;
+  width: min(100% - 64px, 940px);
+  margin: clamp(55px, 10vh, 118px) auto 72px;
 }
 
 .workfolio-start__heading {
-  margin: 0 0 27px;
+  margin: 0 0 30px;
 }
 
 .workfolio-start__heading > span {
@@ -2192,8 +2222,8 @@
 }
 
 .workfolio-start__heading h1 {
-  margin: 9px 0 7px;
-  font-size: clamp(27px, 3.1vw, 38px);
+  margin: 9px 0 9px;
+  font-size: clamp(36px, 3.7vw, 46px);
   font-weight: 620;
   letter-spacing: -0.055em;
   line-height: 1.22;
@@ -2202,17 +2232,18 @@
 .workfolio-start__heading p {
   margin: 0;
   color: #727e75;
-  font-size: 14px;
+  font-size: 16px;
+  line-height: 1.6;
 }
 
 .workfolio-start__status,
 .workfolio-start__warning {
   margin: 0 0 13px;
   border-radius: 7px;
-  padding: 10px 12px;
+  padding: 12px 15px;
   color: #59665d;
   background: #efede5;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .workfolio-start__warning {
@@ -2232,6 +2263,24 @@
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease;
+}
+
+.workfolio-start .composer {
+  padding: 19px 20px 14px;
+}
+
+.workfolio-start .composer textarea {
+  min-height: 140px;
+  font-size: 16px;
+}
+
+.workfolio-start .tool-button {
+  font-size: 13px !important;
+}
+
+.workfolio-start .send-button {
+  width: 40px;
+  height: 40px;
 }
 
 .composer:focus-within {
@@ -2355,20 +2404,19 @@
 .shortcuts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 9px;
-  margin-top: 12px;
+  gap: 12px;
+  margin-top: 14px;
 }
 
 .shortcuts button {
   display: grid;
   min-width: 0;
-  gap: 5px;
+  gap: 8px;
   border: 1px solid #e8ded3 !important;
   border-radius: 8px;
-  padding: 11px 12px;
-  background: linear-gradient(145deg, #fffefa, #fbf8f2) !important;
+  padding: 15px 16px;
+  background: var(--wf-paper) !important;
   text-align: left;
-  box-shadow: 0 2px 7px #49372009, inset 0 1px #ffffffd9;
   transition:
     transform 140ms ease,
     border-color 140ms ease,
@@ -2378,14 +2426,13 @@
 
 .shortcuts button:hover {
   border-color: #d3ad9d !important;
-  background: linear-gradient(145deg, #fffefa, #f8eee8) !important;
-  box-shadow: 0 5px 13px #49372012, inset 0 1px #ffffffd9;
+  background: var(--wf-accent-soft) !important;
   transform: translateY(-1px);
 }
 
 .shortcuts span {
   color: #37463b;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 620;
 }
 
@@ -2393,8 +2440,8 @@
   display: -webkit-box;
   overflow: hidden;
   color: #808a82;
-  font-size: 10px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.5;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -3310,7 +3357,7 @@
 .workfolio-start__privacy {
   margin: 0 0 20px;
   color: #7a857d;
-  font-size: 11.5px;
+  font-size: 13px;
   line-height: 1.65;
 }
 
@@ -3738,6 +3785,15 @@
   line-height: 1.5;
 }
 
+.workfolio-start .composer-mode button {
+  padding: 6px 13px;
+  font-size: 13px;
+}
+
+.workfolio-start .composer-mode p {
+  font-size: 12px;
+}
+
 .workfolio[data-theme='dark'] {
   color-scheme: dark;
   --wf-ink: #eee9e1;
@@ -3750,9 +3806,7 @@
   --wf-canvas: #201f1d;
   --wf-surface: #292724;
   --wf-paper: #2c2a27;
-  background:
-    radial-gradient(ellipse at 8% 0%, #9a5b4320 0, transparent 42%),
-    linear-gradient(135deg, #242220 0%, #1e1d1b 60%, #211e1b 100%);
+  background: var(--wf-canvas);
 }
 
 .workfolio[data-theme='dark'] .workfolio-sidebar {
@@ -3825,17 +3879,12 @@
 }
 
 .workfolio[data-theme='dark'] .workfolio-main {
-  background:
-    radial-gradient(ellipse at 54% 8%, #ffffff05 0, transparent 52%),
-    linear-gradient(145deg, #242321 0%, #1d1c1a 100%);
+  background: var(--wf-canvas);
 }
 
 .workfolio[data-theme='dark'] .task-context {
   border-color: #39342f;
-  background:
-    radial-gradient(ellipse at 100% 0%, #9a5b431c 0, transparent 40%),
-    linear-gradient(180deg, #292724 0%, #242220 100%);
-  box-shadow: inset 1px 0 #ffffff08;
+  background: var(--wf-surface);
 }
 
 .workfolio[data-theme='dark'] .task-context__section,
@@ -4290,6 +4339,7 @@
 
 .workfolio[data-theme='dark'] .system-flow__summary span,
 .workfolio[data-theme='dark'] .system-flow__node-kind,
+.workfolio[data-theme='dark'] .system-flow__node-meta,
 .workfolio[data-theme='dark'] .system-flow__group header small {
   color: #aaa095;
 }
