@@ -115,25 +115,12 @@ function createTable(lines: string[]): Table {
           verticalAlign: 'center',
           margins: { top: 100, bottom: 100, left: 120, right: 120 },
           shading: { type: ShadingType.CLEAR, fill: rowIndex === 0 ? 'E9EFEA' : rowIndex % 2 ? 'FFFFFF' : 'F8F7F2' },
-          children: [
-            new Paragraph({
-              alignment: alignments[columnIndex],
-              spacing: { before: 0, after: 0, line: 276 },
-              children: inlineRuns(row[columnIndex] ?? '', rowIndex === 0),
-            }),
-          ],
+          children: [new Paragraph({ alignment: alignments[columnIndex], spacing: { before: 0, after: 0, line: 276 }, children: inlineRuns(row[columnIndex] ?? '', rowIndex === 0) })],
         }),
       ),
     }),
   );
-  return new Table({
-    rows,
-    width: { size: CONTENT_WIDTH_DXA, type: WidthType.DXA },
-    columnWidths: widths,
-    layout: TableLayoutType.FIXED,
-    borders: TABLE_BORDERS,
-    margins: { top: 100, bottom: 100, left: 120, right: 120 },
-  });
+  return new Table({ rows, width: { size: CONTENT_WIDTH_DXA, type: WidthType.DXA }, columnWidths: widths, layout: TableLayoutType.FIXED, borders: TABLE_BORDERS, margins: { top: 100, bottom: 100, left: 120, right: 120 } });
 }
 
 function paragraph(line: string): Paragraph {
@@ -143,7 +130,7 @@ function paragraph(line: string): Paragraph {
     return new Paragraph({ heading: levels[heading[1]!.length - 1], children: inlineRuns(heading[2]!) });
   }
   const quote = /^>\s?(.*)$/.exec(line);
-  if (quote) return new Paragraph({ indent: { left: 360 }, spacing: { before: 80, after: 160 }, children: inlineRuns(quote[1]!, false).map((run) => run) });
+  if (quote) return new Paragraph({ indent: { left: 360 }, spacing: { before: 80, after: 160 }, children: inlineRuns(quote[1]!) });
   const bullet = /^\s*[-*+]\s+(.+)$/.exec(line);
   if (bullet) return new Paragraph({ bullet: { level: 0 }, spacing: { after: 80 }, children: inlineRuns(bullet[1]!) });
   const numbered = /^\s*\d+[.)]\s+(.+)$/.exec(line);
@@ -156,17 +143,11 @@ export function markdownToDocxChildren(markdown: string): FileChild[] {
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
   const children: FileChild[] = [];
   for (let index = 0; index < lines.length; ) {
-    if (!lines[index]!.trim()) {
-      index += 1;
-      continue;
-    }
+    if (!lines[index]!.trim()) { index += 1; continue; }
     if (lines[index + 1] && lines[index]!.includes('|') && isTableDivider(lines[index + 1]!)) {
       const tableLines = [lines[index]!, lines[index + 1]!];
       index += 2;
-      while (index < lines.length && lines[index]!.trim() && lines[index]!.includes('|')) {
-        tableLines.push(lines[index]!);
-        index += 1;
-      }
+      while (index < lines.length && lines[index]!.trim() && lines[index]!.includes('|')) { tableLines.push(lines[index]!); index += 1; }
       children.push(createTable(tableLines));
       continue;
     }

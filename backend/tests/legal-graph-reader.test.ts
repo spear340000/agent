@@ -71,3 +71,35 @@ test('graph search returns real ranked edges from a read-only SQLite graph', asy
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('precedents citing one article are read exactly, with the law taken from the article file path', async () => {
+  const { readArticleCitations } = await import('../src/infrastructure/legal/legal-graph-reader.ts');
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'workfolio-graph-cites-'));
+  const file = path.join(directory, 'graph.sqlite3');
+  const db = new DatabaseSync(file);
+  db.exec(`
+    CREATE TABLE nodes (id TEXT PRIMARY KEY, type TEXT NOT NULL, label TEXT NOT NULL, properties_json TEXT NOT NULL DEFAULT '{}');
+    CREATE TABLE edges (source_id TEXT NOT NULL, relation TEXT NOT NULL, target_id TEXT NOT NULL, properties_json TEXT NOT NULL DEFAULT '{}', PRIMARY KEY(source_id, relation, target_id));
+  `);
+  const node = db.prepare('INSERT INTO nodes(id,type,label,properties_json) VALUES(?,?,?,?)');
+  const edge = db.prepare('INSERT INTO edges(source_id,relation,target_id) VALUES(?,?,?)');
+  node.run('law:001706:article:398', 'Article', '법률 제398조', JSON.stringify({ path: 'kr/민법/법률.md', number: '제398조' }));
+  node.run('law:001702:article:398', 'Article', '법률 제398조', JSON.stringify({ path: 'kr/상법/법률.md', number: '제398조' }));
+  node.run('precedent:1', 'Precedent', '손해배상', JSON.stringify({ path: '민사/하급심/서울고등법원_2001-01-01_2000나1.md' }));
+  node.run('precedent:2', 'Precedent', '위약금', JSON.stringify({ path: '민사/대법원/대법원_1993-04-23_92다41719.md' }));
+  node.run('precedent:3', 'Precedent', '이사거래', JSON.stringify({ path: '민사/대법원/대법원_2010-01-01_2009다1.md' }));
+  edge.run('precedent:1', 'CITES_ARTICLE', 'law:001706:article:398');
+  edge.run('precedent:2', 'CITES_ARTICLE', 'law:001706:article:398');
+  edge.run('precedent:3', 'CITES_ARTICLE', 'law:001702:article:398');
+  edge.run('precedent:2', 'CITES_LAW', 'law:001706:article:398');
+  db.close();
+  try {
+    const records = readArticleCitations(file, '민법', '제398조', 10);
+    assert.deepEqual(records.map(record => record.graphRelation?.sourceId), ['precedent:2', 'precedent:1'], 'only 민법 제398조, CITES_ARTICLE only, Supreme Court first');
+    assert.equal(records[0]!.graphRelation?.targetPath, 'kr/민법/법률.md');
+    assert.deepEqual(readArticleCitations(file, '형법', '제398조', 10), []);
+    assert.deepEqual(readArticleCitations(file, '민법', '아무거나', 10), []);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

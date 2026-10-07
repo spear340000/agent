@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import ExcelJS from "exceljs";
-import PizZip from "pizzip";
 import { PDFDocument } from "pdf-lib";
+import PizZip from "pizzip";
 import { ApiRouter } from "../src/api/router.js";
 import { ApiAuthenticator } from "../src/api/authentication.js";
 import { createApiServer } from "../src/api/server.js";
@@ -32,7 +32,9 @@ test("PDF tables allocate page width by the amount of content in each column", (
   assert.ok(widths[0]! <= 16);
   assert.ok(widths[0]! < widths[1]!);
   assert.ok(widths[2]! < widths[1]!);
-  assert.ok(Math.abs(widths.reduce((total, width) => total + width, 0) - 100) < 1);
+  assert.ok(
+    Math.abs(widths.reduce((total, width) => total + width, 0) - 100) < 1,
+  );
 });
 
 test("Markdown links keep labels without exposing non-URL destinations", () => {
@@ -52,11 +54,7 @@ test("PDF table columns stay positive and sum to one page for wide tables", () =
   const row = headers.map((_, index) =>
     index === 0 ? "긴 설명 ".repeat(80) : "값",
   );
-  const markdown = [
-    headers,
-    headers.map(() => "---"),
-    row,
-  ]
+  const markdown = [headers, headers.map(() => "---"), row]
     .map((cells) => `| ${cells.join(" | ")} |`)
     .join("\n");
   const html = markdownDocumentHtml(markdown, "넓은 표");
@@ -66,7 +64,9 @@ test("PDF table columns stay positive and sum to one page for wide tables", () =
 
   assert.equal(widths.length, headers.length);
   assert.ok(widths.every((width) => Number.isFinite(width) && width > 0));
-  assert.ok(Math.abs(widths.reduce((total, width) => total + width, 0) - 100) < 1);
+  assert.ok(
+    Math.abs(widths.reduce((total, width) => total + width, 0) - 100) < 1,
+  );
 });
 
 test("file library, Korean downloads, new spreadsheets and PDF inspection work over HTTP", async () => {
@@ -108,7 +108,7 @@ test("file library, Korean downloads, new spreadsheets and PDF inspection work o
     const wikiListResponse = await fetch(`${base}/api/legal/wiki`);
     assert.equal(wikiListResponse.status, 200);
     const wikiList = (await wikiListResponse.json()) as {
-      items: Array<{ name: string; title: string; bytes: number }>;
+      items: Array<{ name: string; title: string }>;
     };
     assert.deepEqual(wikiList.items, [
       {
@@ -162,6 +162,11 @@ test("file library, Korean downloads, new spreadsheets and PDF inspection work o
     assert.ok((await download.arrayBuffer()).byteLength > 1000);
     const pdf = await PDFDocument.create();
     pdf.addPage([300, 400]);
+    pdf.getPages()[0]!.drawText("PDF page thumbnail test", {
+      x: 24,
+      y: 340,
+      size: 18,
+    });
     const saved = await storage.save({
       name: "페이지.pdf",
       mimeType: "application/pdf",
@@ -172,6 +177,35 @@ test("file library, Korean downloads, new spreadsheets and PDF inspection work o
     assert.deepEqual(((await inspected.json()) as { pages: unknown[] }).pages, [
       { number: 1, width: 300, height: 400, rotation: 0 },
     ]);
+    const thumbnails = await post("/api/pdfs/thumbnails", {
+      fileId: saved.id,
+      pageNumbers: [1],
+    });
+    assert.equal(thumbnails.status, 200);
+    const rendered = (await thumbnails.json()) as {
+      pageCount: number;
+      pages: Array<{
+        pageNumber: number;
+        width: number;
+        height: number;
+        dataBase64: string;
+      }>;
+    };
+    assert.equal(rendered.pageCount, 1);
+    assert.equal(rendered.pages[0]?.pageNumber, 1);
+    assert.equal(rendered.pages[0]?.width, 180);
+    assert.equal(rendered.pages[0]?.height, 240);
+    const png = Buffer.from(rendered.pages[0]!.dataBase64, "base64");
+    assert.deepEqual(
+      png.subarray(0, 8),
+      Buffer.from("89504e470d0a1a0a", "hex"),
+    );
+    assert.ok(png.length > 500);
+    const tooManyThumbnails = await post("/api/pdfs/thumbnails", {
+      fileId: saved.id,
+      pageNumbers: Array.from({ length: 13 }, (_, index) => index + 1),
+    });
+    assert.equal(tooManyThumbnails.status, 400);
     const library = await fetch(`${base}/api/files?limit=1`);
     assert.equal(library.status, 200);
     const first = (await library.json()) as {
@@ -188,6 +222,23 @@ test("file library, Korean downloads, new spreadsheets and PDF inspection work o
     assert.notEqual(second.items[0]!.id, first.items[0]!.id);
     const invalid = await fetch(`${base}/api/files?limit=100000`);
     assert.equal(invalid.status, 400);
+    const markdownDoc = await post("/api/documents/markdown", {
+      outputName: "표 서식 검증",
+      markdown:
+        "# 표 서식 검증\n\n| 항목 | 설명 |\n| --- | --- |\n| 표 | **Word 표로 내보내기** |",
+    });
+    assert.equal(markdownDoc.status, 201);
+    const { file: wordFile } = (await markdownDoc.json()) as {
+      file: { id: string };
+    };
+    const wordZip = new PizZip(
+      Buffer.from((await storage.read(wordFile.id)).content),
+    );
+    const wordBody = wordZip.file("word/document.xml")!.asText();
+    assert.equal((wordBody.match(/<w:tbl>/g) ?? []).length, 1);
+    assert.equal((wordBody.match(/<w:tr>/g) ?? []).length, 2);
+    assert.match(wordBody, /<w:tblLayout w:type="fixed"\/>/);
+
     const reportMarkdown =
       "# 카카오 자료 검토\n\n요약 문장입니다.\n\n| 쟁점 | 확인 내용 |\n| --- | --- |\n| 위탁 | 계약과 처리 범위를 확인 |\n| 제공 | 제3자 제공 여부를 확인 |";
     const workbookResponse = await post("/api/documents/export", {
@@ -200,40 +251,6 @@ test("file library, Korean downloads, new spreadsheets and PDF inspection work o
       file: { id: string; name: string };
     };
     assert.equal(workbookFile.name, "카카오 검토.xlsx");
-    const workbookPackage = await storage.read(workbookFile.id);
-    const workbookZip = new PizZip(workbookPackage.content);
-    const sheetXml = workbookZip.file("xl/worksheets/sheet1.xml")?.asText();
-    assert.ok(sheetXml, "report worksheet metadata should be present");
-    assert.match(sheetXml, /<tableParts count="1"/);
-    const reportTableXml = workbookZip.file("xl/tables/table1.xml")?.asText();
-    assert.ok(reportTableXml, "Markdown tables remain native Excel tables");
-    assert.match(reportTableXml, /ref="A3:B5"/);
-    assert.match(reportTableXml, /<autoFilter ref="A3:B5"/);
-    assert.match(reportTableXml, /tableStyleInfo name="TableStyleLight1"/);
-    assert.doesNotMatch(
-      reportTableXml,
-      /totalsRow(?:Shown|Count|Label|Function)/,
-      "a Markdown table must not carry implicit totals-row metadata",
-    );
-    const styledWorkbook = new ExcelJS.Workbook();
-    await styledWorkbook.xlsx.load(Buffer.from(workbookPackage.content));
-    const styledReport = styledWorkbook.getWorksheet("보고서");
-    assert.equal(styledReport?.getCell("A1").font.size, 16);
-    assert.equal(styledReport?.getCell("A1").font.name, "맑은 고딕");
-    assert.equal(styledReport?.getCell("B1").isMerged, true);
-    assert.ok((styledReport?.getColumn(2).width ?? Infinity) <= 44);
-    assert.equal(styledReport?.getCell("A3").font.bold, true);
-    assert.notEqual(
-      styledReport?.getCell("A4").font.bold,
-      true,
-      "the last data row must not inherit totals-row emphasis",
-    );
-    assert.equal(styledReport?.getRow(4).height, 24);
-    assert.notEqual(styledReport?.getCell("A5").font.bold, true);
-    assert.deepEqual(
-      styledReport?.getCell("A5").fill,
-      { type: "pattern", pattern: "solid", fgColor: { argb: "FFF6F7F4" } },
-    );
     const workbookStructure = await post("/api/spreadsheets/inspect", {
       fileId: workbookFile.id,
     });
@@ -245,6 +262,42 @@ test("file library, Korean downloads, new spreadsheets and PDF inspection work o
       ["보고서"],
     );
     assert.equal(workbookInfo.sheets[0]?.columns, 2);
+    const workbookPackage = await storage.read(workbookFile.id);
+    const workbookZip = new PizZip(Buffer.from(workbookPackage.content));
+    const sheetXml = workbookZip.file("xl/worksheets/sheet1.xml")?.asText();
+    assert.ok(sheetXml, "report worksheet metadata should be present");
+    assert.match(sheetXml!, /<tableParts count="1"/);
+    const reportTableXml = workbookZip.file("xl/tables/table1.xml")?.asText();
+    assert.ok(reportTableXml, "Markdown tables remain native Excel tables");
+    assert.match(reportTableXml, /ref="A3:B5"/);
+    assert.match(reportTableXml, /<autoFilter ref="A3:B5"/);
+    assert.match(reportTableXml, /tableStyleInfo name="TableStyleLight1"/);
+    assert.doesNotMatch(
+      reportTableXml,
+      /totalsRow(?:Shown|Count|Label|Function)/,
+    );
+    const styledWorkbook = new ExcelJS.Workbook();
+    await styledWorkbook.xlsx.load(Buffer.from(workbookPackage.content));
+    const styledReport = styledWorkbook.getWorksheet("보고서");
+    assert.equal(styledReport?.getCell("A1").font.size, 16);
+    assert.equal(styledReport?.getCell("A1").font.name, "맑은 고딕");
+    assert.equal(styledReport?.getCell("A1").font.name, "맑은 고딕");
+    assert.equal(styledReport?.getCell("B1").isMerged, true);
+    assert.ok((styledReport?.getColumn(2).width ?? Infinity) <= 44);
+    assert.ok(
+      (styledReport?.getColumn(2).width ?? Infinity) <=
+        (styledReport?.getColumn(1).width ?? 0) * 2.5,
+      "content-heavy columns must not dominate the whole worksheet",
+    );
+    assert.equal(styledReport?.getCell("A3").font.bold, true);
+    assert.notEqual(styledReport?.getCell("A4").font.bold, true);
+    assert.equal(styledReport?.getRow(4).height, 24);
+    assert.notEqual(styledReport?.getCell("A5").font.bold, true);
+    assert.deepEqual(styledReport?.getCell("A5").fill, {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFF6F7F4" },
+    });
     const reportTable = await post("/api/spreadsheets/inspect", {
       fileId: workbookFile.id,
       sheet: "보고서",
@@ -287,6 +340,7 @@ test("file library, Korean downloads, new spreadsheets and PDF inspection work o
     await proseWorkbook.xlsx.load(Buffer.from(proseWorkbookBytes.content));
     const proseSheet = proseWorkbook.getWorksheet("보고서");
     assert.equal(proseSheet?.getCell("A2").font.name, "맑은 고딕");
+    assert.equal(proseSheet?.getCell("A2").font.name, "맑은 고딕");
     assert.equal(proseSheet?.getCell("A2").value, "안내 문장입니다.");
     assert.equal(proseSheet?.getCell("A3").value, "답변");
     assert.equal(proseSheet?.getCell("A4").value, "핵심 판단");
@@ -306,10 +360,10 @@ test("file library, Korean downloads, new spreadsheets and PDF inspection work o
     );
     assert.equal(proseSheet?.getCell("A6").value, "두 번째 문단입니다.");
     assert.equal(proseSheet?.getColumn(1).width, 82);
+    assert.equal(proseSheet?.getTables().length, 0);
     assert.equal(proseSheet?.getCell("A2").isMerged, false);
     assert.equal(proseSheet?.getCell("A3").isMerged, false);
     assert.equal(proseSheet?.getCell("A5").isMerged, false);
-    assert.equal(proseSheet?.getTables().length, 0);
     const widthSampleResponse = await post("/api/documents/export", {
       outputName: "열 너비 검토",
       format: "xlsx",
@@ -361,6 +415,7 @@ test("file library, Korean downloads, new spreadsheets and PDF inspection work o
       );
       assert.doesNotMatch(tableXml, /totalsRow(?:Shown|Count|Label|Function)/);
     }
+
     const pdfResponse = await post("/api/documents/export", {
       outputName: "카카오 검토",
       format: "pdf",

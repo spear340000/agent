@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import { env } from '../src/config/env.ts';
 import { McpStdioClient } from '../src/infrastructure/legal/mcp-stdio-client.ts';
@@ -46,17 +47,7 @@ test('the supplied corpus answers law, precedent, and graph lookups read-only', 
     command: process.env.LEGAL_PYTHON ?? env.legal.python,
     args: buildLegalMcpLaunchArgs(process.env.LEGAL_MCP_SCRIPT ?? env.legal.script, `${process.cwd()}/data/legal-rag-mcp-test.log`),
     cwd: env.legal.runtimeRoot,
-    env: {
-      PATH: process.env.PATH ?? '',
-      SystemRoot: process.env.SystemRoot ?? '',
-      PYTHONUTF8: '1',
-      PYTHONIOENCODING: 'utf-8',
-      LEGAL_DATA_ROOT: corpusRoot,
-      LEGAL_GRAPH_PATH: env.legal.graphPath,
-      LEGAL_ONTOLOGY_PATH: env.legal.ontologyPath,
-      OKF_BUNDLE_PATH: env.legal.okfPath,
-      USE_QDRANT: 'false'
-    },
+    env: { PATH: process.env.PATH ?? '', SystemRoot: process.env.SystemRoot ?? '', PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' },
     startupTimeoutMs: env.legal.startupTimeoutMs,
     requestTimeoutMs: env.legal.requestTimeoutMs,
     maxResponseCharacters: env.legal.maxResponseCharacters,
@@ -135,17 +126,7 @@ test('an exact article lookup that does not exist is a not-found result, not a t
     command: process.env.LEGAL_PYTHON ?? env.legal.python,
     args: buildLegalMcpLaunchArgs(process.env.LEGAL_MCP_SCRIPT ?? env.legal.script, `${process.cwd()}/data/legal-rag-mcp-test.log`),
     cwd: env.legal.runtimeRoot,
-    env: {
-      PATH: process.env.PATH ?? '',
-      SystemRoot: process.env.SystemRoot ?? '',
-      PYTHONUTF8: '1',
-      PYTHONIOENCODING: 'utf-8',
-      LEGAL_DATA_ROOT: corpusRoot,
-      LEGAL_GRAPH_PATH: env.legal.graphPath,
-      LEGAL_ONTOLOGY_PATH: env.legal.ontologyPath,
-      OKF_BUNDLE_PATH: env.legal.okfPath,
-      USE_QDRANT: 'false'
-    },
+    env: { PATH: process.env.PATH ?? '', SystemRoot: process.env.SystemRoot ?? '', PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' },
     startupTimeoutMs: env.legal.startupTimeoutMs,
     requestTimeoutMs: env.legal.requestTimeoutMs,
     maxResponseCharacters: env.legal.maxResponseCharacters,

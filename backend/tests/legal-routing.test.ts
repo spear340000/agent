@@ -77,6 +77,20 @@ test('an exact article lookup uses the smallest exact retrieval tool set', () =>
   assert.equal(countIssueSignals('민법 제398조 내용이 궁금합니다.'), 0);
 });
 
+test('spaced citations use exact article lookup and preserve complete law names', () => {
+  for (const [prompt, lawName, articleNumber] of [
+    ['헌법 제 1조 1항', '헌법', '제1조'],
+    ['개인정보 보호법 제 28 조 의 8 제 1 항', '개인정보 보호법', '제28조의8'],
+    ['국가보안법 제1조', '국가보안법', '제1조'],
+    ['가맹사업거래의 공정화에 관한 법률 제 3조', '가맹사업거래의 공정화에 관한 법률', '제3조'],
+  ]) {
+    const decision = route(prompt!);
+    assert.equal(decision.intent, 'article-lookup');
+    assert.deepEqual(decision.steps, [{ kind: 'law-article', lawName, articleNumber }]);
+    assert.equal(decision.plannerCalls, 0);
+  }
+});
+
 test('a case number lookup prefers the case-number tool', () => {
   const decision = route('2013가합30895 판례의 판결요지를 알려 주세요.');
   assert.equal(decision.intent, 'case-lookup');
@@ -113,6 +127,24 @@ test('multiple issue sentences alone trigger the orchestrated path', () => {
   const prompt = '위약금이란 무엇인가요? 그리고 감액 기준은 어떻게 되나요?';
   assert.ok(countIssueSignals(prompt) >= LEGAL_ROUTING_DEFAULTS.multiIssueThreshold);
   assert.equal(route(prompt).path, 'orchestrated');
+});
+
+test('numbered issue lists trigger planning without question marks or topic vocabulary', () => {
+  const prompt = '다음 항목을 검토하라.\n1. 첫 번째 항목\n2. 두 번째 항목\n3. 세 번째 항목';
+  const decision = route(prompt);
+  assert.equal(decision.path, 'orchestrated');
+  assert.equal(decision.plannerCalls, 1);
+  assert.equal(decision.originalPrompt, prompt);
+  assert.deepEqual(decision.steps, []);
+});
+
+test('a narrative exceeding the direct query limit is planned rather than silently truncated', () => {
+  const prompt = '구체적인 사실관계를 검토해 주세요. '.repeat(25);
+  assert.ok(prompt.length > 300);
+  const decision = route(prompt);
+  assert.equal(decision.path, 'orchestrated');
+  assert.equal(decision.originalPrompt, prompt);
+  assert.deepEqual(decision.steps, []);
 });
 
 test('two or more uploaded sources move a request to the orchestrated legal path', () => {
@@ -161,7 +193,7 @@ test('legal identifier extraction is deterministic', () => {
 
 test('step plans only include stages that actually run', () => {
   const direct = planLegalSteps({ sourceFileIds: [] }, route('중과실의 기준은 무엇인가요?'));
-  assert.deepEqual(direct.map(step => step.key), ['legal:retrieve', 'legal:write']);
+  assert.deepEqual(direct.map(step => step.key), ['legal:retrieve', 'legal:write:v2']);
   const orchestrated = planLegalSteps(
     { sourceFileIds: ['file_1', 'file_2'] },
     route('위약금이란 무엇인가요? 그리고 감액 기준은 어떻게 되나요?', 2)
@@ -171,8 +203,8 @@ test('step plans only include stages that actually run', () => {
     'legal:plan',
     'legal:retrieve',
     'legal:verify',
-    'legal:write'
+    'legal:write:v2'
   ]);
   const directWithWeb = planLegalSteps({ sourceFileIds: [] }, route('현재 시행 중인 위약금 기준과 공식 링크를 알려 주세요.'));
-  assert.deepEqual(directWithWeb.map(step => step.key), ['legal:retrieve', 'legal:web', 'legal:write']);
+  assert.deepEqual(directWithWeb.map(step => step.key), ['legal:retrieve', 'legal:web', 'legal:write:v2']);
 });

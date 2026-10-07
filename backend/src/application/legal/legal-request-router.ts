@@ -1,4 +1,6 @@
 import type { LegalRetrievalStep } from '../../domain/legal-source.js';
+import { extractLawArticle, ARTICLE_NUMBER_PATTERN as BARE_ARTICLE_PATTERN } from '../../domain/legal-reference.js';
+export { extractLawArticle } from '../../domain/legal-reference.js';
 
 export type LegalIntent =
   | 'article-lookup'
@@ -33,10 +35,9 @@ export type LegalRoutingLimits = {
   complexDraftCharacters: number;
   multiAttachmentThreshold: number;
   directQueryLimit: number;
+  maxDirectQueryCharacters?: number;
 };
 
-const ARTICLE_PATTERN = /([가-힣]{2,20}?)\s*제(\d+조(?:의\d+)?)(?:\s*제?\s*(\d+)항)?/;
-const BARE_ARTICLE_PATTERN = /제(\d+조(?:의\d+)?)/;
 const CASE_NUMBER_PATTERN = /(?:^|[^\d])(\d{4}[가-힣]{1,2}\d{2,})(?!\d)/;
 const EFFECTIVE_DATE_PATTERN = /\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일\s*(?:시행|부터)/;
 const LAW_REFERENCE_PATTERN = /(?:법률|법|령|규칙|조칙)[^\n]{0,16}제\d+조/;
@@ -45,7 +46,6 @@ const PROMPT_NOISE = /[\r\n]+/g;
 
 const OUTPUT_SHAPE = /초안|서식|양식|작성|써\s|만들|정식|서류/;
 const WEB_NEEDED = /최신|현재|요즘|오늘|공지|고시|발표|공식\s*(?:사이트|출처|링크)|원문\s*링크|링크|https?:\/\//i;
-const LAW_NAME_SUFFIX = /(?:법률|법|령|규칙|조칙|고시|지침)$/;
 
 const DEFAULT_STEP_LABELS: Readonly<Record<LegalPath, readonly string[]>> = {
   document: [],
@@ -56,28 +56,12 @@ const DEFAULT_STEP_LABELS: Readonly<Record<LegalPath, readonly string[]>> = {
 const normalize = (value: string): string => value.replace(PROMPT_NOISE, ' ').replace(/\s+/g, ' ').trim();
 
 export function countIssueSignals(prompt: string): number {
-  return (normalize(prompt).match(ISSUE_SEPARATOR) ?? []).length;
-}
-
-export function extractLawArticle(prompt: string): { lawName?: string; articleNumber: string } | undefined {
-  const text = normalize(prompt);
-  for (const match of text.matchAll(new RegExp(ARTICLE_PATTERN, 'g'))) {
-    const articleNumber = `제${match[2]}`;
-    const lawName = trimLawName(match[1]!);
-    if (lawName) return { lawName, articleNumber };
-  }
-  const bare = BARE_ARTICLE_PATTERN.exec(text);
-  return bare ? { articleNumber: `제${bare[1]}` } : undefined;
+  const numberedItems = (prompt.match(/^\s*(?:\d{1,3}[.)]|[-*•])\s+\S/gm) ?? []).length;
+  return Math.max((normalize(prompt).match(ISSUE_SEPARATOR) ?? []).length, numberedItems);
 }
 
 export function extractCaseNumber(prompt: string): string | undefined {
   return CASE_NUMBER_PATTERN.exec(normalize(prompt))?.[1];
-}
-
-function trimLawName(candidate: string): string | undefined {
-  let name = candidate.trim();
-  while (name.length > 2 && /^[의과와은는이가을를에서부터까지보다]/u.test(name)) name = name.slice(1);
-  return LAW_NAME_SUFFIX.test(name) ? name : undefined;
 }
 
 export type LegalCitationFormats = {
@@ -114,7 +98,7 @@ export class LegalRequestRouter {
     const caseNumber = extractCaseNumber(prompt);
     const formats = legalCitationFormats(prompt);
     const mentionsDraft = OUTPUT_SHAPE.test(prompt);
-    const issueCount = countIssueSignals(prompt);
+    const issueCount = countIssueSignals(input.prompt);
     const manyAttachments = attachmentCount >= this.limits.multiAttachmentThreshold;
     const complexDraft = mentionsDraft && prompt.length > this.limits.complexDraftCharacters;
     const multiIssue = issueCount >= this.limits.multiIssueThreshold;
@@ -128,7 +112,8 @@ export class LegalRequestRouter {
 
     const questions = splitQuestions(prompt);
     const needsWeb = sourceUrlCount > 0 || WEB_NEEDED.test(prompt);
-    const orchestrated = manyAttachments || multiIssue || complexDraft;
+    const longSearch = !article?.lawName && !caseNumber && input.prompt.length > (this.limits.maxDirectQueryCharacters ?? 300);
+    const orchestrated = manyAttachments || multiIssue || complexDraft || longSearch;
 
     const intent: LegalIntent = caseNumber
       ? 'case-lookup'
@@ -143,6 +128,7 @@ export class LegalRequestRouter {
     if (manyAttachments) reasons.push(`첨부 자료가 ${attachmentCount}개 이상입니다.`);
     if (multiIssue) reasons.push(`요청이 ${issueCount}개 항목으로 나뉘어 있어 여러 번의 검색이 필요합니다.`);
     if (complexDraft) reasons.push('긴 법률 문서 초안 요청이 확인되었습니다.');
+    if (longSearch) reasons.push('원문이 직접 검색 질의 한도를 넘어 검색 계획이 필요합니다.');
 
     const path: LegalPath = orchestrated ? 'orchestrated' : 'direct';
     const queries = buildQueries(prompt, intent);

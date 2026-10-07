@@ -10,6 +10,7 @@ import { TaskService } from "./application/task-service.js";
 import { ComputerControlService } from "./application/computer-control-service.js";
 import { SqliteTaskRepository } from "./infrastructure/persistence/sqlite-task-repository.js";
 import { OpenAiProvider } from "./infrastructure/llm/openai-provider.js";
+import { ModelFailoverProvider } from "./infrastructure/llm/model-failover-provider.js";
 import { ApiRouter } from "./api/router.js";
 import { createApiServer } from "./api/server.js";
 import { BrowserUseService } from "./tools/browser-use.js";
@@ -34,22 +35,32 @@ import { SearxngSearchProvider } from "./infrastructure/search/searxng-search-pr
 import { McpStdioClient } from "./infrastructure/legal/mcp-stdio-client.js";
 import { buildLegalMcpLaunchArgs } from "./infrastructure/legal/mcp-launch.js";
 import { LegalRetrievalService } from "./infrastructure/legal/legal-retrieval-service.js";
+import { OfficialLawArticleReader } from "./infrastructure/legal/official-law-article-reader.js";
 import { VectorContributionProbe } from "./infrastructure/legal/vector-contribution-probe.js";
 import { LegalRequestRouter } from "./application/legal/legal-request-router.js";
 import { LegalWorkflow } from "./application/legal/legal-workflow.js";
 import { legalFailureMessage } from "./domain/legal-error.js";
 import { LegalCatalogService } from "./application/legal/legal-catalog-service.js";
 import { LegalWikiService } from "./application/legal/legal-wiki-service.js";
+import { LegalWikiHints } from "./application/legal/legal-wiki-hints.js";
+import { LegalKnowledgeChain } from "./application/legal/legal-knowledge-chain.js";
 
 validateRuntimeConfig();
 validateLegalConfig();
 mkdirSync("data", { recursive: true });
 const tasks = new SqliteTaskRepository(env.databaseFile);
-const model = new OpenAiProvider({
-  apiKey: env.openAiApiKey,
-  model: env.openAiModel,
-  baseUrl: env.openAiBaseUrl,
-});
+const configuredModelEndpoints = [env.modelProviders.primary, ...env.modelProviders.fallbacks];
+const model = new ModelFailoverProvider(configuredModelEndpoints.map((endpoint) => {
+  const provider = new OpenAiProvider({
+    apiKey: endpoint.apiKey,
+    model: endpoint.model,
+    baseUrl: endpoint.baseUrl,
+    ...(endpoint.maxInputCharacters ? { maxInputCharacters: endpoint.maxInputCharacters } : {}),
+    ...(endpoint.tokensPerMinute ? { tokensPerMinute: endpoint.tokensPerMinute } : {}),
+    maxAttempts: 2,
+  });
+  return { name: `${endpoint.name} · ${endpoint.model}`, failureDomain: endpoint.baseUrl, complete: (input) => provider.complete(input) };
+}), { unhealthyCooldownMs: 600_000, totalBudgetMs: 120_000 });
 const browser = new BrowserUseService({
   searchProvider: new SearxngSearchProvider({ baseUrl: env.searxngUrl }),
 });
@@ -64,6 +75,7 @@ const content = new DocumentContentService(files);
 const fileService = new FileService(files, {
   maxUploadBytes: env.maxUploadBytes,
 });
+const pdfs = new PdfService(files, (html) => browser.renderPdf(html));
 const eventBus = new TaskEventBus();
 
 const legalEnv = (options: { useQdrant: boolean }): Record<string, string> => {
@@ -73,9 +85,9 @@ const legalEnv = (options: { useQdrant: boolean }): Record<string, string> => {
     PYTHONUTF8: "1",
     PYTHONIOENCODING: "utf-8",
     USE_QDRANT: options.useQdrant ? "true" : "false",
+    LEGAL_DATA_ROOT: env.legal.root,
     QDRANT_BACKEND: env.legal.vectorBackend,
     QDRANT_PATH: env.legal.qdrantPath,
-    LEGAL_DATA_ROOT: env.legal.root,
     QDRANT_COLLECTION: process.env.QDRANT_COLLECTION,
     VECTOR_MEMMAP_PATH: env.legal.vectorMemmapPath,
     LEGAL_GRAPH_PATH: env.legal.graphPath,
@@ -106,6 +118,7 @@ const legalClient = new McpStdioClient({
   requestTimeoutMs: env.legal.requestTimeoutMs,
   maxResponseCharacters: env.legal.maxResponseCharacters,
   restartBudget: 1,
+  restartWindowMs: 300_000,
   stderrTailCharacters: 4_000,
 });
 const legalRetrieval = new LegalRetrievalService(legalClient, {
@@ -114,10 +127,10 @@ const legalRetrieval = new LegalRetrievalService(legalClient, {
   maxQueryCharacters: env.legal.maxQueryCharacters,
   maxPrecedentCharacters: env.legal.retrieval.maxPrecedentCharacters,
   graphPath: env.legal.graphPath,
-});
+}, new OfficialLawArticleReader());
 const vectorProbe = new VectorContributionProbe({
   enabled: env.legal.useQdrant,
-  root: env.legal.root,
+  root: env.legal.runtimeRoot,
   python: env.legal.python,
   script: env.legal.script,
   logPath: path.resolve("data", "legal-rag-mcp.log"),
@@ -130,10 +143,17 @@ const legalRouter = new LegalRequestRouter({
   complexDraftCharacters: env.legal.routing.complexDraftCharacters,
   multiAttachmentThreshold: env.legal.routing.multiAttachmentThreshold,
   directQueryLimit: env.legal.retrieval.directQueryLimit,
+  maxDirectQueryCharacters: env.legal.maxQueryCharacters,
 });
 const legalWorkflow = new LegalWorkflow({
   retrieval: legalRetrieval,
   model,
+  queryRewrite: env.legal.queryRewrite,
+  claimVerification: env.legal.claimVerification,
+  ...(env.legal.wikiHints ? { wikiHints: new LegalWikiHints(path.join(env.legal.runtimeRoot, "wiki")) } : {}),
+  ...(env.legal.knowledgeChain ? { knowledgeChain: new LegalKnowledgeChain({ ontology: env.legal.ontologyPath, okf: env.legal.okfPath }) } : {}),
+  relevanceFilter: env.legal.relevanceFilter,
+  evidenceBudgetChars: env.legal.evidenceBudgetChars,
   limits: {
     maxQueryCharacters: env.legal.maxQueryCharacters,
     orchestratedQueryLimit: env.legal.retrieval.orchestratedQueryLimit,
@@ -145,7 +165,10 @@ const legalWorkflow = new LegalWorkflow({
 });
 const capabilities = new CapabilityService(
   {
-    modelConfigured: Boolean(env.openAiApiKey),
+    modelConfigured: configuredModelEndpoints.some((endpoint) => Boolean(endpoint.apiKey)),
+    modelName: env.openAiModel,
+    modelFallbacks: env.modelProviders.fallbacks.map((endpoint) => `${endpoint.name} · ${endpoint.model}`),
+    modelProviders: [...new Set(configuredModelEndpoints.filter((endpoint) => Boolean(endpoint.apiKey)).map((endpoint) => endpoint.name.replace(/ NIM$/, '')))],
     browserAvailable: browser.isAvailable(),
     computerAvailable: computer.isAvailable(),
     platform: process.platform,
@@ -209,12 +232,12 @@ const router = new ApiRouter({
   capabilities,
   legalRetrieval,
   legalCatalog: new LegalCatalogService(env.legal.okfPath),
-  legalWiki: new LegalWikiService(path.join(env.legal.root, "wiki")),
+  legalWiki: new LegalWikiService(path.join(env.legal.runtimeRoot, "wiki")),
   files: fileService,
   spreadsheets: new SpreadsheetService(files),
   documents,
   content,
-  pdfs: new PdfService(files, (html) => browser.renderPdf(html)),
+  pdfs,
   redaction: new RedactionService(files),
   documentAi: new DocumentAiService(model, content, documents),
   eventBus,
