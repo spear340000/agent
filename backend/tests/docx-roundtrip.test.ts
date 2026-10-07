@@ -25,6 +25,25 @@ sourceZip.file('docProps/core.xml', '<cp:coreProperties xmlns:cp="urn:cp"><dc:cr
 const source = await storage.save({ name: 'source.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', content: sourceZip.generate({ type: 'nodebuffer' }) });
 const service = new DocumentService(storage);
 
+const formattedReport = await service.createMarkdownReport({
+  outputName: 'formatted-report',
+  markdown: '# 검토 보고서\n\n## 비교 결과\n\n| 항목 | 현행 규정 | 검토 의견 |\n|:---|:---:|---:|\n| 개인정보 위탁 | **계약·감독 필요** | 확인 필요 |\n| 공개 범위 | 제한적 | `원문 확인` |\n\n본문의 **강조**와 [참고 링크](https://example.com), [W1](알티케이뉴스 기사)를 유지합니다.',
+});
+const formattedXml = new PizZip(Buffer.from((await storage.read(formattedReport.id)).content)).file('word/document.xml')!.asText();
+assert.equal((formattedXml.match(/<w:tbl>/g) ?? []).length, 1, 'Markdown pipe tables become a real Word table');
+assert.equal((formattedXml.match(/<w:tr>/g) ?? []).length, 3, 'the table keeps its header and both data rows');
+assert.equal((formattedXml.match(/<w:tc>/g) ?? []).length, 9, 'every row has the same three-column grid');
+assert.match(formattedXml, /<w:tblLayout w:type="fixed"\/>/, 'fixed layout prevents Word from collapsing the table columns');
+assert.match(formattedXml, /<w:tblHeader/, 'the header row repeats when a table spans pages');
+assert.match(formattedXml, /w:fill="E9EFEA"/, 'table headers receive a distinct fill');
+assert.match(formattedXml, /<w:pgSz[^>]*w:w="11906"[^>]*w:h="16838"/, 'the document uses A4 page dimensions');
+assert.match(formattedXml, /<w:pgMar[^>]*w:left="1080"/, 'the document uses a 1080-twip left margin');
+assert.match(formattedXml, /<w:pgMar[^>]*w:right="1080"/, 'the document uses a 1080-twip right margin');
+assert.match(formattedXml, /w:b/, 'inline bold formatting is retained');
+assert.match(formattedXml, /example\.com/, 'Markdown links remain visible in the document');
+assert.match(formattedXml, /W1/, 'non-URL citation links retain their visible label');
+assert.doesNotMatch(formattedXml, /\]\(알티케이뉴스 기사\)/, 'Markdown destinations are not exposed as raw syntax');
+
 const templateSource = await service.create({ outputName: 'template.docx', title: 'Template', paragraphs: ['Dear {name}', 'Repeat {name}'] });
 const malformedTemplate = await storage.save({ name: 'malformed.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', content: Buffer.from('PK\u0003\u0004invalid') });
 await assert.rejects(() => service.fillTemplate({ fileId: malformedTemplate.id, outputName: 'bad-filled.docx', variables: {} }), /invalid DOCX template/);

@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { resolveModelProviderConfig } from './model-providers.js';
 
 function loadDotEnv(): void {
   try {
@@ -18,11 +19,26 @@ function positiveInteger(name: string, fallback: number): number {
   return parsed;
 }
 
-const LEGAL_ROOT = (process.env.LEGAL_RAG_ROOT ?? 'C:/Users/spear/project/testA').replace(/[/\\]+$/, '');
-const LEGAL_PYTHON_FALLBACK =
+const LEGAL_HOME = path.resolve('backend/legal');
+const LEGAL_RUNTIME_ROOT = path.resolve(
+  process.env.LEGAL_RUNTIME_ROOT ?? process.env.LEGAL_RAG_ROOT ?? LEGAL_HOME,
+);
+const LEGAL_DATA_ROOT = path.resolve(
+  process.env.LEGAL_DATA_ROOT ??
+    (process.env.LEGAL_RAG_ROOT
+      ? path.join(LEGAL_RUNTIME_ROOT, 'data')
+      : path.join(LEGAL_HOME, 'data')),
+);
+const pythonPath = (environment: '.venv' | '.mcp-venv') =>
   process.platform === 'win32'
-    ? path.join(LEGAL_ROOT, '.mcp-venv', 'Scripts', 'python.exe')
-    : path.join(LEGAL_ROOT, '.venv', 'bin', 'python');
+    ? path.join(LEGAL_RUNTIME_ROOT, environment, 'Scripts', 'python.exe')
+    : path.join(LEGAL_RUNTIME_ROOT, environment, 'bin', 'python');
+const LEGAL_PYTHON_FALLBACK = [
+  pythonPath('.venv'),
+  pythonPath('.mcp-venv'),
+].find((candidate) => existsSync(candidate)) ?? pythonPath('.venv');
+
+const MODEL_PROVIDER_CONFIG = resolveModelProviderConfig(process.env);
 
 export const LEGAL_ROUTING_DEFAULTS = {
   multiIssueThreshold: 2,
@@ -44,9 +60,10 @@ export const env = {
   apiAuthEnabled: process.env.API_AUTH_ENABLED === 'true',
   apiAuthToken: process.env.API_AUTH_TOKEN,
   databaseFile: process.env.DATABASE_FILE ?? 'data/agent.db',
-  openAiApiKey: process.env.NVIDIA_API_KEY ?? process.env.OPENAI_API_KEY,
-  openAiModel: process.env.NVIDIA_MODEL ?? process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
-  openAiBaseUrl: process.env.NVIDIA_BASE_URL ?? process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
+  modelProviders: MODEL_PROVIDER_CONFIG,
+  openAiApiKey: MODEL_PROVIDER_CONFIG.primary.apiKey,
+  openAiModel: MODEL_PROVIDER_CONFIG.primary.model,
+  openAiBaseUrl: MODEL_PROVIDER_CONFIG.primary.baseUrl,
   searxngUrl: process.env.SEARXNG_URL ?? 'http://127.0.0.1:8888',
   browserExecutablePath: process.env.BROWSER_EXECUTABLE_PATH,
   computerUseEnabled: process.env.COMPUTER_USE_ENABLED === 'true',
@@ -56,14 +73,15 @@ export const env = {
   frontendOrigins: (process.env.FRONTEND_ORIGINS ?? 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001').split(',').map(origin => origin.trim()).filter(Boolean),
   legal: {
     enabled: process.env.LEGAL_ENABLED !== 'false',
-    root: LEGAL_ROOT,
+    root: LEGAL_DATA_ROOT,
+    runtimeRoot: LEGAL_RUNTIME_ROOT,
     python: process.env.LEGAL_PYTHON ?? LEGAL_PYTHON_FALLBACK,
-    script: process.env.LEGAL_MCP_SCRIPT ?? path.join(LEGAL_ROOT, 'rag_mcp_server.py'),
-    graphPath: process.env.LEGAL_GRAPH_PATH ?? path.join(LEGAL_ROOT, 'data', 'legal_graph.sqlite3'),
-    ontologyPath: process.env.LEGAL_ONTOLOGY_PATH ?? path.join(LEGAL_ROOT, 'ontology', 'legal-wiki.ttl'),
-    okfPath: process.env.OKF_BUNDLE_PATH ?? path.join(LEGAL_ROOT, 'okf', 'korea-legal'),
-    qdrantPath: process.env.QDRANT_PATH ?? path.join(LEGAL_ROOT, 'data', 'qdrant'),
-    vectorMemmapPath: process.env.VECTOR_MEMMAP_PATH ?? path.join(LEGAL_ROOT, 'data', 'vector_memmap'),
+    script: process.env.LEGAL_MCP_SCRIPT ?? path.join(LEGAL_RUNTIME_ROOT, 'rag_mcp_server.py'),
+    graphPath: process.env.LEGAL_GRAPH_PATH ?? path.join(LEGAL_DATA_ROOT, 'legal_graph.sqlite3'),
+    ontologyPath: process.env.LEGAL_ONTOLOGY_PATH ?? path.join(LEGAL_RUNTIME_ROOT, 'ontology', 'legal-wiki.ttl'),
+    okfPath: process.env.OKF_BUNDLE_PATH ?? path.join(LEGAL_RUNTIME_ROOT, 'okf', 'korea-legal'),
+    qdrantPath: process.env.QDRANT_PATH ?? path.join(LEGAL_DATA_ROOT, 'qdrant'),
+    vectorMemmapPath: process.env.VECTOR_MEMMAP_PATH ?? path.join(LEGAL_DATA_ROOT, 'vector_memmap'),
     useQdrant: process.env.USE_QDRANT === 'true' || process.env.LEGAL_VECTOR_SEARCH !== 'false',
     vectorBackend: process.env.QDRANT_BACKEND ?? 'memmap',
     embedModel: process.env.NVIDIA_EMBED_MODEL,
@@ -77,6 +95,12 @@ export const env = {
       complexDraftCharacters: positiveInteger('LEGAL_COMPLEX_DRAFT_CHARS', LEGAL_ROUTING_DEFAULTS.complexDraftCharacters),
       multiAttachmentThreshold: positiveInteger('LEGAL_MULTI_ATTACHMENT_THRESHOLD', LEGAL_ROUTING_DEFAULTS.multiAttachmentThreshold)
     },
+    queryRewrite: process.env.LEGAL_QUERY_REWRITE !== 'false',
+    wikiHints: process.env.LEGAL_WIKI_HINTS !== 'false',
+    knowledgeChain: process.env.LEGAL_KNOWLEDGE_CHAIN !== 'false',
+    evidenceBudgetChars: positiveInteger('LEGAL_EVIDENCE_BUDGET_CHARS', 6_000),
+    claimVerification: process.env.LEGAL_CLAIM_VERIFICATION !== 'false',
+    relevanceFilter: process.env.LEGAL_RELEVANCE_FILTER !== 'false',
     retrieval: {
       directSourceLimit: positiveInteger('LEGAL_DIRECT_SOURCE_LIMIT', LEGAL_RETRIEVAL_DEFAULTS.directSourceLimit),
       directQueryLimit: positiveInteger('LEGAL_DIRECT_QUERY_LIMIT', LEGAL_RETRIEVAL_DEFAULTS.directQueryLimit),

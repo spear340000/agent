@@ -118,5 +118,6 @@ DOCX direct replacement preserves surrounding run styling while matching literal
 ## Test classes
 
 - `npm run check` type-checks the backend without emitting build files.
-- `npm run test:backend` runs deterministic local unit/integration tests; test bootstrap sets test mode before application modules load, and the suite does not require `.env` values or external model/search services.
+- `npm run setup:legal` provisions the bundled legal search Python environment under `backend/legal/.venv`; it does not fetch or modify corpus data.
+- `npm run test:backend` runs local unit/integration tests; corpus-backed Python integration checks run only when the bundled corpus and Python runtime are present, otherwise those checks are explicitly skipped. Tests do not require `.env` values or external model/search services.
 - `BROWSER_INTEGRATION_TESTS=true` plus an explicitly configured Chrome executable and operator-supplied public test URL enables the real-browser integration test. `COMPUTER_INTEGRATION_TESTS=true`, `COMPUTER_TEST_ALLOW_SCREEN_CAPTURE=true`, and `COMPUTER_USE_ENABLED=true` enable a read-only real Windows screenshot smoke test. Both are skipped by default; desktop clicking/typing is never part of the automated integration suite.

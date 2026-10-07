@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import http from 'node:http';
 import net from 'node:net';
+import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { PinnedEgressProxy } from '../src/tools/pinned-egress-proxy.ts';
 
+test('pinned egress proxy restricts and safely closes HTTP, CONNECT, and WebSocket traffic', async () => {
 const upstream = http.createServer((req, res) => {
   if (req.url === '/oversized') { res.writeHead(200, { 'content-length': '1024' }); res.end('x'.repeat(1024)); return; }
   if (req.url === '/stream-oversized') { res.writeHead(200, { 'transfer-encoding': 'chunked' }); res.write('x'.repeat(300)); setTimeout(() => res.end('x'.repeat(300)), 10); return; }
@@ -62,25 +64,40 @@ try {
 
   const tunnel = await new Promise<{ statusLine: string; echo: string }>((resolve, reject) => {
     const client = net.connect({ host: parsedProxy.hostname, port: Number(parsedProxy.port) });
-    const timer = setTimeout(() => { client.destroy(); reject(new Error(`CONNECT tunnel timed out: ${received.toString('utf8')} dialed=${JSON.stringify(dialed)}`)); }, 5_000);
     let received = Buffer.alloc(0);
     let sent = false;
-    client.once('error', error => { clearTimeout(timer); reject(error); });
+    let settled = false;
+    let timer: NodeJS.Timeout;
+    const finish = (error?: Error, result?: { statusLine: string; echo: string }): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error) {
+        client.destroy();
+        reject(error);
+      } else {
+        client.end();
+        resolve(result!);
+      }
+    };
+    timer = setTimeout(() => finish(new Error(`CONNECT tunnel timed out: ${received.toString('utf8')} dialed=${JSON.stringify(dialed)}`)), 5_000);
+    client.once('error', error => finish(error));
+    client.once('close', () => {
+      if (!settled) finish(new Error('CONNECT tunnel closed before echo'));
+    });
     client.on('data', chunk => {
       received = Buffer.concat([received, chunk]);
       const boundary = received.indexOf('\r\n\r\n');
       if (boundary >= 0 && !sent) {
         sent = true;
-        const statusLine = received.subarray(0, boundary).toString('utf8').split('\r\n')[0]!;
         client.write('pinned-tunnel-check');
-        const tail = received.subarray(boundary + 4).toString('utf8');
-        if (tail.includes('pinned-tunnel-check')) { clearTimeout(timer); client.end(); resolve({ statusLine, echo: tail }); }
-        return;
       }
-      if (sent && received.toString('utf8').includes('pinned-tunnel-check')) {
-        const text = received.toString('utf8');
-        const marker = text.indexOf('pinned-tunnel-check', text.indexOf('\r\n\r\n') + 4);
-        if (marker >= 0) { clearTimeout(timer); client.end(); resolve({ statusLine: text.split('\r\n')[0]!, echo: text.slice(marker) }); }
+      const marker = received.indexOf('pinned-tunnel-check', boundary + 4);
+      if (sent && boundary >= 0 && marker >= 0) {
+        finish(undefined, {
+          statusLine: received.subarray(0, boundary).toString('utf8').split('\r\n')[0]!,
+          echo: received.subarray(marker).toString('utf8'),
+        });
       }
     });
     client.once('connect', () => client.write('CONNECT public-example.com:443 HTTP/1.1\r\nHost: public-example.com:443\r\n\r\n'));
@@ -190,3 +207,4 @@ const abortedTunnel = spawnSync(process.execPath, [
 assert.equal(abortedTunnel.status, 0, `aborted CONNECT tunnel crashed its child process:\n${abortedTunnel.stdout}\n${abortedTunnel.stderr}`);
 
 console.log('pinned egress proxy tests passed');
+});

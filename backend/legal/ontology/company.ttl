@@ -1,0 +1,4 @@
+@prefix c: <http://example.com/company#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+c:Person a rdfs:Class . c:Employee a rdfs:Class ; rdfs:subClassOf c:Person . c:Developer a rdfs:Class ; rdfs:subClassOf c:Employee . c:Department a rdfs:Class . c:Project a rdfs:Class . c:Technology a rdfs:Class . c:Company a rdfs:Class .
+c:worksAt a rdfs:Property ; rdfs:domain c:Employee ; rdfs:range c:Department . c:worksOn a rdfs:Property ; rdfs:domain c:Employee ; rdfs:range c:Project . c:uses a rdfs:Property ; rdfs:domain c:Project ; rdfs:range c:Technology . c:customer a rdfs:Property ; rdfs:domain c:Project ; rdfs:range c:Company .

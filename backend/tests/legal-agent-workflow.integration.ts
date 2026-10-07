@@ -75,6 +75,15 @@ const precedentSource: LegalSource = {
   excerpt: "사건번호: 2013가합30895 법원명: 인천지방법원 선고일자: 2015-07-03 판결요지: 집단괴롭힘"
 };
 
+const graphSource: LegalSource = {
+  citationId: 'G1',
+  kind: 'graph',
+  corpus: 'graph',
+  recordId: 'graph:칼날',
+  title: '칼날 관련 법률 관계',
+  excerpt: '칼날 — 위해행위 관련 — 형법'
+};
+
 type StubRetrieval = {
   retrieval: LegalRetrievalService;
   calls: string[];
@@ -155,6 +164,7 @@ test('a simple legal question makes no planner call, no multi-agent call, and re
         assert.match(system, /판례는 기록에 적힌 사실관계와 판단 범위 안에서만 설명/);
         assert.match(system, /참조조문 표시는 해당 조문의 원문이나 공식 명칭을 입증하지 않습니다/);
         assert.match(system, /웹 기사는 보도된 사실·당사자 주장만 확인하는 자료입니다/);
+        assert.match(system, /현재 시행·효력 여부를 증명하지 않습니다/);
         assert.match(user, /LEGAL EVIDENCE/);
         assert.match(user, /민법/);
         return '「해석」조문은 손해배상액의 예정이 가능합니다 [L1]. 개정 표기가 있는 조항입니다.';
@@ -174,6 +184,7 @@ test('a simple legal question makes no planner call, no multi-agent call, and re
     assert.match(artifact.content, /## 답변/);
     assert.match(artifact.content, /\[L1\] 민법 제398조 \(배상액의 예정\)/);
     assert.match(artifact.content, /개정 표기 2010\.1\.22/);
+    assert.match(artifact.content, /개정·선고 날짜만 확인했으며, 현재 시행·효력 여부는 별도로 확인하지 않았습니다/);
     assert.match(artifact.content, /### 사용한 검색 계층/);
     assert.match(artifact.content, /- 벡터 유사도 검색: 사용하지 않음/);
     assert.match(artifact.content, /- 계획 모델 호출: 미사용 \(결정적 라우팅으로 직접 조회\)/);
@@ -194,6 +205,190 @@ test('a simple legal question makes no planner call, no multi-agent call, and re
     assert.deepEqual(metadata.citations.map(citation => citation.citationId), ['L1']);
     assert.equal(metadata.citations[0]!.recordId, 'law:민법#제398조');
   });
+});
+
+test('a direct search with thin legal evidence adds a graph search using the untouched request', async () => {
+  const originalPrompt = '  칼날로 다치면 어떤 법적 문제가 생기나요?  ';
+  const router = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 });
+  const decision = router.route({ prompt: originalPrompt });
+  const calls: Array<Array<{ kind: string; query?: string }>> = [];
+  const retrieval = {
+    retrieve: async (steps: Array<{ kind: string; query?: string }>) => {
+      calls.push(steps);
+      if (steps[0]?.kind === 'graph') {
+        return {
+          sources: [{ ...graphSource, citationId: 'G1' }],
+          status: STATUS,
+          degraded: ['vector'],
+          failures: [],
+          toolCalls: 1,
+          maxToolCalls: 12,
+          steps,
+          trace: [{ step: steps[0] as never, results: 1 }]
+        };
+      }
+      return {
+        sources: [{ ...lawSource, relevance: 0.5, termMatches: ['칼날'] }],
+        status: STATUS,
+        degraded: ['vector'],
+        failures: [],
+        toolCalls: 2,
+        maxToolCalls: 12,
+        steps,
+        trace: steps.map(step => ({ step: step as never, results: 1 }))
+      };
+    }
+  } as unknown as LegalRetrievalService;
+  const workflow = new LegalWorkflow({
+    retrieval,
+    model: { complete: async () => { throw new Error('retrieval must not invoke a model'); } },
+    limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
+  });
+
+  const evidence = await workflow.retrieve(decision, new AbortController().signal);
+  const status = workflow.executionStatus(evidence, decision);
+
+  assert.equal(calls.length, 2, 'a thin direct search should make one bounded graph enrichment call');
+  assert.equal(calls[1]![0]!.kind, 'graph');
+  assert.equal(calls[1]![0]!.query, originalPrompt);
+  assert.deepEqual(evidence.sources.map(source => source.citationId), ['L1', 'G1']);
+  assert.equal(evidence.toolCalls, 3);
+  assert.equal(status.ledger.layers.find(layer => layer.id === 'graph')?.state, 'used');
+});
+
+test('direct graph enrichment is skipped when enough legal evidence is already available', async () => {
+  const calls: Array<Array<{ kind: string }>> = [];
+  const retrieval = {
+    retrieve: async (steps: Array<{ kind: string }>) => {
+      calls.push(steps);
+      return {
+        sources: [lawSource, precedentSource],
+        status: STATUS,
+        degraded: ['vector'],
+        failures: [],
+        toolCalls: steps.length,
+        maxToolCalls: 12,
+        steps,
+        trace: steps.map(step => ({ step: step as never, results: 1 }))
+      };
+    }
+  } as unknown as LegalRetrievalService;
+  const workflow = new LegalWorkflow({
+    retrieval,
+    model: { complete: async () => { throw new Error('retrieval must not invoke a model'); } },
+    limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
+  });
+  const decision = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 }).route({ prompt: '칼날로 다치면 어떤 법적 문제가 생기나요?' });
+
+  const evidence = await workflow.retrieve(decision, new AbortController().signal);
+
+  assert.equal(calls.length, 1);
+  assert.equal(evidence.toolCalls, 2);
+  assert.equal(evidence.steps.some(step => step.kind === 'graph'), false);
+});
+
+test('graph relationships alone are not promoted when lexical retrieval found no legal record', async () => {
+  const calls: Array<Array<{ kind: string }>> = [];
+  const retrieval = {
+    retrieve: async (steps: Array<{ kind: string }>) => {
+      calls.push(steps);
+      return {
+        sources: [],
+        status: STATUS,
+        degraded: ['vector'],
+        failures: [],
+        toolCalls: steps.length,
+        maxToolCalls: 12,
+        steps,
+        trace: steps.map(step => ({ step: step as never, results: 0 }))
+      };
+    }
+  } as unknown as LegalRetrievalService;
+  const workflow = new LegalWorkflow({
+    retrieval,
+    model: { complete: async () => { throw new Error('retrieval must not invoke a model'); } },
+    limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
+  });
+  const decision = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 }).route({ prompt: '불분명한 법적 쟁점' });
+
+  const evidence = await workflow.retrieve(decision, new AbortController().signal);
+
+  assert.equal(calls.length, 1);
+  assert.equal(evidence.sources.length, 0);
+  assert.equal(evidence.steps.some(step => step.kind === 'graph'), false);
+});
+
+test('orchestrated retrieval stays within the planner-selected steps', async () => {
+  const calls: Array<Array<{ kind: string }>> = [];
+  const retrieval = {
+    retrieve: async (steps: Array<{ kind: string }>) => {
+      calls.push(steps);
+      return {
+        sources: [{ ...lawSource, relevance: 0.5, termMatches: ['위약금'] }],
+        status: STATUS,
+        degraded: ['vector'],
+        failures: [],
+        toolCalls: steps.length,
+        maxToolCalls: 12,
+        steps,
+        trace: steps.map(step => ({ step: step as never, results: 1 }))
+      };
+    }
+  } as unknown as LegalRetrievalService;
+  const workflow = new LegalWorkflow({
+    retrieval,
+    model: { complete: async () => { throw new Error('retrieval must not invoke a model'); } },
+    limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
+  });
+  const plan = {
+    title: '위약금 검토',
+    issue: '계약상 위약금',
+    retrievalSteps: [{ kind: 'search-laws' as const, query: '위약금', limit: 5 }],
+    draft: false,
+    needsWeb: false,
+    webQueries: []
+  };
+
+  const evidence = await workflow.retrieve(plan, new AbortController().signal);
+
+  assert.equal(calls.length, 1);
+  assert.equal(evidence.toolCalls, 1);
+  assert.equal(evidence.steps.some(step => step.kind === 'graph'), false);
+});
+
+test('an unavailable optional graph search preserves primary evidence and records the failure', async () => {
+  let calls = 0;
+  const retrieval = {
+    retrieve: async (steps: Array<{ kind: string; query?: string }>) => {
+      calls += 1;
+      if (steps[0]?.kind === 'graph') throw new Error('graph unavailable');
+      return {
+        sources: [{ ...lawSource, relevance: 0.5, termMatches: ['칼날'] }],
+        status: STATUS,
+        degraded: ['vector'],
+        failures: [],
+        toolCalls: steps.length,
+        maxToolCalls: 12,
+        steps,
+        trace: steps.map(step => ({ step: step as never, results: 1 }))
+      };
+    }
+  } as unknown as LegalRetrievalService;
+  const workflow = new LegalWorkflow({
+    retrieval,
+    model: { complete: async () => { throw new Error('retrieval must not invoke a model'); } },
+    limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
+  });
+  const decision = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 }).route({ prompt: '칼날로 다치면 어떤 법적 문제가 생기나요?' });
+
+  const evidence = await workflow.retrieve(decision, new AbortController().signal);
+
+  assert.equal(calls, 2);
+  assert.deepEqual(evidence.sources.map(source => source.citationId), ['L1']);
+  assert.equal(evidence.toolCalls, 3);
+  assert.equal(evidence.failures.at(-1)?.kind, 'tool-error');
+  assert.match(evidence.failures.at(-1)?.message ?? '', /graph unavailable/);
+  assert.equal(evidence.trace.at(-1)?.results, 0);
 });
 
 test('the answer citation list excludes retrieved records that the answer did not cite', async () => {
@@ -442,9 +637,8 @@ test('a direct answer that is repaired into a valid citation completes', async (
   });
 });
 
-test('a currentness claim without a dated record is rejected', async () => {
+test('a currentness claim with only an amendment date is rejected', async () => {
   await withWorkspace(async ({ tasks, files }) => {
-    const undated: LegalSource = { ...lawSource, date: undefined, statusMarkers: undefined };
     let answers = 0;
     const model: ModelProvider = {
       complete: async () => {
@@ -452,7 +646,7 @@ test('a currentness claim without a dated record is rejected', async () => {
         return '현재 시행 중인 조항입니다 [L1].';
       }
     };
-    const stub = stubRetrieval([undated]);
+    const stub = stubRetrieval([lawSource]);
     const { agent } = buildAgent({ tasks, files, model, retrieval: stub.retrieval });
     const task = tasks.createTask('민법 제398조가 정하는 손해배상 예정이 어떻게 되나요?');
     await agent.run(task.id);
@@ -527,6 +721,32 @@ test('an unavailable legal index surfaces an accurate failure state', async () =
     assert.match(String(stored?.error), /process exited/);
     assert.equal(tasks.artifacts(task.id).length, 0);
   });
+});
+
+test('failed retrieval with no evidence fails the task without publishing a diagnostic document', async () => {
+  await withWorkspace(async ({ tasks, files }) => {
+    const stub = stubRetrieval([], [{ step: '법령 검색: 질문 전문', kind: 'tool-error', message: 'query rejected' }]);
+    const model: ModelProvider = { complete: async () => { throw new Error('must not synthesize failed retrieval'); } };
+    const { agent } = buildAgent({ tasks, files, model, retrieval: stub.retrieval });
+    const task = tasks.createTask('요청 내용을 확인해 주세요.');
+    await agent.run(task.id);
+    assert.equal(tasks.getTask(task.id)?.status, 'failed');
+    assert.match(tasks.getTask(task.id)?.error ?? '', /query rejected/);
+    assert.equal(tasks.artifacts(task.id).length, 0);
+    assert.equal(tasks.events(task.id).some(event => event.type === 'legal.answer'), false);
+  });
+});
+
+test('document diagnostics summarize long queries without repeating the original narrative', async () => {
+  const prompt = '사용자 요청의 긴 사실관계 원문입니다. '.repeat(25);
+  const decision = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 }).route({ prompt });
+  const stub = stubRetrieval([]);
+  const workflow = new LegalWorkflow({ retrieval: stub.retrieval, model: { complete: async () => '' }, limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 } });
+  const evidence = await stub.retrieval.retrieve([{ kind: 'search-laws', query: prompt, limit: 5 }]);
+  const output = workflow.buildOutput({ decision, title: '검토 결과', answer: '확인할 근거가 부족합니다.', evidence, sources: [], documents: [], toolCalls: 1 });
+  assert.equal(output.markdown.includes(prompt), false);
+  assert.equal(output.answer.includes(prompt), false);
+  assert.equal(output.sourceStatus.ledger.tools[0]?.query, prompt, 'structured diagnostic data must retain the raw query');
 });
 
 test('a request that needs current public information also uses web search as an extra source', async () => {
@@ -731,4 +951,269 @@ test('citation handles stay stable and legal readiness is reported separately fr
   assert.equal(unknown.state, 'unknown');
   const sources = assignCitationIds([lawSource, precedentSource]);
   assert.deepEqual(sources.map(source => source.citationId), ['L1', 'P1']);
+});
+
+test('an orchestrated issue that returned nothing is re-searched with a narrower query', async () => {
+  const longQuery = '개인정보 유출 사고 통지 의무 과태료 형사처벌 요건 책임';
+  const plan = { title: 't', issue: 'i', retrievalSteps: [{ kind: 'search-laws', query: longQuery }], draft: false, needsWeb: false, webQueries: [] };
+  const calls: string[] = [];
+  const retrieval = {
+    retrieve: async (steps: Array<{ kind: string; query?: string }>) => {
+      calls.push(steps[0]!.query!);
+      const hit = steps[0]!.query !== longQuery;
+      return {
+        sources: hit ? [{ ...lawSource, citationId: 'L1' }] : [],
+        status: STATUS,
+        degraded: [],
+        failures: [],
+        toolCalls: 1,
+        maxToolCalls: 12,
+        steps,
+        trace: steps.map(step => ({ step: step as never, results: hit ? 1 : 0 }))
+      };
+    }
+  } as unknown as LegalRetrievalService;
+  const workflow = new LegalWorkflow({
+    retrieval,
+    model: { complete: async () => { throw new Error('retrieval must not invoke a model'); } },
+    limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
+  });
+  const evidence = await workflow.retrieve(plan as never, new AbortController().signal);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1], '개인정보 유출 사고 통지');
+  assert.deepEqual(evidence.sources.map(source => source.citationId), ['L1']);
+  assert.equal(evidence.toolCalls, 2);
+});
+
+test('a weak direct search is re-run once with statutory-term queries, and a failed rewrite changes nothing', async () => {
+  const router = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 });
+  const decision = router.route({ prompt: '회사에서 갑자기 잘렸어요 어떻게 하나요?' });
+  const calls: string[] = [];
+  const retrieval = {
+    retrieve: async (steps: StubStep[]) => {
+      calls.push(...steps.map(step => `${step.kind}:${step.query ?? ''}`));
+      const rewritten = steps.some(step => step.query === '근로기준법 해고 제한');
+      return {
+        sources: rewritten ? [{ ...lawSource, relevance: 1 }] : [{ ...lawSource, relevance: 0.2 }],
+        status: STATUS, degraded: [], failures: [], toolCalls: steps.length, maxToolCalls: 12, steps,
+        trace: steps.map(step => ({ step: step as never, results: 1 }))
+      };
+    }
+  } as unknown as LegalRetrievalService;
+  const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
+  const good = new LegalWorkflow({ queryRewrite: true, retrieval, model: { complete: async () => '```json\n{"queries":["근로기준법 해고 제한","회사에서 갑자기 잘렸어요 어떻게 하나요?"]}\n```' }, limits });
+  const evidence = await good.retrieve(decision, new AbortController().signal);
+  assert.ok(calls.includes('search-laws:근로기준법 해고 제한'), 'the rewritten query is searched');
+  assert.equal(calls.filter(call => call.includes('근로기준법 해고 제한')).length, 1);
+  assert.equal(evidence.toolCalls, calls.length);
+
+  calls.length = 0;
+  const broken = new LegalWorkflow({ queryRewrite: true, retrieval, model: { complete: async () => 'not json' }, limits });
+  const unchanged = await broken.retrieve(decision, new AbortController().signal);
+  assert.ok(unchanged.sources.length > 0);
+  assert.equal(calls.some(call => call.includes('근로기준법')), false);
+});
+
+test('query rewriting is off unless enabled, so direct lookups never call the model', async () => {
+  const router = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 });
+  const decision = router.route({ prompt: '회사에서 갑자기 잘렸어요 어떻게 하나요?' });
+  const stub = stubRetrieval([{ ...lawSource, relevance: 0.2 }]);
+  const workflow = new LegalWorkflow({
+    retrieval: stub.retrieval,
+    model: { complete: async () => { throw new Error('the model must not be called when rewriting is disabled'); } },
+    limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
+  });
+  await workflow.retrieve(decision, new AbortController().signal);
+  assert.equal(stub.calls.filter(kind => kind === 'search-laws').length, 1);
+});
+
+test('claim verification drops sentences their cited record does not support, and fails open when the check cannot run', async () => {
+  const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
+  const sources = [{ ...lawSource, citationId: 'L1', excerpt: '손해배상액의 예정이 부당히 과다한 경우 법원은 적당히 감액할 수 있다.' }];
+  const answer = '법원은 예정액을 감액할 수 있습니다 [L1].\n위약벌은 언제나 형사처벌 대상입니다 [L1].\n결론적으로 감액이 가능합니다 [L1].';
+  const retrieval = {} as unknown as LegalRetrievalService;
+  const signal = new AbortController().signal;
+  const prompts: string[] = [];
+
+  const judge = new LegalWorkflow({ claimVerification: true, retrieval, limits, model: { complete: async ({ user }) => { prompts.push(user); return '{"unsupported":[2]}'; } } });
+  const verified = await judge.verifyClaims(answer, sources, signal);
+  assert.equal(verified.removed, 1);
+  assert.equal(verified.checked, true);
+  assert.equal(verified.answer, '법원은 예정액을 감액할 수 있습니다 [L1].\n결론적으로 감액이 가능합니다 [L1].');
+  assert.match(prompts[0]!, /부당히 과다한 경우/, 'the cited record text is shown to the judge');
+
+  const broken = new LegalWorkflow({ claimVerification: true, retrieval, limits, model: { complete: async () => 'not json' } });
+  assert.deepEqual(await broken.verifyClaims(answer, sources, signal), { answer, removed: 0, checked: false });
+
+  const allFlagged = new LegalWorkflow({ claimVerification: true, retrieval, limits, model: { complete: async () => '{"unsupported":[1,2,3]}' } });
+  assert.equal((await allFlagged.verifyClaims(answer, sources, signal)).removed, 0, 'an answer is never emptied by the check');
+
+  const off = new LegalWorkflow({ retrieval, limits, model: { complete: async () => { throw new Error('model must not be called when verification is off'); } } });
+  assert.deepEqual(await off.verifyClaims(answer, sources, signal), { answer, removed: 0, checked: true });
+});
+
+test('rewrite also looks up proposed articles, and a proposed article that does not exist is discarded silently', async () => {
+  const router = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 });
+  const decision = router.route({ prompt: '회사에서 갑자기 잘렸어요 어떻게 하나요?' });
+  const steps: StubStep[] = [];
+  const retrieval = {
+    retrieve: async (requested: StubStep[]) => {
+      steps.push(...requested);
+      const article = requested.find(step => step.kind === 'law-article');
+      return {
+        sources: article ? [{ ...lawSource, lawName: '근로기준법', articleNumber: '제23조' }] : [],
+        status: STATUS, degraded: [],
+        failures: requested.filter(step => step.kind === 'law-article' && step.lawName === '없는법').map(step => ({ step: `${step.lawName}`, kind: 'not-found', message: '조문을 찾지 못했습니다.' })),
+        toolCalls: requested.length, maxToolCalls: 12, steps: requested,
+        trace: requested.map(step => ({ step: step as never, results: 0 }))
+      };
+    }
+  } as unknown as LegalRetrievalService;
+  const reply = '{"queries":["해고 제한"],"articles":[{"lawName":"근로기준법","articleNumber":"23"},{"lawName":"없는법","articleNumber":"제9조"},{"lawName":"","articleNumber":"제1조"},{"lawName":"민법","articleNumber":"abc"}]}';
+  const workflow = new LegalWorkflow({
+    queryRewrite: true, retrieval, model: { complete: async () => reply },
+    limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
+  });
+  const evidence = await workflow.retrieve(decision, new AbortController().signal);
+  const lookups = steps.filter(step => step.kind === 'law-article').map(step => `${step.lawName} ${step.articleNumber}`);
+  assert.deepEqual(lookups, ['근로기준법 제23조', '없는법 제9조'], 'a bare number is normalised; blank law names and malformed numbers never reach retrieval');
+  assert.equal(evidence.failures.some(failure => failure.kind === 'not-found'), false, 'the guessed missing article is not reported as a failure');
+  assert.ok(evidence.sources.some(source => source.lawName === '근로기준법'));
+});
+
+test('relevance filtering drops clearly unrelated law records, keeps the rest, and fails open', async () => {
+  const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
+  const record = (id: number, title: string): LegalSource => ({ ...lawSource, citationId: `L${id}`, recordId: `law:${id}`, title, articleLabel: `제${id}조`, excerpt: `${title} 본문` });
+  const sources = [record(1, '민법 불법행위'), record(2, '반도체집적회로의배치설계에관한법률'), record(3, '자동차손해배상보장법'), record(4, '식물신품종보호법')];
+  const retrieval = {} as unknown as LegalRetrievalService;
+  const signal = new AbortController().signal;
+  const prompts: string[] = [];
+
+  const filter = new LegalWorkflow({ relevanceFilter: true, retrieval, limits, model: { complete: async ({ user }) => { prompts.push(user); return '{"relevant":["L1","L3","L99"]}'; } } });
+  const result = await filter.selectRelevantSources('교통사고 손해배상', sources, signal, false);
+  assert.deepEqual(result.sources.map(source => source.citationId), ['L1', 'L3']);
+  assert.equal(result.dropped, 2);
+  assert.match(prompts[0]!, /교통사고 손해배상/);
+
+  assert.equal((await filter.selectRelevantSources('x', sources, signal, true)).dropped, 0, 'a user-named article is never second-guessed');
+  assert.equal((await filter.selectRelevantSources('x', sources.slice(0, 3), signal, false)).dropped, 0, 'small result sets are left alone');
+
+  const unsure = new LegalWorkflow({ relevanceFilter: true, retrieval, limits, model: { complete: async () => '{"relevant":[]}' } });
+  assert.equal((await unsure.selectRelevantSources('x', sources, signal, false)).dropped, 0, 'an empty answer never empties the list');
+  const broken = new LegalWorkflow({ relevanceFilter: true, retrieval, limits, model: { complete: async () => 'oops' } });
+  assert.equal((await broken.selectRelevantSources('x', sources, signal, false)).sources.length, 4);
+  const off = new LegalWorkflow({ retrieval, limits, model: { complete: async () => { throw new Error('model must not be called when the filter is off'); } } });
+  assert.equal((await off.selectRelevantSources('x', sources, signal, false)).dropped, 0);
+});
+
+test('wiki key-article hints are fetched from the corpus, deduplicated, and give the law its official link', async () => {
+  const router = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 });
+  const decision = router.route({ prompt: '회사에서 갑자기 해고당했어요 어떻게 하나요?' });
+  const fetched: string[] = [];
+  const retrieval = {
+    retrieve: async (requested: StubStep[]) => {
+      const articles = requested.filter(step => step.kind === 'law-article');
+      fetched.push(...articles.map(step => `${step.lawName} ${step.articleNumber}`));
+      return {
+        sources: articles.filter(step => step.articleNumber !== '제27조').map(step => ({ ...lawSource, lawName: step.lawName, articleNumber: step.articleNumber, recordId: `law:${step.articleNumber}` })),
+        status: STATUS, degraded: [],
+        failures: articles.filter(step => step.articleNumber === '제27조').map(step => ({ step: `${step.lawName}`, kind: 'not-found', message: '없음' })),
+        toolCalls: requested.length, maxToolCalls: 12, steps: requested,
+        trace: requested.map(step => ({ step: step as never, results: step.articleNumber === '제27조' ? 0 : 1 }))
+      };
+    }
+  } as unknown as LegalRetrievalService;
+  const wikiHints = {
+    find: async () => [
+      { lawName: '근로기준법', article: '제23조', title: '해고 등의 제한' },
+      { lawName: '근로기준법', article: '제26조', title: '해고의 예고' },
+      { lawName: '근로기준법', article: '제27조', title: '해고사유 등의 서면통지' }
+    ],
+    sourceUrlFor: async (lawName: string) => (lawName === '근로기준법' ? 'https://www.law.go.kr/법령/근로기준법' : undefined)
+  };
+  const workflow = new LegalWorkflow({
+    wikiHints, retrieval, model: { complete: async () => { throw new Error('wiki hints must not call the model'); } },
+    limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
+  });
+  const evidence = await workflow.retrieve(decision, new AbortController().signal);
+  assert.ok(fetched.includes('근로기준법 제23조') && fetched.includes('근로기준법 제26조'));
+  assert.equal(evidence.wikiHints, 2, 'only articles that exist in the corpus are counted');
+  assert.equal(evidence.failures.some(failure => failure.kind === 'not-found'), false);
+  const wikiSources = evidence.sources.filter(source => source.lawName === '근로기준법');
+  assert.ok(wikiSources.length >= 2 && wikiSources.every(source => source.officialUrl === 'https://www.law.go.kr/법령/근로기준법'));
+  const ledger = workflow.executionStatus(evidence, decision).ledger;
+  assert.equal(ledger.layers.find(layer => layer.id === 'wiki')?.state, 'used');
+  assert.equal(ledger.layers.find(layer => layer.id === 'okf')?.state, 'used');
+
+  const none = new LegalWorkflow({
+    wikiHints: { find: async () => [], sourceUrlFor: async () => undefined }, retrieval, model: { complete: async () => '' },
+    limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
+  });
+  const quiet = await none.retrieve(decision, new AbortController().signal);
+  assert.equal(quiet.wikiHints, 0);
+  assert.equal(none.executionStatus(quiet, decision).ledger.layers.find(layer => layer.id === 'wiki')?.state, 'ready');
+});
+
+test('the knowledge layers feed each other and every step shows up in the answer document', async () => {
+  const router = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 });
+  const decision = router.route({ prompt: '손해배상액의 예정이 너무 많으면 어떻게 되나요?' });
+  const graphEdge = (caseFile: string): LegalSource => ({
+    citationId: 'G1', kind: 'graph', corpus: 'graph', recordId: `graph:${caseFile}`, title: 'edge', excerpt: 'edge',
+    graphRelation: { sourceId: 'precedent:1', sourceLabel: '손해배상', sourceType: 'Precedent', relation: 'CITES_ARTICLE', targetId: 'law:001706:article:398', targetLabel: '법률 제398조', targetType: 'Article', sourcePath: `민사/대법원/${caseFile}`, targetPath: 'kr/민법/법률.md' }
+  });
+  const precedent = (caseNumber: string, excerpt: string): LegalSource => ({
+    citationId: 'P1', kind: 'precedent', corpus: 'precedent', recordId: `case:${caseNumber}`, title: '손해배상', caseNumber, court: '대법원', excerpt
+  });
+  const retrieval = {
+    retrieve: async (steps: StubStep[]) => {
+      const kind = steps[0]!.kind;
+      const sources = kind === 'graph'
+        ? [graphEdge('대법원_1993-04-23_92다41719.md'), graphEdge('대법원_1995-01-01_94다1.md')]
+        : kind === 'precedent'
+          ? steps.map(step => step.id === '92다41719'
+            ? precedent('92다41719', '참조조문 민법 제398조 제2항 … 손해배상 예정액의 감액')
+            : precedent(step.id!, '참조조문 없음, 다른 사건'))
+          : [lawSource];
+      return { sources, status: STATUS, degraded: [], failures: [], toolCalls: steps.length, maxToolCalls: 12, steps, trace: steps.map(step => ({ step: step as never, results: sources.length })) };
+    }
+  } as unknown as LegalRetrievalService;
+  const knowledgeChain = {
+    loadOntology: async () => (await import('../src/application/legal/legal-knowledge-chain.ts')).parseOntology(
+      'legal:Precedent a rdfs:Class ;\n rdfs:subClassOf legal:LegalDocument .\nlegal:Article a rdfs:Class ;\n rdfs:subClassOf legal:LegalDocument .\nlegal:citesArticle a rdf:Property ;\n rdfs:domain legal:LegalDocument ;\n rdfs:range legal:Article .\n'
+    ),
+    loadOkf: async () => new Map([
+      ['laws', { key: 'laws', type: 'Legal Corpus', title: 'Legal Corpus — Laws', resource: '../../data/legal/full' }],
+      ['precedents', { key: 'precedents', type: 'Legal Corpus', title: 'Legal Corpus — Precedents' }],
+      ['graph-index', { key: 'graph-index', type: 'Graph Index', title: 'Legal Relationship Graph' }]
+    ])
+  };
+  const workflow = new LegalWorkflow({
+    knowledgeChain, retrieval, model: { complete: async () => { throw new Error('the chain itself makes no model calls'); } },
+    limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
+  });
+  const retrieved = await workflow.retrieve(decision, new AbortController().signal);
+  assert.deepEqual(retrieved.chain?.map(stage => stage.id), ['rag'], 'retrieval alone does not walk the graph');
+  // In the agent the graph runs after the relevance check, on the records that survived it.
+  const evidence = await workflow.linkPrecedentsViaGraph(retrieved, new AbortController().signal);
+
+  const linked = evidence.sources.find(source => source.caseNumber === '92다41719');
+  assert.ok(linked, 'the precedent the graph found, and whose text cites the article, is added');
+  assert.equal(evidence.sources.some(source => source.caseNumber === '94다1'), false, 'a precedent whose text does not cite the article is dropped');
+  assert.equal(evidence.sources.some(source => source.corpus === 'graph'), false, 'graph edges are used for linking, not cited themselves');
+  assert.ok(linked.provenance?.some(route => route.includes('citesArticle') && route.includes('민법 제398조') && route.includes('온톨로지')));
+  assert.deepEqual(evidence.chain?.map(stage => stage.id), ['rag', 'graph', 'ontology']);
+
+  const answer = `손해배상 예정액이 과다하면 감액될 수 있습니다 [L1]. 대법원도 같은 취지입니다 [${linked.citationId}].`;
+  const output = workflow.buildOutput({
+    decision, answer, evidence, sources: evidence.sources, documents: [], title: '테스트', toolCalls: evidence.toolCalls,
+    agentStats: { filtered: 1, removedSentences: 0, checked: true }
+  });
+  assert.deepEqual(output.sourceStatus.chain?.map(stage => stage.id), ['rag', 'graph', 'ontology', 'okf', 'mcp', 'agent']);
+  assert.match(output.markdown, /## 근거 형성 과정/);
+  assert.match(output.markdown, /\*\*관계 그래프\*\* — 관련성 검토를 통과한 조문 1건에서 출발해 인용 관계 2건 발견 → 판례 원문으로 확인한 인용 1건 추가/);
+  assert.match(output.markdown, /\*\*에이전트 판단·검증\*\* — 직접 조회 경로 → 관련성 필터 제외 1건 → 의미 검증 제외 0문장 → 답변 인용 2건/);
+  assert.match(output.markdown, /경로: .*MCP search_laws.*OKF 카탈로그: Legal Corpus — Laws/);
+  const precedentCitation = output.citations.find(citation => citation.citationId === linked.citationId);
+  assert.ok(precedentCitation?.provenance?.some(route => route.startsWith('관계 그래프')), 'the citation carries its route for the UI');
+  assert.ok(precedentCitation?.provenance?.some(route => route.includes('Legal Corpus — Precedents')));
 });

@@ -32,6 +32,36 @@ const chromiumOptions = secureChromiumLaunchOptions('chrome.exe', 'http://127.0.
 assert.equal(chromiumOptions.proxy.bypass, '<-loopback>');
 assert.ok(chromiumOptions.args.includes('--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'));
 
+let renderedPdfOptions: Record<string, unknown> | undefined;
+const pdfPage = {
+  setContent: async () => undefined,
+  evaluate: async () => undefined,
+  title: async () => 'Korean legal report',
+  pdf: async (options: Record<string, unknown>) => {
+    renderedPdfOptions = options;
+    return Buffer.from('%PDF-1.4');
+  },
+};
+const pdfService = new BrowserUseService({
+  maxSessions: 1,
+  findExecutable: () => 'fake-browser',
+  proxy: { listen: async () => 'http://127.0.0.1:45678', close: async () => undefined } as never,
+  launch: async () => ({ newPage: async () => pdfPage, close: async () => undefined } as never),
+});
+await pdfService.renderPdf('<html><body><h1>Report</h1></body></html>');
+const pdfHeader = String(renderedPdfOptions?.headerTemplate);
+const pdfFooter = String(renderedPdfOptions?.footerTemplate);
+assert.match(pdfHeader, /font-family:Malgun Gothic,Arial,sans-serif;font-size:9px/);
+assert.match(pdfHeader, /<table style="width:calc\(100% - 36mm\);margin:0 18mm;border-collapse:collapse/);
+assert.match(pdfHeader, /<td style="width:50%;border-bottom:1px solid/);
+assert.match(pdfHeader, /padding:0 0 5px/);
+assert.match(pdfFooter, /<table style="width:calc\(100% - 36mm\);margin:0 18mm;border-collapse:collapse/);
+assert.match(pdfFooter, /<td style="width:50%;border-top:1px solid/);
+assert.match(pdfFooter, /<span class="pageNumber"><\/span> \/ <span class="totalPages"><\/span>/);
+assert.match(pdfFooter, /font-family:Malgun Gothic,Arial,sans-serif;font-size:9px/);
+assert.match(pdfFooter, /padding:5px 0 0/);
+await pdfService.closeAll();
+
 let screenshotCaptured = false;
 const screenshotPage = {
   context: () => ({}), route: async () => undefined, url: () => 'https://public.example/', title: async () => 'public',

@@ -12,8 +12,11 @@ import type {
   LegalSource,
 } from "../../domain/legal-source.js";
 import type { McpStdioClient } from "./mcp-stdio-client.js";
+import type { OfficialLawArticleReader } from "./official-law-article-reader.js";
+import { extractLawArticle } from "../../domain/legal-reference.js";
 import {
   graphIdentifiersFromRecords,
+  readArticleCitations,
   readGraphRelations,
   searchGraphRelations,
 } from "./legal-graph-reader.js";
@@ -138,7 +141,18 @@ export class LegalRetrievalService {
   constructor(
     private readonly client: McpStdioClient,
     private readonly limits: LegalRetrievalLimits,
+    private readonly officialArticles?: Pick<OfficialLawArticleReader, "read">,
   ) {}
+
+  /** Precedents that cite one article, read directly from the local graph database (read-only, no MCP call). */
+  articleCitations(lawName: string, articleNumber: string, limit = 20): LegalSource[] {
+    if (!this.limits.graphPath) return [];
+    try {
+      return assignCitationIds(readArticleCitations(this.limits.graphPath, lawName, articleNumber, limit));
+    } catch {
+      return [];
+    }
+  }
 
   async close(): Promise<void> {
     this.statusCache = undefined;
@@ -209,18 +223,23 @@ export class LegalRetrievalService {
     articleNumber: string,
     signal?: AbortSignal,
   ): Promise<NormalizedRecord[]> {
-    const { text } = await this.read(
-      "get_law_article",
-      {
-        law_name: sanitizeLegalQuery(lawName, 80),
-        article_number: sanitizeLegalQuery(articleNumber, 40),
-      },
-      signal,
-    );
-    const { header, body } = parseDocumentPayload(text);
-    return [
-      lawRecordFromDocument(body || text, header, { lawName, articleNumber }),
-    ];
+    try {
+      const { text } = await this.read(
+        "get_law_article",
+        { law_name: sanitizeLegalQuery(lawName, 80), article_number: sanitizeLegalQuery(articleNumber, 40) },
+        signal,
+      );
+      const { header, body } = parseDocumentPayload(text);
+      const record = lawRecordFromDocument(body || text, header);
+      const compact = (value: string): string => value.replace(/\s+/g, "");
+      if (compact(record.lawName ?? "") !== compact(lawName) || record.articleNumber !== compact(articleNumber)) {
+        throw new LegalRetrievalError("not-found", "로컬 원문이 요청한 법령·조문과 일치하지 않습니다.");
+      }
+      return [record];
+    } catch (error) {
+      if (!isLegalRetrievalError(error) || error.kind !== "not-found" || !this.officialArticles || signal?.aborted) throw error;
+      return this.officialArticles.read(lawName, articleNumber, signal);
+    }
   }
 
   async getPrecedent(
@@ -467,6 +486,10 @@ export class LegalRetrievalService {
     overrideArguments?: Record<string, unknown>,
     searchEvidence?: SearchEvidenceGroup,
   ): Promise<NormalizedRecord[]> {
+    if (tool === "search_laws" && !overrideArguments) {
+      const article = extractLawArticle(query);
+      if (article?.lawName) return this.getLawArticle(article.lawName, article.articleNumber, signal);
+    }
     const args: Record<string, unknown> = overrideArguments ?? {
       query: preserveLegalSearchQuery(query, this.limits.maxQueryCharacters),
       limit,

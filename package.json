@@ -8,6 +8,9 @@
     "start": "node dist/backend/server.js",
     "build": "tsc -p backend/tsconfig.build.json",
     "test": "npm run test:backend",
+    "test:legal": "python -m pytest -q backend/legal/tests",
+    "setup:legal": "tsx backend/src/cli/setup-legal-runtime.ts",
+    "legal:data": "tsx backend/legal/provision-data.ts",
     "typecheck": "tsc -p backend/tsconfig.json --noEmit",
     "backend": "tsx backend/src/server.ts",
     "searxng:up": "tsx backend/src/cli/searxng-container.ts up",
@@ -15,7 +18,8 @@
     "searxng:status": "tsx backend/src/cli/searxng-container.ts status",
     "auth:token": "tsx backend/src/cli/generate-api-token.ts",
     "check": "tsc -p backend/tsconfig.json --noEmit",
-    "test:backend": "tsx backend/tests/bootstrap.ts"
+    "test:backend": "tsx backend/tests/bootstrap.ts",
+    "eval:legal": "tsx scripts/legal-eval.ts"
   },
   "dependencies": {
     "diff": "^9.0.0",

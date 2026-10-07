@@ -1,17 +1,34 @@
 import type { ModelProvider } from '../../domain/model-provider.js';
-import { unavailable } from '../../shared/app-error.js';
+import { ModelProviderError } from './model-provider-error.js';
+import { TokenRateLimiter, estimateTokens } from './token-rate-limiter.js';
+
+/** Longest a request waits for the token window to free up before the next provider is used instead. */
+const MAX_RATE_LIMIT_WAIT_MS = 45_000;
 
 export class OpenAiProvider implements ModelProvider {
-  constructor(private readonly options: { apiKey?: string; model: string; baseUrl: string; maxInputCharacters?: number; maxOutputBytes?: number }) {
+  private readonly limiter?: TokenRateLimiter;
+
+  constructor(private readonly options: { apiKey?: string; model: string; baseUrl: string; maxInputCharacters?: number; maxOutputBytes?: number; maxAttempts?: number; tokensPerMinute?: number; now?: () => number }) {
+    if (options.tokensPerMinute !== undefined) this.limiter = new TokenRateLimiter(options.tokensPerMinute, options.now);
     if (options.maxInputCharacters !== undefined && (!Number.isSafeInteger(options.maxInputCharacters) || options.maxInputCharacters < 1)) throw new Error('maxInputCharacters must be a positive integer');
     if (options.maxOutputBytes !== undefined && (!Number.isSafeInteger(options.maxOutputBytes) || options.maxOutputBytes < 1)) throw new Error('maxOutputBytes must be a positive integer');
+    if (options.maxAttempts !== undefined && (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 1 || options.maxAttempts > 3)) throw new Error('maxAttempts must be an integer from 1 to 3');
   }
-  async complete(input: { system: string; user: string; signal?: AbortSignal }): Promise<string> {
+  async complete(input: { system: string; user: string; signal?: AbortSignal; expectedOutputTokens?: number }): Promise<string> {
     const maxInputCharacters = this.options.maxInputCharacters ?? 200_000;
-    if (input.system.length + input.user.length > maxInputCharacters) throw new Error(`model input exceeds the configured limit of ${maxInputCharacters} characters`);
-    if (!this.options.apiKey) throw unavailable('모델 제공자 API 키가 설정되지 않았습니다. OPENAI_API_KEY를 확인하세요.');
+    if (input.system.length + input.user.length > maxInputCharacters) throw new ModelProviderError(`model input exceeds the configured limit of ${maxInputCharacters} characters`, true);
+    if (!this.options.apiKey) throw new ModelProviderError('모델 제공자 API 키가 설정되지 않았습니다.');
+    let reservation: { tokens: number } | undefined;
+    if (this.limiter) {
+      const tokens = estimateTokens(input.system.length + input.user.length, input.expectedOutputTokens);
+      const wait = this.limiter.waitMs(tokens);
+      if (wait > MAX_RATE_LIMIT_WAIT_MS) throw new ModelProviderError('provider token rate window is full; using the next provider.', true);
+      if (wait > 0) await this.delay(0, input.signal, wait);
+      reservation = this.limiter.record(tokens);
+    }
     const endpoint = `${this.options.baseUrl.replace(/\/+$/, '')}/chat/completions`;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    const maxAttempts = this.options.maxAttempts ?? 3;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       let response: Response;
       try {
         response = await fetch(endpoint, {
@@ -22,8 +39,8 @@ export class OpenAiProvider implements ModelProvider {
         });
       } catch (error) {
         if (input.signal?.aborted) throw new Error('model request cancelled');
-        if (attempt < 2 && (error instanceof TypeError || (error instanceof Error && error.name === 'TimeoutError'))) { await this.delay(attempt, input.signal); continue; }
-        throw unavailable('model provider request failed or timed out. 모델 제공자 연결을 확인하세요.');
+        if (attempt < maxAttempts - 1 && (error instanceof TypeError || (error instanceof Error && error.name === 'TimeoutError'))) { await this.delay(attempt, input.signal); continue; }
+        throw new ModelProviderError('model provider request failed or timed out. 모델 제공자 연결을 확인하세요.');
       }
       if (!response.ok) {
         let failure: { error?: { code?: unknown; type?: unknown } } = {};
@@ -34,30 +51,32 @@ export class OpenAiProvider implements ModelProvider {
         catch { /* Never forward arbitrary provider error bodies. */ }
         if (input.signal?.aborted) throw new Error('model request cancelled');
         if (failure.error?.type === 'insufficient_quota' || ['credit_balance_exhausted', 'insufficient_quota', 'billing_not_active'].includes(String(failure.error?.code))) {
-          throw unavailable('모델 API 크레딧이 소진되었습니다. 설정된 모델 제공자 계정의 잔액·한도를 확인하세요.');
+          throw new ModelProviderError('모델 API 크레딧이 소진되었습니다. 설정된 모델 제공자 계정의 잔액·한도를 확인하세요.', false, true);
         }
-        if (attempt < 2 && [408, 429, 500, 502, 503, 504].includes(response.status)) {
+        if (attempt < maxAttempts - 1 && [408, 429, 500, 502, 503, 504].includes(response.status)) {
           const retryAfter = Number(response.headers.get('retry-after'));
           await this.delay(attempt, input.signal, Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 5_000) : undefined);
           continue;
         }
         const hint = response.status === 401 || response.status === 403 ? '모델 제공자의 API 키와 접근 권한을 확인하세요.' : response.status === 404 ? 'OPENAI_MODEL과 모델 접근 권한을 확인하세요.' : response.status === 429 ? '모델 제공자의 요청 한도에 도달했습니다. 잠시 후 다시 시도하세요.' : '모델 제공자의 응답 상태를 확인하세요.';
-        throw unavailable(`model provider returned HTTP ${response.status}. ${hint}`);
+        const fallbackEligible = ![400, 401, 403, 413, 422].includes(response.status);
+        throw new ModelProviderError(`model provider returned HTTP ${response.status}. ${hint}`, fallbackEligible, [401, 403].includes(response.status));
       }
-      let payload: { choices?: Array<{ message?: { content?: string | null } }> };
+      let payload: { choices?: Array<{ message?: { content?: string | null } }>; usage?: { total_tokens?: number } };
       try {
         const body = await this.readBounded(response, input.signal);
         payload = JSON.parse(body) as typeof payload;
       }
       catch (error) {
         if (error instanceof Error && ['provider response exceeded configured size limit', 'model request cancelled'].includes(error.message)) throw error;
-        throw new Error('model provider returned invalid JSON');
+        throw new ModelProviderError('model provider returned invalid JSON');
       }
+      if (reservation && this.limiter && typeof payload?.usage?.total_tokens === 'number') this.limiter.settle(reservation, payload.usage.total_tokens);
       const content = payload?.choices?.[0]?.message?.content;
-      if (typeof content !== 'string' || !content.trim()) throw new Error('model provider returned an empty completion');
+      if (typeof content !== 'string' || !content.trim()) throw new ModelProviderError('model provider returned an empty completion');
       return content;
     }
-    throw new Error('model provider retry limit exceeded');
+    throw new ModelProviderError('model provider retry limit exceeded');
   }
   private async readBounded(response: Response, signal?: AbortSignal, limit?: number): Promise<string> {
     const maxBytes = Math.min(limit ?? Number.MAX_SAFE_INTEGER, this.options.maxOutputBytes ?? 2 * 1024 * 1024);

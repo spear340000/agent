@@ -1,0 +1,988 @@
+{
+  "nodes": [
+    {
+      "id": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "label": "민법 핵심 조문 검색집",
+      "type": "Law",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/wiki%5Ccivil-law-core.md-67c50b3dc4",
+      "label": "civil-law-core.md",
+      "type": "Source",
+      "value": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2FLSW%2FlsInfoP.do%3FlsId%3D001692-d347d82dee",
+      "label": "lsInfoP.do?lsId=001692",
+      "type": "Source",
+      "value": "https://www.law.go.kr/LSW/lsInfoP.do?lsId=001692"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C1%EC-69af192aee",
+      "label": "제1조 법원",
+      "type": "Article",
+      "text": "민사에 관하여 법률에 규정이 없으면 관습법, 관습법이 없으면 조리에 따른다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C2%EC-ef09987a62",
+      "label": "제2조 신의성실",
+      "type": "Article",
+      "text": "권리의 행사와 의무의 이행은 신의에 좇아 성실히 하여야 하며, 권리는 남용하지 못한다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C3%EC-e778e9ea24",
+      "label": "제3조 권리능력",
+      "type": "Article",
+      "text": "사람은 생존한 동안 권리와 의무의 주체가 된다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C103%-3df4197f94",
+      "label": "제103조 반사회질서 법률행위",
+      "type": "Article",
+      "text": "선량한 풍속이나 그 밖의 사회질서에 위반한 사항을 내용으로 하는 법률행위는 무효이다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C104%-f9d461cc90",
+      "label": "제104조 불공정한 법률행위",
+      "type": "Article",
+      "text": "궁박, 경솔 또는 무경험으로 현저하게 공정을 잃은 법률행위는 무효이다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C110%-ff6db17f12",
+      "label": "제110조 사기·강박에 의한 의사표시",
+      "type": "Article",
+      "text": "사기나 강박에 의한 의사표시는 취소할 수 있다. 채권·계약",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C390%-25da65ad22",
+      "label": "제390조 채무불이행과 손해배상",
+      "type": "Article",
+      "text": "채무자가 채무의 내용에 좇은 이행을 하지 아니한 때에는 손해를 배상하여야 한다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C393%-9b32ef11dc",
+      "label": "제393조 손해배상의 범위",
+      "type": "Article",
+      "text": "통상의 손해를 그 한도로 하며, 특별한 사정으로 인한 손해는 채무자가 그 사정을 알았거나 알 수 있었을 때 배상한다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C398%-288b596d7e",
+      "label": "제398조 손해배상액의 예정",
+      "type": "Article",
+      "text": "당사자는 채무불이행에 관한 손해배상액을 예정할 수 있고, 부당하게 과다한 경우 법원이 감액할 수 있다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C544%-1728316bd2",
+      "label": "제544조 이행지체와 해제",
+      "type": "Article",
+      "text": "당사자 일방이 채무를 이행하지 아니하면 상대방은 상당한 기간을 정하여 이행을 최고하고 계약을 해제할 수 있다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C750%-d9a84cc7e5",
+      "label": "제750조 불법행위",
+      "type": "Article",
+      "text": "고의 또는 과실로 인한 위법행위로 타인에게 손해를 가한 자는 손해를 배상할 책임이 있다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C751%-45fb231a39",
+      "label": "제751조 정신상 손해",
+      "type": "Article",
+      "text": "타인의 신체, 자유 또는 명예를 해하거나 그 밖의 정신상 고통을 가한 자는 재산 외 손해도 배상할 책임이 있다. 물권·상속",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C186%-2070319341",
+      "label": "제186조 부동산 물권변동",
+      "type": "Article",
+      "text": "부동산에 관한 법률행위로 인한 물권의 득실변경은 등기하여야 효력이 생긴다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C211%-dbb8532ea6",
+      "label": "제211조 소유권",
+      "type": "Article",
+      "text": "소유자는 법률의 범위 내에서 그 소유물을 사용·수익·처분할 권리가 있다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C1005-739d8e86e5",
+      "label": "제1005조 상속의 일반적 효력",
+      "type": "Article",
+      "text": "상속인은 상속 개시된 때부터 피상속인의 재산에 관한 포괄적 권리·의무를 승계한다. ※ 요약 corpus이며 법률 자문이나 최신 조문 전문이 아니다. 적용 전 국가법령정보센터 원문과 시행일을 확인한다.",
+      "wiki": "wiki\\civil-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-5f9d71fc3e",
+      "label": "민법",
+      "type": "Law",
+      "wiki": "wiki\\civil-law.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/wiki%5Ccivil-law.md-3792b3cb3e",
+      "label": "civil-law.md",
+      "type": "Source",
+      "value": "wiki\\civil-law.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2FLSW%2FlsLinkProc.do%3FlsId%3D001706%26lsNm%3D%25EB%25AF%25BC%25EB%25B2-1b3a4ad1bd",
+      "label": "lsLinkProc.do?lsId=001706&lsNm=%EB%AF%BC%EB%B2%95",
+      "type": "Source",
+      "value": "https://www.law.go.kr/LSW/lsLinkProc.do?lsId=001706&lsNm=%EB%AF%BC%EB%B2%95"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95%3A%EC%A0%9C750%EC%A1%B0-c55626f47c",
+      "label": "제750조 불법행위의 내용",
+      "type": "Article",
+      "text": "고의 또는 과실로 인한 위법행위로 타인에게 손해를 가한 자는 그 손해를 배상할 책임이 있다.",
+      "wiki": "wiki\\civil-law.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/law/%EB%8C%80%ED%95%9C%EB%AF%BC%EA%B5%AD%ED%97%8C%EB%B2%95-0e6bc19e6b",
+      "label": "대한민국헌법",
+      "type": "Law",
+      "wiki": "wiki\\constitution.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/wiki%5Cconstitution.md-d0aa89b9c2",
+      "label": "constitution.md",
+      "type": "Source",
+      "value": "wiki\\constitution.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2FlsInfoP.do%3FlsId%3D001444-9a94a0b64a",
+      "label": "lsInfoP.do?lsId=001444",
+      "type": "Source",
+      "value": "https://www.law.go.kr/lsInfoP.do?lsId=001444"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "label": "형법 핵심 조문 검색집",
+      "type": "Law",
+      "wiki": "wiki\\criminal-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/wiki%5Ccriminal-law-core.md-0121ab7794",
+      "label": "criminal-law-core.md",
+      "type": "Source",
+      "value": "wiki\\criminal-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2F%EB%B2%95%EB%A0%B9%2F%ED%98%95%EB%B2%95-2fcd99d3f1",
+      "label": "형법",
+      "type": "Source",
+      "value": "https://www.law.go.kr/법령/형법"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C1%EC-ee6bc1f09a",
+      "label": "제1조 범죄의 성립과 처벌",
+      "type": "Article",
+      "text": "행위시의 법률에 의하며, 범죄 후 법률 변경으로 형이 가벼워진 때에는 신법을 적용한다.",
+      "wiki": "wiki\\criminal-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C13%E-073cf0aefc",
+      "label": "제13조 범의",
+      "type": "Article",
+      "text": "죄의 성립요소인 사실을 인식하지 못한 행위는 원칙적으로 벌하지 아니한다.",
+      "wiki": "wiki\\criminal-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C14%E-37c9cd5e59",
+      "label": "제14조 과실",
+      "type": "Article",
+      "text": "정상의 주의를 태만함으로 인하여 죄의 성립요소인 사실을 인식하지 못한 행위는 법률에 특별한 규정이 있는 경우에만 처벌한다.",
+      "wiki": "wiki\\criminal-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C20%E-eeaf7f11bc",
+      "label": "제20조 정당행위",
+      "type": "Article",
+      "text": "법령에 의한 행위 또는 업무로 인한 행위, 그 밖에 사회상규에 위배되지 아니하는 행위는 벌하지 아니한다.",
+      "wiki": "wiki\\criminal-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C21%E-cd5b505d6a",
+      "label": "제21조 정당방위",
+      "type": "Article",
+      "text": "자기 또는 타인의 법익에 대한 현재의 부당한 침해를 방위하기 위한 상당한 이유 있는 행위는 벌하지 아니한다.",
+      "wiki": "wiki\\criminal-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C250%-a15911d97f",
+      "label": "제250조 살인",
+      "type": "Article",
+      "text": "사람을 살해한 자는 사형, 무기 또는 5년 이상의 징역에 처한다.",
+      "wiki": "wiki\\criminal-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/offense/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C250%-541619fcb4",
+      "label": "살인",
+      "type": "Offense"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/penalty/%EC%82%AC%ED%98%95-52f868e3fd",
+      "label": "사형",
+      "type": "Penalty"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/penalty/%EB%AC%B4%EA%B8%B0-6d9489eaa1",
+      "label": "무기",
+      "type": "Penalty"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/penalty/5%EB%85%84-%EC%9D%B4%EC%83%81%EC%9D%98-%EC%A7%95%EC%97%AD-d6ddaf5583",
+      "label": "5년 이상의 징역",
+      "type": "Penalty"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C329%-1d9719ee6c",
+      "label": "제329조 절도",
+      "type": "Article",
+      "text": "타인의 재물을 절취한 자는 6년 이하의 징역 또는 1천만원 이하의 벌금에 처한다.",
+      "wiki": "wiki\\criminal-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/offense/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C329%-04fd9c98a8",
+      "label": "절도",
+      "type": "Offense"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/penalty/6%EB%85%84-%EC%9D%B4%ED%95%98%EC%9D%98-%EC%A7%95%EC%97%AD-31d5503838",
+      "label": "6년 이하의 징역",
+      "type": "Penalty"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/penalty/1%EC%B2%9C%EB%A7%8C%EC%9B%90-%EC%9D%B4%ED%95%98%EC%9D%98-%EB%B2%8C%EA%B8%88-95db53551d",
+      "label": "1천만원 이하의 벌금",
+      "type": "Penalty"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C347%-1c9bd26126",
+      "label": "제347조 사기",
+      "type": "Article",
+      "text": "사람을 기망하여 재물의 교부를 받거나 재산상 이익을 취득한 자는 처벌된다.",
+      "wiki": "wiki\\criminal-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C355%-7c250945db",
+      "label": "제355조 횡령·배임",
+      "type": "Article",
+      "text": "타인의 재물을 보관하는 자가 횡령하거나 반환을 거부한 경우, 또는 타인의 사무를 처리하는 자가 임무에 위배하여 이익을 취득하게 하고 손해를 가한 경우를 처벌한다.",
+      "wiki": "wiki\\criminal-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C283%-e2fbd6838e",
+      "label": "제283조 협박",
+      "type": "Article",
+      "text": "사람을 협박한 자를 처벌하며, 존속에 대한 협박은 별도로 가중될 수 있다. ※ 형사 사건은 사실관계와 판례에 따라 결론이 달라지며, 이 문서는 검색용 요약이다.",
+      "wiki": "wiki\\criminal-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-e9f885b01d",
+      "label": "형법",
+      "type": "Law",
+      "wiki": "wiki\\criminal-law.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/wiki%5Ccriminal-law.md-1b5c63f7f3",
+      "label": "criminal-law.md",
+      "type": "Source",
+      "value": "wiki\\criminal-law.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2FlsLinkCommonInfo.do%3FchrClsCd%3D010202%26lsJoLnkSeq%3D1032387065-733abe484b",
+      "label": "lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1032387065",
+      "type": "Source",
+      "value": "https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1032387065"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95%3A%EC%A0%9C250%EC%A1%B0-e50f152530",
+      "label": "제250조 살인, 존속살해",
+      "type": "Article",
+      "text": "사람을 살해한 자는 사형, 무기 또는 5년 이상의 징역에 처한다.",
+      "wiki": "wiki\\criminal-law.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/offense/%ED%98%95%EB%B2%95%3A%EC%A0%9C250%EC%A1%B0-f530fd62e7",
+      "label": "살인, 존속살해",
+      "type": "Offense"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "label": "근로기준법 핵심 조문 검색집",
+      "type": "Law",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/wiki%5Clabor-law-core.md-c6b86b11e5",
+      "label": "labor-law-core.md",
+      "type": "Source",
+      "value": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2F%EB%B2%95%EB%A0%B9%2F%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-1c5048f6ff",
+      "label": "근로기준법",
+      "type": "Source",
+      "value": "https://www.law.go.kr/법령/근로기준법"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-c78b73aaba",
+      "label": "제6조 균등한 처우",
+      "type": "Article",
+      "text": "사용자는 근로자에 대하여 국적, 신앙 또는 사회적 신분을 이유로 근로조건에 대한 차별적 처우를 하지 못한다.",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-7e368f590b",
+      "label": "제15조 법 기준 미달 근로조건",
+      "type": "Article",
+      "text": "이 법에서 정하는 기준에 미치지 못하는 근로조건을 정한 근로계약은 그 부분에 한정하여 무효이다.",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-416565e433",
+      "label": "제17조 근로조건의 명시",
+      "type": "Article",
+      "text": "사용자는 임금, 소정근로시간, 휴일, 연차 유급휴가 등 근로조건을 명시하여야 한다.",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-3949715e9f",
+      "label": "제23조 해고 등의 제한",
+      "type": "Article",
+      "text": "정당한 이유 없이 해고, 휴직, 정직, 전직, 감봉, 그 밖의 징벌을 하지 못한다.",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-3a3f991afe",
+      "label": "제26조 해고의 예고",
+      "type": "Article",
+      "text": "사용자는 근로자를 해고하려면 원칙적으로 30일 전에 예고하거나 30일분 이상의 통상임금을 지급하여야 한다.",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-62de96ef70",
+      "label": "제27조 해고사유 등의 서면통지",
+      "type": "Article",
+      "text": "해고사유와 해고시기를 서면으로 통지하여야 한다.",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-1c98d14192",
+      "label": "제36조 금품 청산",
+      "type": "Article",
+      "text": "근로자가 퇴직한 경우 지급사유가 발생한 때부터 14일 이내에 임금, 보상금, 그 밖의 금품을 지급하여야 한다.",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-3c0f7939b1",
+      "label": "제43조 임금 지급",
+      "type": "Article",
+      "text": "임금은 통화로 직접 근로자에게 전액을 지급하는 것이 원칙이며, 매월 1회 이상 일정한 날짜를 정하여 지급한다.",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-74d7e85d05",
+      "label": "제50조 근로시간",
+      "type": "Article",
+      "text": "1주간의 근로시간은 휴게시간을 제외하고 40시간을 초과할 수 없다.",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-94da1788d2",
+      "label": "제54조 휴게",
+      "type": "Article",
+      "text": "근로시간이 4시간인 경우 30분 이상, 8시간인 경우 1시간 이상의 휴게시간을 근로시간 도중에 주어야 한다.",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-b5f7b719ab",
+      "label": "제60조 연차 유급휴가",
+      "type": "Article",
+      "text": "일정 요건을 충족한 근로자에게 유급휴가를 부여한다.",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-ae1b57e1d9",
+      "label": "제76조의2 직장 내 괴롭힘 금지",
+      "type": "Article",
+      "text": "사용자 또는 근로자는 지위·관계의 우위를 이용하여 업무상 적정범위를 넘어 신체적·정신적 고통을 주거나 근무환경을 악화시키는 행위를 하여서는 안 된다. ※ 요약 corpus이며 사업장 규모, 예외, 시행일에 따라 적용이 달라질 수 있다.",
+      "wiki": "wiki\\labor-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-c80aee3b91",
+      "label": "근로기준법",
+      "type": "Law",
+      "wiki": "wiki\\labor-standards-act.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/wiki%5Clabor-standards-act.md-d055542a51",
+      "label": "labor-standards-act.md",
+      "type": "Source",
+      "value": "wiki\\labor-standards-act.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2FlsLinkCommonInfo.do%3FchrClsCd%3D010202%26lsJoLnkSeq%3D1025589739-a3d5f89a6a",
+      "label": "lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1025589739",
+      "type": "Source",
+      "value": "https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1025589739"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95%3A%EC%A0%9C23%EC%A1%B0-dcc2eaf21f",
+      "label": "제23조 해고 등의 제한",
+      "type": "Article",
+      "text": "사용자는 근로자에게 정당한 이유 없이 해고, 휴직, 정직, 전직, 감봉, 그 밖의 징벌을 하지 못한다.",
+      "wiki": "wiki\\labor-standards-act.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-b6d2716ba8",
+      "label": "개인정보 보호법",
+      "type": "Law",
+      "wiki": "wiki\\personal-information-protection-act.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/wiki%5Cpersonal-information-protection-act.md-6fec567091",
+      "label": "personal-information-protection-act.md",
+      "type": "Source",
+      "value": "wiki\\personal-information-protection-act.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2FlsLinkCommonInfo.do%3FchrClsCd%3D010202%26lsJoLnkSeq%3D1029335387-edf3e51f45",
+      "label": "lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1029335387",
+      "type": "Source",
+      "value": "https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1029335387"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95%3A%EC%A0%9C15%EC%A1%B0-d451ddf210",
+      "label": "제15조 개인정보의 수집ㆍ이용",
+      "type": "Article",
+      "text": "개인정보처리자는 정보주체의 동의를 받은 경우, 법률상 의무 준수에 불가피한 경우, 계약 이행에 필요한 경우 등 법에서 정한 경우 개인정보를 수집할 수 있으며 그 수집 목적의 범위에서 이용할 수 있다.",
+      "wiki": "wiki\\personal-information-protection-act.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "label": "개인정보 보호법 핵심 조문 검색집",
+      "type": "Law",
+      "wiki": "wiki\\privacy-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/wiki%5Cprivacy-law-core.md-abbe283b2a",
+      "label": "privacy-law-core.md",
+      "type": "Source",
+      "value": "wiki\\privacy-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2F%EB%B2%95%EB%A0%B9%2F%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EB%B3%B4%ED%-94a2b95e32",
+      "label": "개인정보보호법",
+      "type": "Source",
+      "value": "https://www.law.go.kr/법령/개인정보보호법"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-2424eb725d",
+      "label": "제3조 개인정보 보호 원칙",
+      "type": "Article",
+      "text": "개인정보의 처리 목적을 명확히 하고 필요한 최소한의 개인정보만 적법하고 정당하게 수집한다.",
+      "wiki": "wiki\\privacy-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-b14ac4bc5e",
+      "label": "제15조 수집·이용",
+      "type": "Article",
+      "text": "정보주체 동의, 법률상 의무, 계약 이행, 급박한 생명·신체·재산 이익 등 법에서 정한 경우 개인정보를 수집·이용할 수 있다.",
+      "wiki": "wiki\\privacy-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-a391ba4eda",
+      "label": "제17조 제공",
+      "type": "Article",
+      "text": "개인정보를 제3자에게 제공할 때에는 원칙적으로 정보주체의 동의를 받거나 법률상 근거가 있어야 한다.",
+      "wiki": "wiki\\privacy-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-a875b2c8b4",
+      "label": "제18조 목적 외 이용·제공 제한",
+      "type": "Article",
+      "text": "개인정보를 수집 목적의 범위를 초과하여 이용하거나 제3자에게 제공해서는 안 된다. 법정 예외가 있다.",
+      "wiki": "wiki\\privacy-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-8a3b64edb1",
+      "label": "제21조 파기",
+      "type": "Article",
+      "text": "보유기간의 경과 또는 처리 목적 달성 등 개인정보가 불필요하게 된 때에는 지체 없이 파기한다.",
+      "wiki": "wiki\\privacy-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-89f49feffc",
+      "label": "제23조 민감정보",
+      "type": "Article",
+      "text": "사상·신념, 노동조합·정당 가입·탈퇴, 정치적 견해, 건강, 성생활 등에 관한 정보는 별도 제한을 받는다.",
+      "wiki": "wiki\\privacy-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-254646cf3a",
+      "label": "제24조 고유식별정보",
+      "type": "Article",
+      "text": "주민등록번호 등 고유식별정보의 처리는 별도 법적 요건과 안전조치가 필요하다.",
+      "wiki": "wiki\\privacy-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-e106638531",
+      "label": "제29조 안전조치",
+      "type": "Article",
+      "text": "개인정보가 분실·도난·유출·위조·변조 또는 훼손되지 않도록 내부관리계획, 접속기록 보관 등 안전성 확보 조치를 하여야 한다.",
+      "wiki": "wiki\\privacy-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-8e2330f5be",
+      "label": "제35조 열람 요구",
+      "type": "Article",
+      "text": "정보주체는 자신의 개인정보에 대한 열람을 요구할 수 있다.",
+      "wiki": "wiki\\privacy-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-1d88916904",
+      "label": "제36조 정정·삭제 요구",
+      "type": "Article",
+      "text": "정보주체는 개인정보의 정정 또는 삭제를 요구할 수 있다.",
+      "wiki": "wiki\\privacy-law-core.md"
+    },
+    {
+      "id": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-69b77e0ce4",
+      "label": "제37조 처리정지 요구",
+      "type": "Article",
+      "text": "정보주체는 개인정보 처리의 정지를 요구할 수 있다. 법률상 예외가 있다. ※ 요약 corpus이며 개인정보 처리의 법적 근거·보유기간·위탁 여부를 실제 업무별로 확인해야 한다.",
+      "wiki": "wiki\\privacy-law-core.md"
+    }
+  ],
+  "edges": [
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/source/wiki%5Ccivil-law-core.md-67c50b3dc4",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2FLSW%2FlsInfoP.do%3FlsId%3D001692-d347d82dee",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C1%EC-69af192aee",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C2%EC-ef09987a62",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C3%EC-e778e9ea24",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C103%-3df4197f94",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C104%-f9d461cc90",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C110%-ff6db17f12",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C390%-25da65ad22",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C393%-9b32ef11dc",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C398%-288b596d7e",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C544%-1728316bd2",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C750%-d9a84cc7e5",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C751%-45fb231a39",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C186%-2070319341",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C211%-dbb8532ea6",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-e0b59a5e80",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C1005-739d8e86e5",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-5f9d71fc3e",
+      "target": "https://knowledge-rag.local/legal/source/wiki%5Ccivil-law.md-3792b3cb3e",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-5f9d71fc3e",
+      "target": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2FLSW%2FlsLinkProc.do%3FlsId%3D001706%26lsNm%3D%25EB%25AF%25BC%25EB%25B2-1b3a4ad1bd",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%AF%BC%EB%B2%95-5f9d71fc3e",
+      "target": "https://knowledge-rag.local/legal/article/%EB%AF%BC%EB%B2%95%3A%EC%A0%9C750%EC%A1%B0-c55626f47c",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%8C%80%ED%95%9C%EB%AF%BC%EA%B5%AD%ED%97%8C%EB%B2%95-0e6bc19e6b",
+      "target": "https://knowledge-rag.local/legal/source/wiki%5Cconstitution.md-d0aa89b9c2",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EB%8C%80%ED%95%9C%EB%AF%BC%EA%B5%AD%ED%97%8C%EB%B2%95-0e6bc19e6b",
+      "target": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2FlsInfoP.do%3FlsId%3D001444-9a94a0b64a",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "target": "https://knowledge-rag.local/legal/source/wiki%5Ccriminal-law-core.md-0121ab7794",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "target": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2F%EB%B2%95%EB%A0%B9%2F%ED%98%95%EB%B2%95-2fcd99d3f1",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "target": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C1%EC-ee6bc1f09a",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "target": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C13%E-073cf0aefc",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "target": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C14%E-37c9cd5e59",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "target": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C20%E-eeaf7f11bc",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "target": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C21%E-cd5b505d6a",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "target": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C250%-a15911d97f",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C250%-a15911d97f",
+      "target": "https://knowledge-rag.local/legal/offense/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C250%-541619fcb4",
+      "relation": "definesOffense"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C250%-a15911d97f",
+      "target": "https://knowledge-rag.local/legal/penalty/%EC%82%AC%ED%98%95-52f868e3fd",
+      "relation": "hasPenalty"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C250%-a15911d97f",
+      "target": "https://knowledge-rag.local/legal/penalty/%EB%AC%B4%EA%B8%B0-6d9489eaa1",
+      "relation": "hasPenalty"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C250%-a15911d97f",
+      "target": "https://knowledge-rag.local/legal/penalty/5%EB%85%84-%EC%9D%B4%EC%83%81%EC%9D%98-%EC%A7%95%EC%97%AD-d6ddaf5583",
+      "relation": "hasPenalty"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "target": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C329%-1d9719ee6c",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C329%-1d9719ee6c",
+      "target": "https://knowledge-rag.local/legal/offense/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C329%-04fd9c98a8",
+      "relation": "definesOffense"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C329%-1d9719ee6c",
+      "target": "https://knowledge-rag.local/legal/penalty/6%EB%85%84-%EC%9D%B4%ED%95%98%EC%9D%98-%EC%A7%95%EC%97%AD-31d5503838",
+      "relation": "hasPenalty"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C329%-1d9719ee6c",
+      "target": "https://knowledge-rag.local/legal/penalty/1%EC%B2%9C%EB%A7%8C%EC%9B%90-%EC%9D%B4%ED%95%98%EC%9D%98-%EB%B2%8C%EA%B8%88-95db53551d",
+      "relation": "hasPenalty"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "target": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C347%-1c9bd26126",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "target": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C355%-7c250945db",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91-4c6ddaca88",
+      "target": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%89%EC%A7%91%3A%EC%A0%9C283%-e2fbd6838e",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-e9f885b01d",
+      "target": "https://knowledge-rag.local/legal/source/wiki%5Ccriminal-law.md-1b5c63f7f3",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-e9f885b01d",
+      "target": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2FlsLinkCommonInfo.do%3FchrClsCd%3D010202%26lsJoLnkSeq%3D1032387065-733abe484b",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%ED%98%95%EB%B2%95-e9f885b01d",
+      "target": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95%3A%EC%A0%9C250%EC%A1%B0-e50f152530",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95%3A%EC%A0%9C250%EC%A1%B0-e50f152530",
+      "target": "https://knowledge-rag.local/legal/offense/%ED%98%95%EB%B2%95%3A%EC%A0%9C250%EC%A1%B0-f530fd62e7",
+      "relation": "definesOffense"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95%3A%EC%A0%9C250%EC%A1%B0-e50f152530",
+      "target": "https://knowledge-rag.local/legal/penalty/%EC%82%AC%ED%98%95-52f868e3fd",
+      "relation": "hasPenalty"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95%3A%EC%A0%9C250%EC%A1%B0-e50f152530",
+      "target": "https://knowledge-rag.local/legal/penalty/%EB%AC%B4%EA%B8%B0-6d9489eaa1",
+      "relation": "hasPenalty"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/article/%ED%98%95%EB%B2%95%3A%EC%A0%9C250%EC%A1%B0-e50f152530",
+      "target": "https://knowledge-rag.local/legal/penalty/5%EB%85%84-%EC%9D%B4%EC%83%81%EC%9D%98-%EC%A7%95%EC%97%AD-d6ddaf5583",
+      "relation": "hasPenalty"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/source/wiki%5Clabor-law-core.md-c6b86b11e5",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2F%EB%B2%95%EB%A0%B9%2F%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-1c5048f6ff",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-c78b73aaba",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-7e368f590b",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-416565e433",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-3949715e9f",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-3a3f991afe",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-62de96ef70",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-1c98d14192",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-3c0f7939b1",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-74d7e85d05",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-94da1788d2",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-b5f7b719ab",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-86916b47b7",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%B8-%EA%B2%80%EC%83%-ae1b57e1d9",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-c80aee3b91",
+      "target": "https://knowledge-rag.local/legal/source/wiki%5Clabor-standards-act.md-d055542a51",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-c80aee3b91",
+      "target": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2FlsLinkCommonInfo.do%3FchrClsCd%3D010202%26lsJoLnkSeq%3D1025589739-a3d5f89a6a",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95-c80aee3b91",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B7%BC%EB%A1%9C%EA%B8%B0%EC%A4%80%EB%B2%95%3A%EC%A0%9C23%EC%A1%B0-dcc2eaf21f",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-b6d2716ba8",
+      "target": "https://knowledge-rag.local/legal/source/wiki%5Cpersonal-information-protection-act.md-6fec567091",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-b6d2716ba8",
+      "target": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2FlsLinkCommonInfo.do%3FchrClsCd%3D010202%26lsJoLnkSeq%3D1029335387-edf3e51f45",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-b6d2716ba8",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95%3A%EC%A0%9C15%EC%A1%B0-d451ddf210",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/source/wiki%5Cprivacy-law-core.md-abbe283b2a",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/source/https%3A%2F%2Fwww.law.go.kr%2F%EB%B2%95%EB%A0%B9%2F%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EB%B3%B4%ED%-94a2b95e32",
+      "relation": "derivedFrom"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-2424eb725d",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-b14ac4bc5e",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-a391ba4eda",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-a875b2c8b4",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-8a3b64edb1",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-89f49feffc",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-254646cf3a",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-e106638531",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-8e2330f5be",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-1d88916904",
+      "relation": "hasArticle"
+    },
+    {
+      "source": "https://knowledge-rag.local/legal/law/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-7c6db02889",
+      "target": "https://knowledge-rag.local/legal/article/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4-%EB%B3%B4%ED%98%B8%EB%B2%95-%ED%95%B5%EC%8B%AC-%EC%A1%B0%EB%AC%-69b77e0ce4",
+      "relation": "hasArticle"
+    }
+  ],
+  "stats": {
+    "laws": 9,
+    "articles": 52,
+    "offenses": 3,
+    "instruments": 0,
+    "penalties": 5,
+    "sources": 18,
+    "documents": 9,
+    "nodes": 87,
+    "edges": 81
+  }
+}
