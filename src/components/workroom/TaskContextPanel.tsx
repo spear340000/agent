@@ -8,6 +8,7 @@ import {
   X
 } from 'lucide-react'
 import Composer from './Composer'
+import EvidenceChain, { RouteChips } from './EvidenceChain'
 import { Sources } from './Documents'
 import {
   legalIntentLabels,
@@ -203,6 +204,7 @@ function LegalAnswer({
                         } ${citation.date.value}`
                       : ''}
                   </small>
+                  <RouteChips provenance={citation.provenance} />
                 </span>
               </li>
             ))}
@@ -213,6 +215,12 @@ function LegalAnswer({
           확인된 법령·판례 기록이 없어 단정적인 법적 결론을 제시하지 않습니다.
         </p>
       )}
+      {legal.sourceStatus.chain?.length ? (
+        <>
+          <h4 className="task-context__legal-subheading">근거 형성 과정</h4>
+          <EvidenceChain stages={legal.sourceStatus.chain} />
+        </>
+      ) : null}
       {legal.sourceStatus.notes.length > 0 ? (
         <ul className="task-context__legal-notes">
           {legal.sourceStatus.notes.map((note) => (

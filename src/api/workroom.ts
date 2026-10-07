@@ -55,7 +55,7 @@ export type ManagedFile = {
   createdAt: string
 }
 export type RuntimeCapabilities = {
-  model: { configured: boolean; provider: string | null }
+  model: { configured: boolean; provider: string | null; name: string; providers?: string[] }
   browserUse: { available: boolean }
   computerUse: { available: boolean; platform: string }
   legalRetrieval: LegalRetrievalCapability
@@ -98,6 +98,8 @@ export type LegalCitation = {
   termMatches?: string[]
   relevance?: number
   date?: { kind: 'amendment' | 'decision'; value: string }
+  /** The knowledge layers this record passed through on its way into the answer. */
+  provenance?: string[]
 }
 export type LegalLibraryItem = {
   citationId: string
@@ -244,6 +246,7 @@ export type LegalLayerUse = {
     | 'graph'
     | 'ontology'
     | 'okf'
+    | 'wiki'
   label: string
   state: 'used' | 'ready' | 'degraded' | 'unused' | 'unavailable'
   detail: string
@@ -270,6 +273,23 @@ export type LegalSourceStatus = {
   notes: string[]
   failures: { step: string; kind: string; message: string }[]
   ledger?: LegalLedger
+  chain?: LegalChainStage[]
+}
+export const LEGAL_CHAIN_STAGE_IDS = [
+  'wiki',
+  'rag',
+  'graph',
+  'ontology',
+  'okf',
+  'mcp',
+  'agent'
+] as const
+/** One step of how the evidence was built: which layer ran and what it handed on. */
+export type LegalChainStage = {
+  id: (typeof LEGAL_CHAIN_STAGE_IDS)[number]
+  label: string
+  summary: string
+  items: string[]
 }
 export type LegalAnswer = {
   intent: string

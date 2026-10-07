@@ -2,17 +2,21 @@ import type {
   BackendEvent,
   BackendTask,
   LegalAnswer,
+  LegalChainStage,
   LegalLedger,
   TaskDetails
 } from '@/api/workroom'
+import { LEGAL_CHAIN_STAGE_IDS } from '@/api/workroom'
 import type {
   LegalAnswerView,
+  TaskModelUse,
   Source,
   Task,
   TaskMessage,
   TaskStep,
   WorkflowStage
 } from './types'
+import { friendlyTaskError } from './displayText'
 
 const stageByStep: WorkflowStage[] = [
   'planning',
@@ -128,7 +132,8 @@ const LEDGER_LAYER_IDS = [
   'vector',
   'graph',
   'ontology',
-  'okf'
+  'okf',
+  'wiki'
 ] as const
 const LEDGER_STATES = [
   'used',
@@ -137,6 +142,23 @@ const LEDGER_STATES = [
   'unused',
   'unavailable'
 ] as const
+
+/** Stages of how the evidence was built; unknown stage ids from a newer backend are skipped, not fatal. */
+export function chainFrom(value: unknown): LegalChainStage[] {
+  if (!Array.isArray(value)) return []
+  return value.filter(isRecord).flatMap((stage) => {
+    const id = String(stage.id)
+    if (!LEGAL_CHAIN_STAGE_IDS.includes(id as LegalChainStage['id'])) return []
+    return [
+      {
+        id: id as LegalChainStage['id'],
+        label: String(stage.label ?? id),
+        summary: String(stage.summary ?? ''),
+        items: Array.isArray(stage.items) ? stage.items.map(String) : []
+      }
+    ]
+  })
+}
 
 function ledgerFrom(value: unknown): LegalLedger | undefined {
   if (!isRecord(value)) return undefined
@@ -181,6 +203,31 @@ function ledgerFrom(value: unknown): LegalLedger | undefined {
   }
 }
 
+export function modelUseFromEvents(
+  events: BackendEvent[]
+): TaskModelUse | undefined {
+  const metadata = [...events]
+    .reverse()
+    .find((item) => item.type === 'model.attempts')?.metadata
+  if (!isRecord(metadata)) return undefined
+  const attempts = Array.isArray(metadata.attempts)
+    ? metadata.attempts.filter(isRecord)
+    : []
+  const failedModels = [
+    ...new Set(
+      attempts
+        .filter((attempt) => attempt.ok === false)
+        .map((attempt) => String(attempt.model))
+    )
+  ]
+  return {
+    finalModel:
+      typeof metadata.finalModel === 'string' ? metadata.finalModel : null,
+    fellBack: metadata.fellBack === true,
+    failedModels
+  }
+}
+
 export function legalAnswerFromEvents(
   events: BackendEvent[]
 ): LegalAnswerView | undefined {
@@ -203,6 +250,9 @@ export function legalAnswerFromEvents(
         label: String(citation.label ?? ''),
         ...(typeof citation.officialUrl === 'string'
           ? { officialUrl: citation.officialUrl }
+          : {}),
+        ...(Array.isArray(citation.provenance)
+          ? { provenance: citation.provenance.map(String) }
           : {}),
         ...(isRecord(citation.date) &&
         typeof citation.date.value === 'string' &&
@@ -251,6 +301,10 @@ export function legalAnswerFromEvents(
       ...(() => {
         const ledger = ledgerFrom(sourceStatus.ledger)
         return ledger ? { ledger } : {}
+      })(),
+      ...(() => {
+        const chain = chainFrom(sourceStatus.chain)
+        return chain.length ? { chain } : {}
       })()
     },
     plannerCalls: metadata.plannerCalls === 1 ? 1 : 0,
@@ -325,10 +379,14 @@ export function toWorkroomTask(
     documentType: 'md',
     createdAt: Date.parse(task.createdAt) || 0,
     updatedAt: Date.parse(task.updatedAt) || 0,
-    error: task.error,
+    error: task.error ? friendlyTaskError(task.error) : task.error,
     ...(() => {
       const legal = legalAnswerFromEvents(details.events)
       return legal ? { legal } : {}
+    })(),
+    ...(() => {
+      const modelUse = modelUseFromEvents(details.events)
+      return modelUse ? { modelUse } : {}
     })()
   }
 }

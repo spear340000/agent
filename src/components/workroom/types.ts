@@ -80,6 +80,7 @@ export type Task = {
   sourceFileIds?: string[]
   documentDirty?: boolean
   legal?: LegalAnswerView
+  modelUse?: TaskModelUse
 }
 export const stageMeta: Record<
   WorkflowStage,
@@ -125,4 +126,11 @@ export const legalIntentLabels: Record<string, string> = {
 export const legalPathLabels: Record<string, string> = {
   direct: '직접 조회',
   orchestrated: '복합 조사'
+}
+
+/** Which model actually answered this task, from its `model.attempts` event. */
+export type TaskModelUse = {
+  finalModel: string | null
+  fellBack: boolean
+  failedModels: string[]
 }

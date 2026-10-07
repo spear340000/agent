@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { toWorkroomTask } from './taskAdapters.js'
+import { modelUseFromEvents, toWorkroomTask } from './taskAdapters.js'
 import type { TaskDetails } from '@/api/workroom'
 
 test('a planning failure does not leave pending sources pretending to be actively collected', () => {
@@ -397,4 +397,32 @@ test('a failed task still exposes the persisted retrieval tool ledger', () => {
   })
   assert.equal(task.legal?.toolCalls, 1)
   assert.equal(task.legal?.sourceStatus.ledger?.tools[0]?.tool, 'search_laws')
+})
+
+test('the model that actually answered, and any failed fallbacks, come from the task event', () => {
+  const event = (metadata: Record<string, unknown>) => ({
+    id: 1,
+    taskId: 't',
+    type: 'model.attempts',
+    title: '모델 사용 기록',
+    message: '',
+    status: 'warning',
+    createdAt: '',
+    metadata
+  })
+  assert.deepEqual(
+    modelUseFromEvents([
+      event({
+        finalModel: 'backup',
+        fellBack: true,
+        attempts: [
+          { model: 'primary', ok: false },
+          { model: 'primary', ok: false },
+          { model: 'backup', ok: true }
+        ]
+      })
+    ]),
+    { finalModel: 'backup', fellBack: true, failedModels: ['primary'] }
+  )
+  assert.equal(modelUseFromEvents([]), undefined)
 })

@@ -5414,3 +5414,182 @@
     grid-row: 1 / span 2;
   }
 }
+
+/* Evidence route: which knowledge layers a cited record passed through. */
+.evidence-route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.evidence-route__chip {
+  border: 1px solid var(--wf-line);
+  border-radius: 999px;
+  padding: 0 7px;
+  background: var(--wf-accent-soft);
+  color: var(--wf-accent-dark);
+  font-size: 10px;
+  font-weight: 620;
+  line-height: 17px;
+  white-space: nowrap;
+}
+
+.evidence-route__arrow {
+  color: var(--wf-muted);
+  font-size: 10px;
+}
+
+/* Evidence chain: the ordered steps that built an answer's evidence. */
+.evidence-chain {
+  display: grid;
+  gap: 0;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.evidence-chain__stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
+.evidence-chain__stage:not(:last-child)::before {
+  position: absolute;
+  top: 22px;
+  bottom: 0;
+  left: 10px;
+  width: 1px;
+  background: var(--wf-line);
+  content: '';
+}
+
+.evidence-chain__marker {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--wf-accent-soft);
+  color: var(--wf-accent-dark);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.evidence-chain__stage--graph .evidence-chain__marker,
+.evidence-chain__stage--ontology .evidence-chain__marker {
+  background: var(--wf-accent);
+  color: #fff;
+}
+
+.evidence-chain__body {
+  min-width: 0;
+}
+
+.evidence-chain__body strong {
+  display: block;
+  color: var(--wf-ink);
+  font-size: 11.5px;
+  font-weight: 660;
+}
+
+.evidence-chain__body p {
+  margin: 2px 0 0;
+  color: var(--wf-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.evidence-chain__body details {
+  margin-top: 3px;
+  font-size: 10.5px;
+}
+
+.evidence-chain__body summary {
+  cursor: pointer;
+  color: var(--wf-accent-dark);
+}
+
+.evidence-chain__body ul {
+  margin: 4px 0 0;
+  padding-left: 15px;
+  color: var(--wf-muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.system-explorer__chain {
+  margin: 14px 0;
+  border: 1px solid var(--wf-line);
+  border-radius: 10px;
+  padding: 14px 16px 4px;
+  background: var(--wf-surface);
+}
+
+.system-explorer__chain h3 {
+  margin: 0 0 6px;
+  color: var(--wf-ink);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.system-explorer__chain .evidence-chain {
+  margin-top: 10px;
+}
+
+.system-explorer__chain .evidence-chain__body strong {
+  font-size: 12.5px;
+}
+
+.system-explorer__chain .evidence-chain__body p,
+.system-explorer__chain .evidence-chain__body details {
+  font-size: 11.5px;
+}
+
+.system-explorer__pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 22px;
+  padding: 0;
+  list-style: none;
+  counter-reset: pipeline;
+}
+
+.system-explorer__pipeline li {
+  position: relative;
+  display: grid;
+  flex: 1 1 150px;
+  gap: 2px;
+  border: 1px solid var(--wf-line);
+  border-radius: 8px;
+  padding: 9px 11px 9px 32px;
+  background: var(--wf-surface);
+  counter-increment: pipeline;
+}
+
+.system-explorer__pipeline li::before {
+  position: absolute;
+  top: 9px;
+  left: 10px;
+  color: var(--wf-accent);
+  font-size: 11px;
+  font-weight: 700;
+  content: counter(pipeline);
+}
+
+.system-explorer__pipeline strong {
+  color: var(--wf-ink);
+  font-size: 12px;
+  font-weight: 660;
+}
+
+.system-explorer__pipeline span {
+  color: var(--wf-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}

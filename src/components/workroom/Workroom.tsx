@@ -46,6 +46,7 @@ import {
 } from './taskAdapters'
 import type { Source, Task, TaskState } from './types'
 import { stageMeta } from './types'
+import { friendlyErrorMessage } from './displayText'
 
 type SaveFailure = { taskId: string; message: string }
 type ExportFormat = 'md' | 'docx' | 'xlsx' | 'pdf'
@@ -208,9 +209,7 @@ export default function Workroom() {
       } catch (error) {
         if (!disposed)
           setNotice(
-            error instanceof Error
-              ? error.message
-              : '작업 목록을 불러오지 못했습니다.'
+            friendlyErrorMessage(error, '작업 목록을 불러오지 못했습니다.')
           )
       } finally {
         loading = false
@@ -307,9 +306,7 @@ export default function Workroom() {
     ).catch((error: unknown) => {
       if (!controller.signal.aborted) {
         setNotice(
-          error instanceof Error
-            ? error.message
-            : '실시간 진행 상태를 불러오지 못했습니다.'
+          friendlyErrorMessage(error, '실시간 진행 상태를 불러오지 못했습니다.')
         )
       }
     })
@@ -969,7 +966,11 @@ export default function Workroom() {
                 </p>
               ) : null}
               <p className="workfolio-start__privacy">
-                질문 내용과 검색된 조문·판례 일부가 모델 제공자에게 전송됩니다.
+                질문 내용과 검색된 조문·판례 일부가{' '}
+                {capabilities?.model.providers?.length
+                  ? `모델 제공자(${capabilities.model.providers.join(', ')})`
+                  : '모델 제공자'}
+                에게 전송됩니다.
                 법령 검색은 이 컴퓨터 안에서만 실행되며, 첨부한 자료는 이 작업의
                 근거로만 사용되고 법령 저장소에 등록되지 않습니다.
               </p>

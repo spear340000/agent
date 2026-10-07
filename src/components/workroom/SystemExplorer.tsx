@@ -30,6 +30,7 @@ import {
   type LegalWikiPageSummary,
   type RuntimeCapabilities
 } from '@/api/workroom'
+import EvidenceChain from './EvidenceChain'
 import MarkdownView from './MarkdownView'
 import { legalIntentLabels, stageMeta, type Task } from './types'
 
@@ -736,6 +737,32 @@ function WorkflowCanvas({ task }: { task: Task }) {
   )
 }
 
+type LibraryTabState = {
+  items: LegalLibraryItem[]
+  loading: boolean
+  error: string
+  searchKey: string
+}
+
+const EMPTY_LIBRARY_TAB: LibraryTabState = {
+  items: [],
+  loading: false,
+  error: '',
+  searchKey: ''
+}
+
+/** How the components hand work to each other for one legal question, in order. */
+const PIPELINE: { title: string; role: string }[] = [
+  { title: 'RAG 검색', role: '키워드·벡터 색인에서 법령·판례 후보를 찾음' },
+  { title: 'LLM Wiki', role: '핵심 조문집으로 놓친 조문을 보충' },
+  { title: '에이전트', role: '질문과 무관한 후보를 걸러냄' },
+  { title: '관계 그래프', role: '남은 조문을 인용한 판례를 찾음' },
+  { title: '온톨로지', role: '그래프 관계가 허용된 유형인지 검증' },
+  { title: 'MCP 도구', role: '조문·판례 원문을 열어 인용을 확인' },
+  { title: 'OKF', role: '각 근거와 색인의 출처를 카탈로그로 연결' },
+  { title: '답변 검증', role: '근거가 뒷받침하지 않는 문장을 제거' }
+]
+
 export default function SystemExplorer({
   capabilities,
   backendStatus,
@@ -750,11 +777,21 @@ export default function SystemExplorer({
   const [libraryCorpus, setLibraryCorpus] = useState<
     'law' | 'precedent' | 'graph' | 'all'
   >('all')
-  const [libraryItems, setLibraryItems] = useState<LegalLibraryItem[]>([])
+  const [libraryStates, setLibraryStates] = useState<
+    Record<string, LibraryTabState>
+  >({})
   const [includeGraphContext, setIncludeGraphContext] = useState(false)
-  const [libraryLoading, setLibraryLoading] = useState(false)
-  const [libraryError, setLibraryError] = useState('')
-  const [librarySearchKey, setLibrarySearchKey] = useState('')
+  const {
+    items: libraryItems,
+    loading: libraryLoading,
+    error: libraryError,
+    searchKey: librarySearchKey
+  } = libraryStates[topic] ?? EMPTY_LIBRARY_TAB
+  const patchLibrary = (tab: string, patch: Partial<LibraryTabState>) =>
+    setLibraryStates((current) => ({
+      ...current,
+      [tab]: { ...(current[tab] ?? EMPTY_LIBRARY_TAB), ...patch }
+    }))
   const [precedentPages, setPrecedentPages] = useState<
     Record<
       string,
@@ -770,6 +807,7 @@ export default function SystemExplorer({
     >
   >({})
   const autoLoadedTopics = useRef(new Set<string>())
+  const autoLoadingTopics = useRef(new Set<string>())
   const [catalogItems, setCatalogItems] = useState<LegalCatalogEntry[]>([])
   const [catalogError, setCatalogError] = useState('')
   const [catalogLoading, setCatalogLoading] = useState(false)
@@ -805,7 +843,8 @@ export default function SystemExplorer({
     if (
       !['wiki', 'rag', 'ontology'].includes(topic) ||
       backendStatus !== 'online' ||
-      autoLoadedTopics.current.has(topic)
+      autoLoadedTopics.current.has(topic) ||
+      autoLoadingTopics.current.has(topic)
     )
       return
     const corpus =
@@ -816,35 +855,31 @@ export default function SystemExplorer({
           : libraryCorpus
     const initialQuery = '민법'
     const searchKey = `${topic}:${corpus}:${initialQuery}`
-    let cancelled = false
-    setLibraryLoading(true)
+    const tab = topic
+    autoLoadingTopics.current.add(tab)
+    patchLibrary(tab, { loading: true })
     void searchLegalLibrary(initialQuery, corpus, connection)
       .then(({ items }) => {
-        if (cancelled) return
-        setLibraryItems(items)
-        setLibraryError('')
-        setLibrarySearchKey(searchKey)
-        autoLoadedTopics.current.add(topic)
+        patchLibrary(tab, { items, error: '', searchKey })
+        autoLoadedTopics.current.add(tab)
       })
       .catch(() => {
-        if (cancelled) return
-        setLibraryError(
-          '자료 검색을 완료하지 못했습니다. 백엔드 상태를 확인한 뒤 다시 시도해 주세요.'
-        )
+        patchLibrary(tab, {
+          error:
+            '자료 검색을 완료하지 못했습니다. 백엔드 상태를 확인한 뒤 다시 시도해 주세요.'
+        })
       })
       .finally(() => {
-        if (!cancelled) setLibraryLoading(false)
+        autoLoadingTopics.current.delete(tab)
+        patchLibrary(tab, { loading: false })
       })
-    return () => {
-      cancelled = true
-    }
   }, [backendStatus, connection, libraryCorpus, topic])
 
   async function runLibrarySearch(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault()
     if (!libraryQuery.trim()) return
-    setLibraryLoading(true)
-    setLibraryError('')
+    const tab = topic
+    patchLibrary(tab, { loading: true, error: '' })
     try {
       const corpus =
         topic === 'ontology'
@@ -857,15 +892,19 @@ export default function SystemExplorer({
         corpus,
         connection
       )
-      setLibraryItems(items)
-      setLibrarySearchKey(`${topic}:${corpus}:${libraryQuery}`)
+      patchLibrary(tab, {
+        items,
+        searchKey: `${tab}:${corpus}:${libraryQuery}`
+      })
+      autoLoadedTopics.current.add(tab)
     } catch {
-      setLibraryItems([])
-      setLibraryError(
-        '자료 검색을 완료하지 못했습니다. 백엔드 상태를 확인한 뒤 다시 시도해 주세요.'
-      )
+      patchLibrary(tab, {
+        items: [],
+        error:
+          '자료 검색을 완료하지 못했습니다. 백엔드 상태를 확인한 뒤 다시 시도해 주세요.'
+      })
     } finally {
-      setLibraryLoading(false)
+      patchLibrary(tab, { loading: false })
     }
   }
 
@@ -943,6 +982,9 @@ export default function SystemExplorer({
     }
   }, [backendStatus, connection, topic, tools.length])
 
+  const latestModelUse = [...tasks]
+    .sort((left, right) => right.updatedAt - left.updatedAt)
+    .find((task) => task.modelUse?.finalModel)?.modelUse
   const selectedTask =
     tasks.find((task) => task.id === selectedTaskId) ??
     tasks.find((task) => task.steps.length > 0) ??
@@ -1302,7 +1344,7 @@ export default function SystemExplorer({
           <p className="system-explorer__note">
             {librarySearchKey.split(':')[1] === 'graph'
               ? visibleLibraryItems.length > 0
-                ? '개념·조문 관계는 찾지 못했습니다. 출처·법원 연결을 포함하면 구조 관계를 확인할 수 있습니다.'
+                ? `개념·조문 관계는 찾지 못했습니다. 조회된 ${visibleLibraryItems.length}건은 모두 출처·법원 연결이라 숨겨져 있으며, '출처·법원 관계 포함'을 누르면 볼 수 있습니다.`
                 : '검색 서버가 이 질의에서 검증 가능한 관계 경로를 반환하지 않았습니다. 노드 ID만으로는 관계 근거를 만들지 않습니다.'
               : '이 검색어와 일치하는 자료가 없습니다. 다른 표현으로 검색해 보세요.'}
           </p>
@@ -1391,8 +1433,21 @@ export default function SystemExplorer({
           <div className="system-explorer__summary-grid">
             <article>
               <Server aria-hidden="true" />
-              <span>모델 제공자</span>
-              <strong>{capabilities?.model.provider ?? '확인 필요'}</strong>
+              <span>사용 모델</span>
+              <strong>
+                {capabilities?.model.providers?.[0]
+                  ? `${capabilities.model.providers[0]} · `
+                  : ''}
+                {capabilities?.model.name ?? '확인 필요'}
+              </strong>
+              <small>
+                {capabilities?.model.providers?.[0]
+                  ? `제공자 ${capabilities.model.providers[0]}의 기본 모델`
+                  : (capabilities?.model.provider ?? '모델 제공자 확인 대기')}
+                {latestModelUse?.finalModel
+                  ? ` · 최근 작업 실제 응답: ${latestModelUse.finalModel}`
+                  : ''}
+              </small>
               <Status
                 ready={capabilities?.model.configured ?? null}
                 label="설정"
@@ -1414,6 +1469,15 @@ export default function SystemExplorer({
               <small>키워드·벡터·그래프·온톨로지 상태는 RAG 탭에서 확인</small>
             </article>
           </div>
+          <h2>질문 하나가 지나가는 순서</h2>
+          <ol className="system-explorer__pipeline" aria-label="지식 계층 연결 순서">
+            {PIPELINE.map((step) => (
+              <li key={step.title}>
+                <strong>{step.title}</strong>
+                <span>{step.role}</span>
+              </li>
+            ))}
+          </ol>
           <h2>구성 요소</h2>
           <div className="system-explorer__cards">
             {topics.slice(1).map(({ id, label, icon: Icon }) => (
@@ -1471,7 +1535,13 @@ export default function SystemExplorer({
                 <span>{selectedTask.request}</span>
                 <small>
                   상태 {selectedTask.state} · 단계 {selectedTask.steps.length}개
-                  · 근거 {selectedTask.sources.length}개
+                  · 첨부 자료 {selectedTask.sources.length}개
+                  {selectedTask.legal
+                    ? ` · 검색 근거 ${selectedTask.legal.sourceStatus.retrieved}건 · 본문 인용 ${selectedTask.legal.sourceStatus.cited ?? 0}건`
+                    : ''}
+                  {selectedTask.modelUse
+                    ? ` · 응답 모델 ${selectedTask.modelUse.finalModel ?? '없음'}${selectedTask.modelUse.fellBack ? ` (대체 사용, 실패: ${selectedTask.modelUse.failedModels.join(', ')})` : ''}`
+                    : ''}
                 </small>
               </div>
               {selectedTask.legal ? (
@@ -1486,6 +1556,20 @@ export default function SystemExplorer({
                     {selectedTask.legal.sourceStatus.retrieved}건 · 인용{' '}
                     {selectedTask.legal.citations.length}건
                   </p>
+                  {selectedTask.legal.sourceStatus.chain?.length ? (
+                    <section
+                      className="system-explorer__chain"
+                      aria-label="이 작업에서 지식 계층이 이어진 순서"
+                    >
+                      <h3>이 작업에서 지식 계층이 이어진 순서</h3>
+                      <p className="system-explorer__note">
+                        각 단계는 앞 단계의 결과를 받아 다음 단계에 넘깁니다. 예를
+                        들어 관계 그래프는 관련성 검토를 통과한 조문에서만 출발하고,
+                        온톨로지가 허용한 관계만 판례 원문 확인으로 이어집니다.
+                      </p>
+                      <EvidenceChain stages={selectedTask.legal.sourceStatus.chain} />
+                    </section>
+                  ) : null}
                   {selectedTask.legal.sourceStatus.failures.length ? (
                     <div className="system-explorer__run-materials">
                       <h3>검색 중 확인된 제한</h3>

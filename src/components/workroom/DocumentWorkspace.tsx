@@ -32,6 +32,7 @@ import DocumentOutline from './DocumentOutline'
 import DocumentFormatPreview, {
   type DocumentFormat
 } from './DocumentFormatPreview'
+import { blankDuplicateTitle } from './displayText'
 import MarkdownView from './MarkdownView'
 
 export type DocumentWorkspaceProps = {
@@ -421,7 +422,7 @@ export default function DocumentWorkspace({
                 </>
               ) : (
                 <MarkdownView
-                  value={value}
+                  value={blankDuplicateTitle(value, title)}
                   highlightedHeadingLine={highlightedHeadingLine}
                   onContentClick={() => setHighlightedHeadingLine(null)}
                 />
