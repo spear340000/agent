@@ -599,20 +599,6 @@ export function rerunTask(
   )
 }
 
-export async function downloadFile(
-  id: string,
-  name: string,
-  connection: Connection = defaultConnection,
-  fetcher: Fetcher = fetch
-): Promise<void> {
-  const url = URL.createObjectURL(await getFileContent(id, connection, fetcher))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = name
-  anchor.click()
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
 export async function getFileContent(
   id: string,
   connection: Connection = defaultConnection,
@@ -637,6 +623,23 @@ export async function getFileContent(
   if (!response.ok)
     throw new Error(`파일 내용을 불러오지 못했습니다. (${response.status})`)
   return response.blob()
+}
+
+/** Same as getFileContent; kept for the callers that use this name. */
+export const fetchFileContent = getFileContent
+
+export async function downloadFile(
+  id: string,
+  name: string,
+  connection: Connection = defaultConnection,
+  fetcher: Fetcher = fetch
+): Promise<void> {
+  const url = URL.createObjectURL(await getFileContent(id, connection, fetcher))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = name
+  anchor.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 export async function watchTask(

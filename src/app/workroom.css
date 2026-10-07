@@ -1207,6 +1207,46 @@
   background: #fffefa;
   padding: 0 9px;
 }
+.system-explorer__wiki-entries {
+  margin-top: 16px;
+  border-top: 1px solid var(--wf-line);
+  padding-top: 13px;
+}
+.system-explorer__wiki-entry-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+.system-explorer__wiki-entry-search input {
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid var(--wf-line);
+  border-radius: 6px;
+  background: #fffefa;
+  padding: 0 8px;
+}
+.system-explorer__wiki-entry-search button,
+.system-explorer__wiki-entry-pagination button {
+  border: 1px solid var(--wf-line);
+  border-radius: 6px;
+  background: #fffefa;
+  padding: 0 9px;
+  color: var(--wf-ink);
+}
+.system-explorer__wiki-entry-search button:disabled,
+.system-explorer__wiki-entry-pagination button:disabled {
+  opacity: .5;
+}
+.system-explorer__wiki-entry-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 10px;
+  color: var(--wf-muted);
+  font-size: 10px;
+}
 .system-explorer__wiki-list ul {
   display: grid;
   gap: 3px;

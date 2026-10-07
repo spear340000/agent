@@ -353,6 +353,247 @@
   border: 1px solid #d6d3c8 !important;
   border-radius: 5px;
 }
+
+/* Spreadsheet and PDF tools use the available width for a real document preview. */
+.workfolio-tools__content:has(.workfolio-spreadsheet-form):has(
+    .workfolio-spreadsheet-preview
+  ),
+.workfolio-tools__content:has(.workfolio-pdf-form):has(.workfolio-pdf-preview) {
+  grid-template-columns: minmax(250px, 0.72fr) minmax(0, 1.28fr);
+  gap: 18px;
+}
+.workfolio-tools__content:has(.workfolio-spreadsheet-form):not(
+    :has(.workfolio-spreadsheet-preview)
+  ),
+.workfolio-tools__content:has(.workfolio-pdf-form):not(
+    :has(.workfolio-pdf-preview)
+  ) {
+  grid-template-columns: minmax(0, 680px);
+}
+.workfolio-spreadsheet-form,
+.workfolio-pdf-form {
+  align-content: start;
+}
+.workfolio-spreadsheet-form > h2,
+.workfolio-pdf-form > h2 {
+  align-self: end;
+  padding-bottom: 3px;
+}
+.workfolio-spreadsheet-form > p,
+.workfolio-pdf-form > p {
+  max-width: 760px;
+}
+.workfolio-spreadsheet-preview,
+.workfolio-pdf-preview {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #ded8cd;
+  border-radius: 9px;
+  background: #fbf9f4;
+}
+.workfolio-spreadsheet-preview__heading,
+.workfolio-pdf-preview__heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.workfolio-spreadsheet-preview__heading h3,
+.workfolio-pdf-preview__heading h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.workfolio-spreadsheet-preview__heading p,
+.workfolio-pdf-preview__heading p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #6e7971;
+}
+.workfolio-spreadsheet-preview__heading > span,
+.workfolio-pdf-preview__heading > span {
+  color: #6e7971;
+  font-size: 11px;
+}
+.workfolio-sheet-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid #ded8cd;
+  margin-bottom: 12px;
+}
+.workfolio-sheet-tabs button {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border-bottom: 2px solid transparent;
+  color: #59685f;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.workfolio-sheet-tabs button[aria-pressed='true'] {
+  border-color: #236b52;
+  color: #1c5944;
+  font-weight: 600;
+}
+.workfolio-sheet-tabs small {
+  color: #899188;
+  font-size: 10px;
+  font-weight: 400;
+}
+.workfolio-spreadsheet-formula-bar {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #ded8cd;
+  border-radius: 5px 5px 0 0;
+  padding: 6px 10px;
+  color: #59685f;
+  font-size: 12px;
+}
+.workfolio-spreadsheet-formula-bar strong {
+  min-width: 46px;
+  border-right: 1px solid #ded8cd;
+  color: #26382d;
+  font-family: var(--font-dm-mono), monospace;
+}
+.workfolio-spreadsheet-formula-bar span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workfolio-spreadsheet-grid-scroll {
+  max-height: min(60vh, 620px);
+  overflow: auto;
+  border: 1px solid #ded8cd;
+  border-top: 0;
+}
+.workfolio-tools .workfolio-spreadsheet-grid {
+  width: max-content;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #fffdf8;
+  font-size: 12px;
+  margin: 0;
+}
+.workfolio-spreadsheet-grid th,
+.workfolio-spreadsheet-grid td {
+  width: 96px;
+  min-width: 0;
+  height: 32px;
+  max-width: 280px;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid #e8e4dc;
+  border-bottom: 1px solid #e8e4dc;
+  white-space: nowrap;
+}
+.workfolio-spreadsheet-grid thead th,
+.workfolio-spreadsheet-grid tbody th {
+  position: sticky;
+  z-index: 1;
+  min-width: 42px;
+  background: #f2f0e9;
+  color: #657168;
+  text-align: center;
+  font-weight: 500;
+}
+.workfolio-spreadsheet-grid thead th {
+  top: 0;
+  z-index: 2;
+}
+.workfolio-spreadsheet-grid tbody th {
+  left: 0;
+}
+.workfolio-tools .workfolio-spreadsheet-grid td button {
+  display: block;
+  width: 100%;
+  height: 31px;
+  overflow: hidden;
+  padding: 0 8px;
+  color: #2c352e;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workfolio-tools .workfolio-spreadsheet-grid td button[aria-pressed='true'] {
+  outline: 2px solid #236b52;
+  outline-offset: -2px;
+  background: #edf4ed;
+}
+.workfolio-spreadsheet-empty {
+  padding: 22px 0;
+  color: #6e7971;
+  font-size: 13px;
+}
+.workfolio-pdf-pages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 10px;
+  max-height: min(60vh, 620px);
+  overflow: auto;
+  margin: 0;
+  padding: 2px;
+  list-style: none;
+}
+.workfolio-tools .workfolio-pdf-page {
+  display: flex;
+  width: 100%;
+  min-height: 164px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 12px 8px;
+  border: 1px solid #e1dccf;
+  border-radius: 7px;
+  background: #fffdf8;
+  color: #344239;
+  text-align: center;
+}
+.workfolio-tools button.workfolio-pdf-page[aria-pressed='true'] {
+  border-color: #236b52;
+  background: #edf4ed;
+  box-shadow: 0 0 0 1px #236b52;
+}
+.workfolio-pdf-page__paper {
+  display: flex;
+  width: 58px;
+  height: 76px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin-bottom: 4px;
+  border: 1px solid #d7d2c8;
+  border-radius: 2px;
+  background: #fffdf8;
+  color: #66756b;
+  box-shadow: 0 2px 4px #34382b12;
+}
+.workfolio-pdf-page__paper > span {
+  color: #6e7971;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.workfolio-pdf-page__paper > img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.workfolio-pdf-page strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.workfolio-pdf-page small {
+  color: #6e7971;
+  font-size: 10px;
+}
 @media (max-width: 1000px) {
   .workfolio-tools__content {
     grid-template-columns: minmax(0, 1fr);
@@ -362,6 +603,20 @@
     border-top: 1px solid #ded8cd;
     padding: 20px 0 0;
     position: static;
+  }
+  .workfolio-tools__content:has(.workfolio-spreadsheet-form):has(
+      .workfolio-spreadsheet-preview
+    ),
+  .workfolio-tools__content:has(.workfolio-spreadsheet-form):not(
+      :has(.workfolio-spreadsheet-preview)
+    ),
+  .workfolio-tools__content:has(.workfolio-pdf-form):has(
+      .workfolio-pdf-preview
+    ),
+  .workfolio-tools__content:has(.workfolio-pdf-form):not(
+      :has(.workfolio-pdf-preview)
+    ) {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 760px) {
@@ -960,4 +1215,19 @@
   margin: 0;
   color: #737d75;
   font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .workfolio-spreadsheet-preview,
+  .workfolio-pdf-preview {
+    padding: 12px;
+  }
+  .workfolio-spreadsheet-preview__heading,
+  .workfolio-pdf-preview__heading {
+    flex-direction: column;
+  }
+  .workfolio-tools__content:has(.workfolio-spreadsheet-form) > label,
+  .workfolio-tools__content:has(.workfolio-pdf-form) > label {
+    grid-column: 1 / -1;
+  }
 }

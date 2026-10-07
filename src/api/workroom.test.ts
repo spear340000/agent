@@ -6,12 +6,56 @@ import {
   searchLegalLibrary,
   listLegalWikiPages,
   getLegalWikiPage,
+  fetchFileContent,
   reviseTask,
   request,
   watchTask,
   type Connection,
   type TaskDetails
 } from './workroom.js'
+
+test('fetchFileContent retrieves the actual PDF bytes using the saved API token', async () => {
+  const connection: Connection = {
+    baseUrl: 'http://127.0.0.1:8787',
+    token: ' test-token '
+  }
+  let requestUrl = ''
+  let requestInit: RequestInit | undefined
+  const file = await fetchFileContent(
+    'folder/file-123',
+    connection,
+    async (url, init) => {
+      requestUrl = String(url)
+      requestInit = init
+      return new Response('%PDF-1.7\nreal bytes', {
+        headers: { 'content-type': 'application/pdf' }
+      })
+    }
+  )
+
+  assert.equal(
+    requestUrl,
+    'http://127.0.0.1:8787/api/files/folder%2Ffile-123/content'
+  )
+  assert.equal(
+    new Headers(requestInit?.headers).get('authorization'),
+    'Bearer test-token'
+  )
+  assert.equal(requestInit?.cache, 'no-store')
+  assert.equal(file.type, 'application/pdf')
+  assert.equal(await file.text(), '%PDF-1.7\nreal bytes')
+})
+
+test('fetchFileContent reports an unavailable source file instead of returning an empty preview', async () => {
+  await assert.rejects(
+    fetchFileContent(
+      'file-missing',
+      { baseUrl: 'http://127.0.0.1:8787', token: '' },
+      async () => new Response('not found', { status: 404 })
+    ),
+    /파일 내용을 불러오지 못했습니다\. \(404\)/
+  )
+})
 
 test('read-only Wiki browser lists source pages and requests bounded original-text ranges', async () => {
   const connection: Connection = { baseUrl: 'http://127.0.0.1:8787', token: '' }

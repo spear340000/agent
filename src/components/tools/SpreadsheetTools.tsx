@@ -9,6 +9,7 @@ import {
 } from '@/api/automation'
 import { FileField, ToolButton, type ToolProps } from './ToolFields'
 import { parseRows } from './toolInputs'
+import { spreadsheetGrid } from './spreadsheetView'
 
 function serializeRows(rows: Scalar[][], delimiter: ',' | '\t'): string {
   return rows
@@ -73,6 +74,10 @@ export default function SpreadsheetTools({
   const [inspection, setInspection] = useState<SpreadsheetInspection | null>(
     null
   )
+  const [selectedCell, setSelectedCell] = useState('')
+  const previewGrid = inspection
+    ? spreadsheetGrid(inspection, inspection.selectedSheet)
+    : null
   const [operations, setOperations] = useState<SpreadsheetOperation[]>([])
   const [queueWasCleared, setQueueWasCleared] = useState(false)
   const [editingOperationIndex, setEditingOperationIndex] = useState<
@@ -510,48 +515,122 @@ export default function SpreadsheetTools({
         {mode === 'inspect' ? '조회' : '파일로 저장'}
       </ToolButton>
       {inspection && (
-        <section className="workfolio-table-wrap" aria-label="Excel 조회 결과">
-          <table>
-            <thead>
-              <tr>
-                <th>시트</th>
-                <th>행</th>
-                <th>열</th>
-              </tr>
-            </thead>
-            <tbody>
-              {inspection.sheets.map((item) => (
-                <tr key={item.name}>
-                  <td>
-                    <button type="button" onClick={() => setSheet(item.name)}>
-                      {item.name}
-                    </button>
-                  </td>
-                  <td>{item.rows}</td>
-                  <td>{item.columns}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!!inspection.cells.length && (
-            <table>
-              <thead>
-                <tr>
-                  <th>셀</th>
-                  <th>값</th>
-                  <th>수식</th>
-                </tr>
-              </thead>
-              <tbody>
-                {inspection.cells.map((item) => (
-                  <tr key={item.address}>
-                    <td>{item.address}</td>
-                    <td>{String(item.value ?? '')}</td>
-                    <td>{item.formula ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <section
+          className="workfolio-spreadsheet-preview"
+          aria-label="Excel 조회 결과"
+        >
+          <div className="workfolio-spreadsheet-preview__heading">
+            <div>
+              <h3>{inspection.selectedSheet ?? '통합 문서'}</h3>
+              <p>
+                {inspection.range ? `${inspection.range} 범위 · ` : ''}
+                {inspection.cells.length}개 셀
+              </p>
+            </div>
+            <span>수식 결과는 계산하지 않음</span>
+          </div>
+          <nav className="workfolio-sheet-tabs" aria-label="워크시트">
+            {inspection.sheets.map((item) => (
+              <button
+                key={item.name}
+                type="button"
+                aria-pressed={inspection.selectedSheet === item.name}
+                onClick={() => {
+                  setSheet(item.name)
+                  setSelectedCell('')
+                  if (!fileId) return
+                  void run('Excel 시트 조회', async () => {
+                    const result = await officeApi.inspectSpreadsheet(
+                      connection,
+                      {
+                        fileId,
+                        sheet: item.name,
+                        range
+                      }
+                    )
+                    setInspection(result)
+                    return undefined
+                  })
+                }}
+              >
+                {item.name}
+                <small>
+                  {item.rows}행 · {item.columns}열
+                </small>
+              </button>
+            ))}
+          </nav>
+          {inspection.cells.length ? (
+            <>
+              <div
+                className="workfolio-spreadsheet-formula-bar"
+                aria-live="polite"
+              >
+                <strong>{selectedCell || '셀 선택'}</strong>
+                <span>
+                  {inspection.cells.find(
+                    (cell) => cell.address === selectedCell
+                  )?.formula
+                    ? `=${inspection.cells.find((cell) => cell.address === selectedCell)?.formula}`
+                    : String(
+                        inspection.cells.find(
+                          (cell) => cell.address === selectedCell
+                        )?.value ?? ''
+                      )}
+                </span>
+              </div>
+              <div
+                className="workfolio-spreadsheet-grid-scroll"
+                role="region"
+                aria-label="시트 셀 미리보기"
+                tabIndex={0}
+              >
+                <table className="workfolio-spreadsheet-grid">
+                  <colgroup>
+                    <col style={{ width: 42 }} />
+                    {previewGrid?.columnWidths.map((width, index) => (
+                      <col key={previewGrid.columns[index]} style={{ width }} />
+                    ))}
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th aria-label="행 번호" />
+                      {previewGrid?.columns.map((column) => (
+                        <th key={column} scope="col">
+                          {column}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewGrid?.rows.map((row) => (
+                      <tr key={row.number}>
+                        <th scope="row">{row.number}</th>
+                        {row.cells.map((value, index) => {
+                          const address = `${previewGrid?.columns[index]}${row.number}`
+                          return (
+                            <td key={address}>
+                              <button
+                                type="button"
+                                aria-label={`${address}: ${value || '빈 셀'}`}
+                                aria-pressed={selectedCell === address}
+                                onClick={() => setSelectedCell(address)}
+                              >
+                                {value}
+                              </button>
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <p className="workfolio-spreadsheet-empty">
+              셀 데이터가 없어요. 시트를 선택하고 범위를 확인해 주세요.
+            </p>
           )}
         </section>
       )}
