@@ -8,6 +8,7 @@ import {
   X
 } from 'lucide-react'
 import Composer from './Composer'
+import { safeHttpUrl } from './safe-http-url'
 import EvidenceChain, { RouteChips } from './EvidenceChain'
 import { Sources } from './Documents'
 import {
@@ -182,9 +183,9 @@ function LegalAnswer({
                 </span>
                 <span className="task-context__citation-body">
                   <strong>
-                    {citation.officialUrl ? (
+                    {safeHttpUrl(citation.officialUrl) ? (
                       <a
-                        href={citation.officialUrl}
+                        href={safeHttpUrl(citation.officialUrl)}
                         target="_blank"
                         rel="noreferrer noopener"
                       >

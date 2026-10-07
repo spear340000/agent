@@ -57,6 +57,53 @@ const task: Task = {
   }
 }
 
+test('execution citations expose only absolute HTTP(S) source links', () => {
+  for (const [officialUrl, clickable] of [
+    ['https://www.law.go.kr/', true],
+    ['http://example.com/law', true],
+    ['javascript:alert(1)', false],
+    ['java\tscript:alert(1)', false],
+    ['data:text/html,unsafe', false],
+    ['//example.com/law', false],
+    ['not a URL', false]
+  ] as const) {
+    const markup = renderToStaticMarkup(
+      createElement(SystemExplorer, {
+        capabilities: null,
+        backendStatus: 'online',
+        onRetry: () => {},
+        connection: defaultConnection,
+        tasks: [
+          {
+            ...task,
+            legal: {
+              ...task.legal!,
+              citations: [
+                {
+                  citationId: 'L1',
+                  recordId: 'law:1',
+                  corpus: 'law',
+                  label: 'Citation title',
+                  officialUrl
+                }
+              ]
+            }
+          }
+        ],
+        topic: 'flow',
+        onTopicChange: () => {}
+      })
+    )
+    assert.equal(
+      /<a\b[^>]*>공식 출처 열기<\/a>/.test(markup),
+      clickable,
+      officialUrl
+    )
+    assert.match(markup, /Citation title/)
+    if (clickable) assert.ok(markup.includes(`href="${officialUrl}"`))
+  }
+})
+
 test('agentic flow is rendered as a connected execution canvas using actual task and RAG traces', () => {
   const markup = renderToStaticMarkup(
     createElement(SystemExplorer, {
