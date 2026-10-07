@@ -73,6 +73,17 @@ function parseRange(value: string): {
   };
 }
 
+function columnLabel(column: number): string {
+  let value = column;
+  let label = "";
+  while (value > 0) {
+    value -= 1;
+    label = String.fromCharCode(65 + (value % 26)) + label;
+    value = Math.floor(value / 26);
+  }
+  return label;
+}
+
 function validSheetName(name: unknown): name is string {
   return (
     typeof name === "string" &&
@@ -364,16 +375,21 @@ export class SpreadsheetService {
         cell.border = {
           bottom: { style: "hair", color: { argb: "FFE1E6E1" } },
         };
-      const mergedWidth = columnWidths.reduce((total, width) => total + width, 0);
-      const lineCount = value.split("\n").reduce(
-        (count, line) =>
-          count +
-          Math.max(
-            1,
-            Math.ceil(displayWidth(line) / (mergedWidth * wrapWidthFactor)),
-          ),
+      const mergedWidth = columnWidths.reduce(
+        (total, width) => total + width,
         0,
       );
+      const lineCount = value
+        .split("\n")
+        .reduce(
+          (count, line) =>
+            count +
+            Math.max(
+              1,
+              Math.ceil(displayWidth(line) / (mergedWidth * wrapWidthFactor)),
+            ),
+          0,
+        );
       row.height = Math.min(120, Math.max(20, lineCount * 16 + 8));
     };
     for (const block of blocks) {
@@ -469,7 +485,7 @@ export class SpreadsheetService {
             90,
             Math.max(
               24,
-                ...rows[rowIndex - 2]!.map(
+              ...rows[rowIndex - 2]!.map(
                 (value, columnIndex) =>
                   Math.ceil(
                     displayWidth(value) /
@@ -545,7 +561,14 @@ export class SpreadsheetService {
     }
     const sheet = workbook.getWorksheet(input.sheet);
     if (!sheet) throw notFound(`worksheet not found: ${input.sheet}`);
-    const range = parseRange(input.range ?? "A1:Z50");
+    const defaultColumns = Math.max(1, Math.min(sheet.columnCount, 50));
+    const defaultRows = Math.max(
+      1,
+      Math.min(sheet.rowCount, Math.floor(5_000 / defaultColumns)),
+    );
+    const range = parseRange(
+      input.range ?? `A1:${columnLabel(defaultColumns)}${defaultRows}`,
+    );
     result.selectedSheet = sheet.name;
     result.range = range.normalized;
     for (let row = range.start.row; row <= range.end.row; row++) {

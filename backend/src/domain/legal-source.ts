@@ -40,6 +40,8 @@ export type LegalSource = {
   relevance?: number;
   truncated?: boolean;
   graphRelation?: LegalGraphRelation;
+  /** How this record reached the answer, one step per knowledge layer it passed through (shown to the user). */
+  provenance?: string[];
 };
 
 export type LegalLayerStatus = { ready: boolean; documents?: number; nodes?: number; edges?: number; reason?: string };
@@ -78,10 +80,24 @@ export type LegalEvidence = {
   maxToolCalls: number;
   steps: LegalRetrievalStep[];
   trace: LegalRetrievalTrace[];
+  /** Set when wiki key-article hints were enabled for this search: how many extra articles they supplied. */
+  wikiHints?: number;
+  /** What each knowledge layer contributed to this search, in the order the layers ran. */
+  chain?: LegalChainStage[];
+};
+
+export type LegalChainStageId = 'wiki' | 'rag' | 'graph' | 'ontology' | 'okf' | 'mcp' | 'agent';
+
+/** One step of how the evidence was built: which layer ran, what it was given, and what it handed on. */
+export type LegalChainStage = {
+  id: LegalChainStageId;
+  label: string;
+  summary: string;
+  items: string[];
 };
 
 export type LegalLayerUse = {
-  id: 'law-keyword' | 'precedent-keyword' | 'vector' | 'graph' | 'ontology' | 'okf';
+  id: 'law-keyword' | 'precedent-keyword' | 'vector' | 'graph' | 'ontology' | 'okf' | 'wiki';
   label: string;
   state: 'used' | 'ready' | 'degraded' | 'unused' | 'unavailable';
   detail: string;
@@ -107,6 +123,8 @@ export type LegalPlan = {
 };
 
 export type LegalCitation = {
+  /** The knowledge layers this record passed through on its way into the answer. */
+  provenance?: string[];
   citationId: string;
   recordId: string;
   corpus: LegalCorpus;
@@ -124,4 +142,5 @@ export type LegalSourceStatus = {
   notes: string[];
   failures: LegalEvidenceFailure[];
   ledger: LegalLedger;
+  chain?: LegalChainStage[];
 };

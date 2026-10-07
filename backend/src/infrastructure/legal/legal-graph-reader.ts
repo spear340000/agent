@@ -246,3 +246,37 @@ function toRelationRecord(row: GraphEdgeRow): NormalizedRecord {
     ...(provenance ? { indexPath: provenance } : {})
   };
 }
+
+/**
+ * Precedents that cite one specific article, read straight from the graph (read-only). The article is resolved by its
+ * number and its source file (kr/<law name>/...), because graph labels only say "법률 제750조". Supreme Court
+ * judgments are listed first.
+ */
+export function readArticleCitations(databasePath: string, lawName: string, articleNumber: string, limit = 20): NormalizedRecord[] {
+  const number = /(\d+)(?:조의(\d+))?/.exec(articleNumber.replace(/\s+/g, ''));
+  if (!number || !lawName.trim()) return [];
+  const suffix = number[2] ? `:article:${number[1]}-${number[2]}` : `:article:${number[1]}`;
+  const law = lawName.replace(/\s+/g, '');
+  const database = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    const articles = (database.prepare("SELECT id, properties_json FROM nodes WHERE type = 'Article' AND id LIKE ?").all(`%${suffix}`) as Array<{ id: string; properties_json: string }>)
+      .filter(row => (sourcePath(row.properties_json) ?? '').split('/').some(part => part.replace(/\s+/g, '') === law));
+    if (articles.length === 0) return [];
+    const readCitations = database.prepare(`
+      SELECT e.source_id, source.type AS source_type, source.label AS source_label,
+             source.properties_json AS source_properties, e.relation, e.target_id,
+             target.type AS target_type, target.label AS target_label,
+             target.properties_json AS target_properties
+      FROM edges AS e
+      JOIN nodes AS source ON source.id = e.source_id
+      JOIN nodes AS target ON target.id = e.target_id
+      WHERE e.target_id = ? AND e.relation = 'CITES_ARTICLE' AND source.type = 'Precedent'
+      ORDER BY CASE WHEN source.properties_json LIKE '%대법원%' THEN 0 ELSE 1 END, e.source_id DESC
+      LIMIT ?
+    `);
+    const rows = articles.flatMap(article => readCitations.all(article.id, Math.min(Math.max(limit, 1), 50)) as unknown as GraphEdgeRow[]);
+    return rows.map(toRelationRecord);
+  } finally {
+    database.close();
+  }
+}

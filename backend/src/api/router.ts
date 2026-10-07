@@ -122,22 +122,6 @@ export class ApiRouter {
         throw unavailable("읽기 전용 법률 Wiki가 설정되지 않았습니다.");
       return sendJson(res, 200, { items: await this.deps.legalWiki.list() });
     }
-    if (req.method === "GET" && url.pathname === "/api/legal/wiki/entries") {
-      if (!this.deps.legalWiki)
-        throw unavailable("읽기 전용 법률 Wiki가 설정되지 않았습니다.");
-      const name = url.searchParams.get("name");
-      if (name === null) throw badRequest("name is required");
-      return sendJson(
-        res,
-        200,
-        await this.deps.legalWiki.listEntries(
-          name,
-          url.searchParams.get("q") ?? "",
-          Number(url.searchParams.get("offset") ?? 0),
-          Number(url.searchParams.get("limit") ?? 50),
-        ),
-      );
-    }
     if (req.method === "GET" && url.pathname === "/api/legal/wiki/page") {
       if (!this.deps.legalWiki)
         throw unavailable("읽기 전용 법률 Wiki가 설정되지 않았습니다.");
@@ -239,6 +223,22 @@ export class ApiRouter {
       return this.redactDocument(req, res);
     if (req.method === "POST" && url.pathname === "/api/pdfs/merge")
       return this.mergePdfs(req, res);
+    if (req.method === "POST" && url.pathname === "/api/pdfs/thumbnails") {
+      const body = await readJson(req);
+      if (
+        !Array.isArray(body.pageNumbers) ||
+        !body.pageNumbers.every((pageNumber) => typeof pageNumber === "number")
+      )
+        throw badRequest("pageNumbers must be a number array");
+      return sendJson(
+        res,
+        200,
+        await this.deps.pdfs.renderThumbnails({
+          fileId: asString(body.fileId, "fileId", true)!,
+          pageNumbers: body.pageNumbers as number[],
+        }),
+      );
+    }
     if (req.method === "POST" && url.pathname === "/api/pdfs/inspect") {
       const body = await readJson(req);
       return sendJson(

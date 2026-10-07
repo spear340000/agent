@@ -18,7 +18,8 @@
     "searxng:status": "tsx backend/src/cli/searxng-container.ts status",
     "auth:token": "tsx backend/src/cli/generate-api-token.ts",
     "check": "tsc -p backend/tsconfig.json --noEmit",
-    "test:backend": "tsx backend/tests/bootstrap.ts"
+    "test:backend": "tsx backend/tests/bootstrap.ts",
+    "eval:legal": "tsx scripts/legal-eval.ts"
   },
   "dependencies": {
     "diff": "^9.0.0",

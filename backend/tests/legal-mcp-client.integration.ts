@@ -9,7 +9,7 @@ import { McpStdioClient } from '../src/infrastructure/legal/mcp-stdio-client.ts'
 const fixture = fileURLToPath(new URL('./mcp-fixture.ts', import.meta.url));
 const runner = fileURLToPath(new URL('./bootstrap.ts', import.meta.url));
 
-const client = (mode: string, overrides: Partial<{ startupTimeoutMs: number; requestTimeoutMs: number; maxResponseCharacters: number; restartBudget: number }> = {}) =>
+const client = (mode: string, overrides: Partial<{ startupTimeoutMs: number; requestTimeoutMs: number; maxResponseCharacters: number; restartBudget: number; restartWindowMs: number }> = {}) =>
   new McpStdioClient({
     command: process.execPath,
     args: [runner, fixture, mode],
@@ -19,6 +19,7 @@ const client = (mode: string, overrides: Partial<{ startupTimeoutMs: number; req
     requestTimeoutMs: overrides.requestTimeoutMs ?? 5_000,
     maxResponseCharacters: overrides.maxResponseCharacters ?? 2_000_000,
     restartBudget: overrides.restartBudget ?? 1,
+    ...(overrides.restartWindowMs !== undefined ? { restartWindowMs: overrides.restartWindowMs } : {}),
     stderrTailCharacters: 1_000
   });
 
@@ -91,6 +92,20 @@ test('a child that dies mid-session is restarted once on a later request', async
       assert.match(String(error.message), /restart/);
       return true;
     });
+  } finally {
+    await mcp.close();
+  }
+});
+
+test('with a restart window, the restart budget recovers instead of staying exhausted', async () => {
+  const mcp = client('crash-after-first', { restartBudget: 1, restartWindowMs: 300 });
+  try {
+    assert.equal((await mcp.callTool('echo', { query: '첫 요청' })).isError, false);
+    await assert.rejects(() => mcp.callTool('echo', { query: '두 번째' }), (error: { kind?: string }) => error.kind === 'transport');
+    assert.equal((await mcp.callTool('echo', { query: '재시작 1' })).isError, false);
+    await assert.rejects(() => mcp.callTool('echo', { query: '다시 실패' }), (error: { kind?: string }) => error.kind === 'transport');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    assert.equal((await mcp.callTool('echo', { query: '창이 지난 뒤 복구' })).isError, false, 'the budget is restored once the window passes');
   } finally {
     await mcp.close();
   }

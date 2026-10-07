@@ -1,5 +1,7 @@
 import { LegalRetrievalError } from '../../domain/legal-error.js';
 import type {
+  LegalChainStage,
+  LegalChainStageId,
   LegalCitation,
   LegalEvidence,
   LegalLayerUse,
@@ -15,9 +17,12 @@ import type { ExtractedDocument } from '../document-content-service.js';
 import type { WebSource } from '../../tools/browser-use.js';
 import { assignCitationIds, describeStep, preserveLegalSearchQuery, sanitizeLegalQuery } from '../../infrastructure/legal/legal-retrieval-service.js';
 import type { LegalRetrievalService } from '../../infrastructure/legal/legal-retrieval-service.js';
+import type { LegalWikiHints } from './legal-wiki-hints.js';
+import { precedentsCitingArticle, type LegalKnowledgeChain, type OkfEntry } from './legal-knowledge-chain.js';
+import { fitEvidenceToBudget, relevantExcerpt } from './legal-evidence-budget.js';
 import { describeLawDate } from '../../infrastructure/legal/legal-normalization.js';
 import type { NormalizedRecord } from '../../infrastructure/legal/legal-normalization.js';
-import { validateLegalAnswer, normalizeLegalCitations, legalCitationIds } from './legal-citations.js';
+import { validateLegalAnswer, normalizeLegalCitations, legalCitationIds, dropUnsupportedSentences, splitAnswerParts, joinAnswerParts, citedSourcesOf } from './legal-citations.js';
 import type { LegalIntent, LegalRouteDecision } from './legal-request-router.js';
 
 export type LegalWorkflowLimits = {
@@ -60,7 +65,12 @@ export type LegalOutputInput = {
   webSources?: WebSource[];
   title: string;
   toolCalls: number;
+  notes?: string[];
+  agentStats?: LegalAgentStats;
 };
+
+/** What the agent's own checks did to the evidence and the answer before it was published. */
+export type LegalAgentStats = { filtered: number; removedSentences: number; checked: boolean };
 
 export type LegalRunOutput = {
   mode: LegalRetrievalMode;
@@ -101,6 +111,31 @@ const SYSTEM_PROMPT = [
   '사용자가 요청한 언어로 답변하세요. 기본은 한국어입니다.'
 ].join('\n');
 
+const REWRITE_SYSTEM = [
+  'You rewrite search queries. Output only JSON: {"queries":[string],"articles":[{"lawName":string,"articleNumber":string}]}.',
+  'Rewrite a colloquial Korean legal question into 1 or 2 short search queries (at most 6 words each) made of statutory terms, for a Korean statute full-text index. The index does not weight law names, so keep queries topical.',
+  'In "articles", list at most 3 statute articles that most directly govern the question, only when you are confident of both the exact law name and the article number (for example {"lawName":"근로기준법","articleNumber":"제23조"}). The system looks each one up and discards any that do not exist, so leave the list empty rather than guess.',
+  'Never answer the question.'
+].join('\n');
+
+const CLAIM_VERIFY_SYSTEM = [
+  'You audit a Korean legal answer. Output only JSON: {"unsupported":[integer]}.',
+  'Each numbered sentence cites sources by id. List the numbers of sentences whose claim is NOT supported by the text of the source it cites, for example a different requirement, liability, penalty, or conclusion than the source states.',
+  'Do not list sentences that are supported. If every sentence is supported, return {"unsupported":[]}.'
+].join('\n');
+const RELEVANCE_SYSTEM = [
+  'You screen search results for a Korean legal question. Output only JSON: {"relevant":[string]}.',
+  'List the ids of the records that could help answer the question. Leave out only records that are clearly about a different subject, for example a statute for another industry that merely shares a word like 손해배상 or 청구.',
+  'When unsure, keep the record.'
+].join('\n');
+const RELEVANCE_TIMEOUT_MS = 20_000;
+const CLAIM_EXCERPT_CHARACTERS = 800;
+const DEFAULT_EVIDENCE_BUDGET_CHARS = 6_000;
+const CLAIM_VERIFY_TIMEOUT_MS = 45_000;
+
+/** The rewrite only improves recall, so a slow model must not stall a direct lookup. */
+const REWRITE_TIMEOUT_MS = 6_000;
+
 const PLANNER_SYSTEM = [
   'Return only valid JSON. Shape: {"title":string,"issue":string,"queries":[{"corpus":"law"|"precedent"|"all"|"graph","query":string,"limit":integer}],"articles":[{"lawName":string,"articleNumber":string}],"caseNumbers":[string],"draft":boolean,"webQueries":[string]}.',
   'You plan retrieval for a Korean legal information request. Never answer the request.',
@@ -112,9 +147,10 @@ const PLANNER_SYSTEM = [
 
 export class LegalWorkflow {
   private vectorState: LegalVectorState = null;
+  private okfEntries = new Map<string, OkfEntry>();
 
   constructor(
-    private readonly deps: { retrieval: LegalRetrievalService; model: ModelProvider; limits: LegalWorkflowLimits }
+    private readonly deps: { retrieval: LegalRetrievalService; model: ModelProvider; limits: LegalWorkflowLimits; queryRewrite?: boolean; wikiHints?: Pick<LegalWikiHints, 'find' | 'sourceUrlFor'>; knowledgeChain?: Pick<LegalKnowledgeChain, 'loadOntology' | 'loadOkf'>; claimVerification?: boolean; evidenceBudgetChars?: number; relevanceFilter?: boolean }
   ) {}
 
   setVectorState(state: LegalVectorState): void {
@@ -137,8 +173,22 @@ export class LegalWorkflow {
 
   async retrieve(plan: LegalPlan | LegalRouteDecision, signal: AbortSignal): Promise<LegalEvidence> {
     const steps = 'retrievalSteps' in plan ? plan.retrievalSteps : plan.steps;
-    const evidence = await this.deps.retrieval.retrieve(steps, signal);
-    if ('retrievalSteps' in plan || steps.some(step => step.kind === 'graph')) return evidence;
+    let evidence = tagSources(await this.deps.retrieval.retrieve(steps, signal), source => RAG_TAG[source.corpus] ?? 'RAG 검색');
+    evidence = withStage(evidence, {
+      id: 'rag',
+      label: 'RAG 검색 (키워드 + 벡터)',
+      summary: `법령 ${countCorpus(evidence, 'law')}건 · 판례 ${countCorpus(evidence, 'precedent')}건을 찾음`,
+      items: steps.map(describeStep).slice(0, 4)
+    });
+    if (this.deps.knowledgeChain) this.okfEntries = await this.deps.knowledgeChain.loadOkf();
+    if ('retrievalSteps' in plan) {
+      evidence = await this.fillEvidenceGaps(evidence, signal);
+      return this.addWikiHints(plan.issue || plan.title, evidence, signal);
+    }
+    if (steps.some(step => step.kind === 'graph')) return evidence;
+    const questionStep = steps.find(step => step.kind === 'search-laws' || step.kind === 'search-all');
+    if (questionStep && 'query' in questionStep) evidence = await this.addWikiHints(questionStep.query, evidence, signal);
+    if (this.deps.queryRewrite) evidence = await this.rewriteWeakDirectSearch(steps, evidence, signal);
     const searchStep = steps.find(step =>
       step.kind === 'search-laws' || step.kind === 'search-precedents' || step.kind === 'search-all'
     );
@@ -154,7 +204,7 @@ export class LegalWorkflow {
 
     const graphStep: LegalRetrievalStep = { kind: 'graph', query: searchStep.query, limit: 3 };
     try {
-      const graphEvidence = await this.deps.retrieval.retrieve([graphStep], signal);
+      const graphEvidence = tagSources(await this.deps.retrieval.retrieve([graphStep], signal), () => '근거가 적어 관계 그래프로 보강 · MCP search_legal_graph');
       const records = [...evidence.sources, ...graphEvidence.sources].map(source => {
         const { citationId: _citationId, ...record } = source;
         return record;
@@ -186,6 +236,262 @@ export class LegalWorkflow {
     }
   }
 
+  /**
+   * Looks the question up in the curated key-article pages of the legal wiki (the pages carry tags and an official
+   * source URL, the OKF-style metadata). Matching articles are fetched from the real corpus, so a listed article that is
+   * missing there is simply dropped, and the wiki's source URL is attached to every record of that law as its official
+   * link. Never fails the search: any problem keeps the evidence unchanged.
+   */
+  /**
+   * Hands the articles found so far (wiki key articles first) to the relation graph, keeps only the precedent→article
+   * edges the ontology allows, and fetches those precedents through MCP so their own text confirms the citation.
+   * This is where the layers feed each other; each step is recorded on the evidence and on every record it adds.
+   */
+  async linkPrecedentsViaGraph(evidence: LegalEvidence, signal: AbortSignal): Promise<LegalEvidence> {
+    const chain = this.deps.knowledgeChain;
+    if (!chain || !evidence.status.graph.ready) return evidence;
+    const squash = (value: string): string => value.replace(/\s+/g, '');
+    const anchors = evidence.sources
+      .filter(source => source.corpus === 'law' && source.kind === 'law-article' && source.lawName && source.articleNumber)
+      // Start from the articles that matter most for this question: search relevance first (an exact lookup has no
+      // score), with a nudge for articles the wiki's curated key-article list also points to.
+      .map(source => ({ source, score: (source.relevance ?? 0.5) + (source.provenance?.some(route => route.startsWith('LLM Wiki')) ? 0.3 : 0) }))
+      .sort((a, b) => b.score - a.score)
+      .map(({ source }) => source)
+      .filter((source, index, all) => all.findIndex(other => squash(other.lawName!) === squash(source.lawName!) && other.articleNumber === source.articleNumber) === index)
+      .slice(0, 2);
+    if (anchors.length === 0) return evidence;
+    try {
+      const contract = await chain.loadOntology();
+      let current = evidence;
+      let edges = 0;
+      let validated = 0;
+      const linked: string[] = [];
+      const properties = new Set<string>();
+      const totalCiting: string[] = [];
+      for (const anchor of anchors) {
+        if (current.maxToolCalls - current.toolCalls < 2) break;
+        const article = `${anchor.lawName} ${anchor.articleNumber}`;
+        // Read the article's incoming citations straight from the graph database when possible; a label search
+        // ("법률 제398조" matches that article number in every law) is only the fallback.
+        const direct = typeof this.deps.retrieval.articleCitations === 'function' ? this.deps.retrieval.articleCitations(anchor.lawName!, anchor.articleNumber!, 20) : [];
+        let graphSources = direct;
+        if (graphSources.length === 0) {
+          const graph = await this.deps.retrieval.retrieve([{ kind: 'graph', query: article, limit: 10 }], signal);
+          current = { ...current, toolCalls: current.toolCalls + graph.toolCalls, steps: [...current.steps, ...graph.steps], trace: [...current.trace, ...graph.trace] };
+          graphSources = graph.sources;
+        }
+        const found = precedentsCitingArticle(graphSources, anchor.lawName!, anchor.articleNumber!, contract, 2);
+        if (direct.length > 0) totalCiting.push(`${article}: 이 조문을 인용한 판례 관계 ${direct.length}건 이상 (그래프 DB 직접 조회)`);
+        edges += found.edges;
+        validated += found.validated;
+        for (const citation of found.citations) properties.add(citation.property);
+        const budget = Math.min(found.citations.length, current.maxToolCalls - current.toolCalls);
+        if (budget <= 0) continue;
+        // get_precedent returns the judgment text with its 참조조문 section; a case-number search returns only a summary.
+        const fetched = await this.deps.retrieval.retrieve(found.citations.slice(0, budget).map(citation => ({ kind: 'precedent' as const, id: citation.caseNumber, maxChars: 4_000 })), signal);
+        // The graph only names "법률 제N조"; keep a precedent only if its own text cites this law's article.
+        const confirmed = fetched.sources.filter(source => source.corpus === 'precedent' && squash(source.excerpt).includes(squash(anchor.articleNumber!)) && squash(source.excerpt).includes(squash(anchor.lawName!)));
+        const tagged = tagSources({ ...fetched, sources: confirmed, failures: fetched.failures.filter(failure => failure.kind !== 'not-found') }, source => {
+          const citation = found.citations.find(item => source.caseNumber === item.caseNumber || source.recordId.includes(item.caseNumber));
+          return `관계 그래프: 판례${citation ? ` 「${citation.caseName}」` : ''} —${citation?.property ?? 'citesArticle'}→ ${article} (온톨로지가 허용한 관계) → MCP get_precedent로 판례 원문의 참조조문에서 인용 확인`;
+        });
+        for (const source of confirmed) linked.push(`${source.caseNumber ?? source.title} —인용→ ${article}`);
+        current = mergeLegalEvidence(current, tagged);
+      }
+      current = withStage(current, {
+        id: 'graph',
+        label: '관계 그래프',
+        summary: `관련성 검토를 통과한 조문 ${anchors.length}건에서 출발해 인용 관계 ${edges}건 발견 → 판례 원문으로 확인한 인용 ${linked.length}건 추가`,
+        items: [...totalCiting, ...anchors.map(anchor => `출발 조문: ${anchor.lawName} ${anchor.articleNumber}`), ...linked]
+      });
+      return withStage(current, {
+        id: 'ontology',
+        label: '법률 온톨로지',
+        summary: contract
+          ? `그래프 관계 ${edges}건 중 ${validated}건이 온톨로지 정의(관계 유형·정의역·치역)를 통과`
+          : '온톨로지 파일을 읽지 못해 관계 검증 없이 진행',
+        items: contract ? [...properties].map(name => {
+          const property = contract.properties.get(name);
+          return `${name}: ${property?.domain ?? '?'} → ${property?.range ?? '?'}`;
+        }) : []
+      });
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return evidence;
+    }
+  }
+
+  async addWikiHints(question: string, evidence: LegalEvidence, signal: AbortSignal): Promise<LegalEvidence> {
+    const wiki = this.deps.wikiHints;
+    if (!wiki) return evidence;
+    try {
+      const squash = (value: string): string => value.replace(/\s+/g, '');
+      const have = new Set(evidence.sources.map(source => `${squash(source.lawName ?? '')}|${squash(source.articleNumber ?? '')}`));
+      const budget = Math.min(3, evidence.maxToolCalls - evidence.toolCalls);
+      const matches = (await wiki.find(question, 3)).filter(match => !have.has(`${squash(match.lawName)}|${squash(match.article)}`)).slice(0, Math.max(0, budget));
+      let merged: LegalEvidence = { ...evidence, wikiHints: 0 };
+      let found = 0;
+      if (matches.length > 0) {
+        const titleFor = (source: LegalSource): string | undefined =>
+          matches.find(match => squash(match.lawName) === squash(source.lawName ?? '') && squash(match.article) === squash(source.articleNumber ?? ''))?.title;
+        const extra = tagSources(
+          await this.deps.retrieval.retrieve(matches.map(match => ({ kind: 'law-article' as const, lawName: match.lawName, articleNumber: match.article })), signal),
+          source => `LLM Wiki 핵심 조문집${titleFor(source) ? ` '${titleFor(source)}'` : ''} → MCP get_law_article로 원문 확인`
+        );
+        found = extra.trace.filter(entry => entry.results > 0).length;
+        merged = { ...mergeLegalEvidence(evidence, { ...extra, failures: extra.failures.filter(failure => failure.kind !== 'not-found') }), wikiHints: found };
+      }
+      merged = withStage(merged, {
+        id: 'wiki',
+        label: 'LLM Wiki 핵심 조문집',
+        summary: matches.length > 0
+          ? `질문의 태그·용어와 맞는 핵심 조문 ${matches.length}건 → 법령 색인에서 ${found}건 확인`
+          : '질문과 맞는 핵심 조문이 없음',
+        items: matches.map(match => `${match.lawName} ${match.article} ${match.title}`)
+      });
+      const urls = new Map<string, string | undefined>();
+      for (const lawName of new Set(merged.sources.map(source => source.lawName).filter((name): name is string => Boolean(name)))) urls.set(lawName, await wiki.sourceUrlFor(lawName));
+      return { ...merged, sources: merged.sources.map(source => (!source.officialUrl && source.lawName && urls.get(source.lawName) ? { ...source, officialUrl: urls.get(source.lawName)! } : source)) };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return evidence;
+    }
+  }
+
+  /**
+   * Keyword search returns any record sharing a word with the question (a semiconductor-design statute for a traffic
+   * accident), and the answer then cites it. Asks the model once to drop clearly unrelated law and precedent records
+   * before the answer is written. Skipped when the user named the article, and fails open: the original list is kept
+   * when the check cannot run or would remove everything.
+   */
+  async selectRelevantSources(question: string, sources: LegalSource[], signal: AbortSignal, userNamedArticle: boolean): Promise<{ sources: LegalSource[]; dropped: number }> {
+    const keep = { sources, dropped: 0 };
+    if (!this.deps.relevanceFilter || userNamedArticle) return keep;
+    const candidates = sources.filter(source => source.corpus === 'law' || source.corpus === 'precedent');
+    if (candidates.length <= 3) return keep;
+    const listing = candidates.map(source => `[${source.citationId}] ${source.title}${source.articleLabel ? ` ${source.articleLabel}` : ''} | ${source.excerpt.replace(/\s+/g, ' ').slice(0, 160)}`).join('\n');
+    try {
+      const raw = await this.deps.model.complete({
+        system: RELEVANCE_SYSTEM,
+        expectedOutputTokens: 400,
+        user: `QUESTION
+${question.slice(0, 600)}
+
+RECORDS
+${listing}`,
+        signal: AbortSignal.any([signal, AbortSignal.timeout(RELEVANCE_TIMEOUT_MS)])
+      });
+      const parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')) as { relevant?: unknown };
+      const candidateIds = new Set(candidates.map(source => source.citationId));
+      const relevant = new Set(asArray(parsed.relevant).filter((item): item is string => typeof item === 'string' && candidateIds.has(item)));
+      if (relevant.size === 0) return keep;
+      const kept = sources.filter(source => !candidateIds.has(source.citationId) || relevant.has(source.citationId));
+      return { sources: kept, dropped: sources.length - kept.length };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return keep;
+    }
+  }
+
+  /**
+   * Asks the model whether each cited sentence is actually backed by the text of the record it cites, and drops the
+   * sentences that are not. Citation ids alone cannot show that a claim matches its source. Fails open: when the
+   * check cannot run, the answer is returned unchanged and `checked` is false so the caller can say so.
+   */
+  async verifyClaims(answer: string, sources: LegalSource[], signal: AbortSignal): Promise<{ answer: string; removed: number; checked: boolean }> {
+    if (!this.deps.claimVerification) return { answer, removed: 0, checked: true };
+    const parts = splitAnswerParts(answer);
+    const cited = parts.map((part, index) => ({ index, sentence: part.sentence.trim(), records: citedSourcesOf(part.sentence, sources) })).filter(item => item.sentence && item.records.length > 0);
+    if (cited.length === 0) return { answer, removed: 0, checked: true };
+    const recordIds = [...new Set(cited.flatMap(item => item.records.map(record => record.citationId)))];
+    const recordText = sources.filter(source => recordIds.includes(source.citationId))
+      .map(source => `[${source.citationId}] ${source.title}\n${relevantExcerpt(source.excerpt, cited.filter(item => item.records.includes(source)).map(item => item.sentence), CLAIM_EXCERPT_CHARACTERS)}`).join('\n\n');
+    const sentenceText = cited.map((item, position) => `${position + 1}. ${item.sentence}`).join('\n');
+    try {
+      const raw = await this.deps.model.complete({
+        system: CLAIM_VERIFY_SYSTEM,
+        expectedOutputTokens: 400,
+        user: `SOURCES\n${recordText}\n\nSENTENCES\n${sentenceText}`,
+        signal: AbortSignal.any([signal, AbortSignal.timeout(CLAIM_VERIFY_TIMEOUT_MS)])
+      });
+      const parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')) as { unsupported?: unknown };
+      const flagged = new Set(asArray(parsed.unsupported).filter((item): item is number => Number.isInteger(item) && (item as number) >= 1 && (item as number) <= cited.length));
+      const drop = new Set([...flagged].map(position => cited[position - 1]!.index));
+      if (drop.size === 0) return { answer, removed: 0, checked: true };
+      const kept = parts.filter((_part, index) => !drop.has(index));
+      const next = joinAnswerParts(kept);
+      if (!next || legalCitationIds(next).length === 0) return { answer, removed: 0, checked: true };
+      return { answer: next, removed: drop.size, checked: true };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return { answer, removed: 0, checked: false };
+    }
+  }
+
+  /**
+   * A direct search uses the user's raw wording, and the index's relevance score only counts matching words (a wrong
+   * statute can score 1), so it cannot tell whether the right law was found. Ask the model once for statutory-term
+   * queries and search again. Best effort: any failure keeps the original evidence.
+   */
+  async rewriteWeakDirectSearch(steps: LegalRetrievalStep[], evidence: LegalEvidence, signal: AbortSignal): Promise<LegalEvidence> {
+    const searchStep = steps.find(step => step.kind === 'search-laws' || step.kind === 'search-all');
+    if (!searchStep || !('query' in searchStep)) return evidence;
+    const budget = Math.min(5, evidence.maxToolCalls - evidence.toolCalls);
+    if (budget <= 0) return evidence;
+    try {
+      const raw = await this.deps.model.complete({ system: REWRITE_SYSTEM, expectedOutputTokens: 600, user: `QUESTION\n${searchStep.query}`, signal: AbortSignal.any([signal, AbortSignal.timeout(REWRITE_TIMEOUT_MS)]) });
+      const parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')) as { queries?: unknown; articles?: unknown };
+      const queries = [...new Set(asArray(parsed.queries)
+        .filter((item): item is string => typeof item === 'string')
+        .map(item => sanitizeLegalQuery(item, this.deps.limits.maxQueryCharacters))
+        .filter(item => item && item !== searchStep.query))].slice(0, 2);
+      const articles = asArray(parsed.articles).flatMap((item): LegalRetrievalStep[] => {
+        if (!item || typeof item !== 'object') return [];
+        const { lawName, articleNumber } = item as { lawName?: unknown; articleNumber?: unknown };
+        const number = typeof articleNumber === 'string' ? articleNumber.replace(/\s+/g, '').replace(/^(\d+(?:의\d+)?)$/, '제$1조') : '';
+        if (typeof lawName !== 'string' || !lawName.trim() || !/^제\d+조(?:의\d+)?$/.test(number)) return [];
+        return [{ kind: 'law-article', lawName: sanitizeLegalQuery(lawName, 60), articleNumber: number }];
+      }).slice(0, 3);
+      const extraSteps: LegalRetrievalStep[] = [...queries.map(query => ({ kind: 'search-laws' as const, query, limit: 5 })), ...articles].slice(0, budget);
+      if (extraSteps.length === 0) return evidence;
+      const extra = tagSources(await this.deps.retrieval.retrieve(extraSteps, signal), source =>
+        source.kind === 'law-article' && articles.some(step => step.kind === 'law-article' && step.articleNumber === source.articleNumber)
+          ? '질의 재작성(LLM)이 제안한 후보 조문 → MCP get_law_article로 원문 확인'
+          : `질의 재작성(LLM) "${queries.join('", "')}" → MCP search_laws`);
+      // A guessed article that does not exist is expected and must not surface as a retrieval failure.
+      return withStage(mergeLegalEvidence(evidence, { ...extra, failures: extra.failures.filter(failure => failure.kind !== 'not-found') }), {
+        id: 'rag',
+        label: 'RAG 검색 (키워드 + 벡터)',
+        summary: `질의 재작성 후 추가 검색 ${extraSteps.length}회`,
+        items: extraSteps.map(describeStep)
+      });
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return evidence;
+    }
+  }
+
+  /** Re-search planned issues that returned nothing, using a narrower query than the planner's long one. */
+  async fillEvidenceGaps(evidence: LegalEvidence, signal: AbortSignal): Promise<LegalEvidence> {
+    const retries: LegalRetrievalStep[] = [];
+    for (const entry of evidence.trace) {
+      const step = entry.step;
+      if (entry.results > 0 || !('query' in step) || step.kind === 'graph') continue;
+      const tokens = step.query.split(/\s+/).filter(Boolean);
+      if (tokens.length <= 4) continue;
+      retries.push({ ...step, query: tokens.slice(0, 4).join(' ') });
+    }
+    const budget = Math.min(2, evidence.maxToolCalls - evidence.toolCalls);
+    if (retries.length === 0 || budget <= 0) return evidence;
+    try {
+      return mergeLegalEvidence(evidence, tagSources(await this.deps.retrieval.retrieve(retries.slice(0, budget), signal), () => '근거가 없던 쟁점을 좁힌 질의로 재검색 · MCP search_laws'));
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return evidence;
+    }
+  }
+
   executionStatus(evidence: LegalEvidence, decision: LegalRouteDecision): LegalSourceStatus {
     const plannerCalls = decision.path === 'orchestrated' ? 1 : 0;
     return buildSourceStatus(evidence, evidence.sources, 0, plannerCalls, this.vectorState);
@@ -200,7 +506,9 @@ export class LegalWorkflow {
     let answer = normalizeLegalCitations((await this.deps.model.complete({ system, user, signal: input.signal })).trim(), validIds);
     if (input.signal.aborted) throw new Error('task cancelled');
     const rejected = validateLegalAnswer({ text: answer, sources });
-    const uninformative = isUninformativeAnswer(answer);
+    const retrievalPlanOutput = isRetrievalPlanOutput(answer);
+    const placeholderAnswer = isUninformativeAnswer(answer);
+    const uninformative = placeholderAnswer || retrievalPlanOutput;
     if (rejected.valid && !uninformative) return answer;
     answer = normalizeLegalCitations(
       (
@@ -209,13 +517,20 @@ export class LegalWorkflow {
           user: [
             user,
             'REPAIR REQUIRED',
-            ...(uninformative ? [
+            ...(retrievalPlanOutput ? [
+              '직전 응답은 사용자에게 보여 줄 법률 답변이 아니라 내부 검색 도구 호출용 JSON 계획이었습니다.',
+              '그 JSON을 반복하거나 설명하지 말고, 확인된 근거만 사용해 사용자의 질문에 직접 답하세요.'
+            ] : []),
+            ...(placeholderAnswer ? [
               '답변 초안은 "확인된 기록이 없습니다" 한 문장뿐이라 사용자의 질문에 답하지 못했습니다.',
               '질문에 대한 직접적인 결론을 먼저 제시하세요. 자료가 부족하다면 어떤 사실이 확인되지 않았는지 구체적으로 설명하고, 확인된 사실·판단할 수 없는 부분·판단에 필요한 추가 자료를 구분하세요.',
               '검색된 자료가 질문과 무관하면 이를 답의 근거로 인용하지 마세요. 기사 제목만 확인되고 본문을 읽지 못했다면 그 한계를 분명히 밝히세요.'
             ] : []),
             `허용되지 않은 인용: ${rejected.invalidCitations.join(', ') || '없음'}`,
             `근거 없는 최신성 주장: ${rejected.unsupportedCurrentness.join(', ') || '없음'}`,
+            `확보하지 않은 조문 언급(삭제하거나 확인되지 않았다고 쓰세요): ${rejected.unretrievedArticles.join(', ') || '없음'}`,
+            `인용한 근거에 해당 조문이 없는 문장(올바른 근거로 바꾸거나 인용을 제거하세요): ${rejected.mismatchedClaims.join(' | ') || '없음'}`,
+            `한국어 문장에 섞인 일본어·중국어 문자(한국어로 고치세요): ${rejected.foreignScript.join(', ') || '없음'}`,
             `허용 인용 ID: ${validIds.join(', ') || '(사용 가능한 근거 없음)'}`,
             '인용은 반드시 대괄호로 감싸 [L1] 형태로 표기하세요. 근거가 없는 문장은 인용하지 말고 확인되지 않았다고 적으세요.',
             'Sources 섹션을 만들지 마세요.',
@@ -228,18 +543,31 @@ export class LegalWorkflow {
       ).trim(),
       validIds
     );
-    if (isUninformativeAnswer(answer)) {
-      throw new LegalRetrievalError('tool-error', 'legal answer generation returned no substantive answer after one repair attempt');
+    const afterRepair = validateLegalAnswer({ text: answer, sources });
+    if (afterRepair.unretrievedArticles.length > 0 || afterRepair.mismatchedClaims.length > 0 || afterRepair.unsupportedCurrentness.length > 0) {
+      const pruned = dropUnsupportedSentences(answer, sources);
+      if (pruned.removed > 0 && pruned.text) {
+        answer = `${pruned.text}\n\n※ 확보한 근거로 뒷받침되지 않는 문장 ${pruned.removed}개는 제외했습니다.`;
+      }
+    }
+    if (isUninformativeAnswer(answer) || isRetrievalPlanOutput(answer)) {
+      throw new LegalRetrievalError('tool-error', 'legal answer generation returned no substantive answer or a retrieval tool plan after one repair attempt');
     }
     return answer;
   }
 
   assertPublishable(answer: string, sources: LegalSource[]): { citationless: boolean } {
+    if (isRetrievalPlanOutput(answer)) {
+      throw new LegalRetrievalError('tool-error', 'legal answer contains a retrieval tool plan instead of user-facing prose');
+    }
     const validation = validateLegalAnswer({ text: answer, sources });
     if (validation.valid) return { citationless: validation.citationCount === 0 };
     const reasons: string[] = [];
     if (validation.invalidCitations.length) reasons.push(`허용되지 않은 인용 ${validation.invalidCitations.join(', ')}`);
     if (validation.unsupportedCurrentness.length) reasons.push(`근거 없는 최신성 주장 ${validation.unsupportedCurrentness.join(', ')}`);
+    if (validation.unretrievedArticles.length) reasons.push(`확보하지 않은 조문 ${validation.unretrievedArticles.join(', ')}`);
+    if (validation.mismatchedClaims.length) reasons.push(`인용과 조문이 일치하지 않는 문장 ${validation.mismatchedClaims.length}건`);
+    if (validation.foreignScript.length) reasons.push(`외국 문자 혼입 ${validation.foreignScript.join(', ')}`);
     throw new LegalRetrievalError('tool-error', `legal answer validation failed: ${reasons.join('; ')}`);
   }
 
@@ -247,12 +575,21 @@ export class LegalWorkflow {
     const { decision, answer, evidence, sources, documents } = input;
     const validation = validateLegalAnswer({ text: answer, sources });
     const sourceStatus = buildSourceStatus(evidence, sources, validation.citationCount, decision.plannerCalls, this.vectorState);
+    sourceStatus.notes.push(...(input.notes ?? []));
     const webSources = input.webSources ?? [];
     for (const source of webSources.filter(item => item.retrievalStatus === 'unavailable')) {
       sourceStatus.notes.push(`${source.url.startsWith('urn:') ? source.title : `링크 ${source.url}`} · ${source.retrievalError ?? '본문을 확인하지 못했습니다.'}`);
     }
     const citedIds = new Set(legalCitationIds(answer));
-    const citedSources = sources.filter(source => citedIds.has(source.citationId));
+    const okfRoute = (source: LegalSource): string | undefined => {
+      const entry = this.okfEntries.get(source.corpus === 'law' ? 'laws' : source.corpus === 'precedent' ? 'precedents' : '');
+      return entry ? `OKF 카탈로그: ${entry.title}${entry.resource ? ` (${entry.resource})` : ''}` : undefined;
+    };
+    const citedSources = sources.filter(source => citedIds.has(source.citationId)).map(source => {
+      const route = okfRoute(source);
+      return route ? { ...source, provenance: [...(source.provenance ?? []), route] } : source;
+    });
+    sourceStatus.chain = buildKnowledgeChain(evidence, citedSources, decision, input.agentStats, this.okfEntries);
     const draft = Boolean(decision.draftKind);
     const body = sources.length === 0 ? `${answer}\n\n${noEvidenceGuidance(evidence)}` : answer;
     const markdown = [
@@ -267,6 +604,10 @@ export class LegalWorkflow {
       '## 근거',
       '',
       ...renderSourceList(citedSources, sources.length > 0),
+      '',
+      '## 근거 형성 과정',
+      '',
+      ...renderChain(sourceStatus.chain),
       '',
       '## 확인 상태',
       '',
@@ -286,7 +627,8 @@ export class LegalWorkflow {
         corpus: source.corpus,
         label: citationLabel(source),
         ...(source.officialUrl ? { officialUrl: source.officialUrl } : {}),
-        ...(source.date ? { date: source.date } : {})
+        ...(source.date ? { date: source.date } : {}),
+        ...(source.provenance?.length ? { provenance: source.provenance } : {})
       })),
       sources,
       sourceStatus,
@@ -327,7 +669,7 @@ export class LegalWorkflow {
 
   private buildSynthesisUser(input: LegalSynthesisInput): string {
     const legalEvidence = JSON.stringify(
-      input.sources.map(source => ({
+      fitEvidenceToBudget(input.sources, this.deps.evidenceBudgetChars ?? DEFAULT_EVIDENCE_BUDGET_CHARS).map(({ source, excerptLimit }) => ({
         id: source.citationId,
         recordId: source.recordId,
         type: source.kind,
@@ -344,10 +686,8 @@ export class LegalWorkflow {
         relatedArticles: source.relatedArticles,
         officialUrl: source.officialUrl,
         truncated: source.truncated,
-        text: source.excerpt.slice(0, 4_000)
-      })),
-      null,
-      2
+        text: relevantExcerpt(source.excerpt, [input.task.prompt, ...(source.termMatches ?? [])], excerptLimit)
+      }))
     );
     const documentEvidence = JSON.stringify(
       this.buildDocumentRecords(input.documents).map((record, index) => ({
@@ -451,8 +791,70 @@ export class LegalWorkflow {
   }
 }
 
+const RAG_TAG: Partial<Record<LegalSource['corpus'], string>> = {
+  law: 'RAG 검색(키워드 + 벡터) · MCP search_laws',
+  precedent: 'RAG 검색(키워드 + 벡터) · MCP search_precedents',
+  graph: '관계 그래프 · MCP search_legal_graph'
+};
+
+/** Records how these sources were found; a source that already has a route keeps it and gains this one. */
+function tagSources(evidence: LegalEvidence, route: (source: LegalSource) => string): LegalEvidence {
+  return {
+    ...evidence,
+    sources: evidence.sources.map(source => ({ ...source, provenance: [...new Set([...(source.provenance ?? []), route(source)])] }))
+  };
+}
+
+function withStage(evidence: LegalEvidence, stage: LegalChainStage): LegalEvidence {
+  return { ...evidence, chain: [...(evidence.chain ?? []), stage] };
+}
+
+function countCorpus(evidence: LegalEvidence, corpus: LegalSource['corpus']): number {
+  return evidence.sources.filter(source => source.corpus === corpus).length;
+}
+
+/** Merges a later search into the evidence; a record found again keeps one entry but gains the new route. */
+function mergeLegalEvidence(evidence: LegalEvidence, extra: LegalEvidence): LegalEvidence {
+  const byKey = new Map<string, Omit<LegalSource, 'citationId'>>();
+  const records: Array<Omit<LegalSource, 'citationId'>> = [];
+  for (const source of [...evidence.sources, ...extra.sources]) {
+    const { citationId: _citationId, ...record } = source;
+    const key = `${record.corpus}:${record.recordId}`;
+    const existing = byKey.get(key);
+    if (existing) {
+      const routes = [...new Set([...(existing.provenance ?? []), ...(record.provenance ?? [])])];
+      if (routes.length > 0) existing.provenance = routes;
+      continue;
+    }
+    const copy = { ...record };
+    byKey.set(key, copy);
+    records.push(copy);
+  }
+  return {
+    ...evidence,
+    chain: [...(evidence.chain ?? []), ...(extra.chain ?? [])],
+    sources: assignCitationIds(records as NormalizedRecord[]),
+    degraded: [...new Set([...evidence.degraded, ...extra.degraded])],
+    failures: [...evidence.failures, ...extra.failures],
+    toolCalls: evidence.toolCalls + extra.toolCalls,
+    steps: [...evidence.steps, ...extra.steps],
+    trace: [...evidence.trace, ...extra.trace]
+  };
+}
+
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function isRetrievalPlanOutput(answer: string): boolean {
+  const text = answer.trim().replace(/^```(?:json)?\s*/i, '');
+  if (!/^\{/.test(text) || !/["']queries["']\s*:\s*\[\s*\{/.test(text)) return false;
+  const legacyToolCall = /["'](?:engine|opts|top_k)["']\s*:/i.test(text) && /["'](?:law|precedent|graph|all)["']/i.test(text);
+  const legalPlan = /["']corpus["']\s*:\s*["'](?:law|precedent|graph|all)["']/i.test(text)
+    && /["']query["']\s*:/i.test(text)
+    && /["']limit["']\s*:/i.test(text)
+    && /["'](?:issue|articles|caseNumbers|webQueries)["']\s*:/i.test(text);
+  return legacyToolCall || legalPlan;
 }
 
 function isUninformativeAnswer(answer: string): boolean {
@@ -488,8 +890,72 @@ function renderSourceList(sources: LegalSource[], retrievedAny: boolean): string
     if (source.date) parts.push(`(${describeLawDate(source.date)})`);
     if (source.truncated) parts.push('(일부만 읽음)');
     const link = source.officialUrl ? ` <${source.officialUrl}>` : '';
-    return `${parts.join(' ')}${link}`;
+    const route = source.provenance?.length ? `\n  - 경로: ${source.provenance.join(' → ')}` : '';
+    return `${parts.join(' ')}${link}${route}`;
   });
+}
+
+const STAGE_ORDER: LegalChainStageId[] = ['wiki', 'rag', 'graph', 'ontology', 'okf', 'mcp', 'agent'];
+
+/**
+ * One ordered account of how the evidence was built: the layers that ran during retrieval (merged per layer), the OKF
+ * catalog entries behind the cited records, the MCP tool calls, and what the agent's checks removed before answering.
+ */
+export function buildKnowledgeChain(
+  evidence: LegalEvidence,
+  cited: LegalSource[],
+  decision: Pick<LegalRouteDecision, 'path'>,
+  stats: LegalAgentStats | undefined,
+  okf: ReadonlyMap<string, OkfEntry>
+): LegalChainStage[] {
+  const merged = new Map<LegalChainStageId, LegalChainStage>();
+  for (const stage of evidence.chain ?? []) {
+    const previous = merged.get(stage.id);
+    merged.set(stage.id, previous
+      ? { ...previous, summary: `${previous.summary} · ${stage.summary}`, items: [...previous.items, ...stage.items] }
+      : { ...stage, items: [...stage.items] });
+  }
+  if (okf.size > 0) {
+    const keys = ['laws', 'precedents', 'lexical-index', 'vector-index', ...(merged.has('graph') ? ['graph-index'] : []), ...(merged.has('ontology') ? ['ontology'] : [])];
+    const used = keys.map(key => okf.get(key)).filter((entry): entry is OkfEntry => Boolean(entry));
+    const legalCited = cited.filter(source => source.corpus === 'law' || source.corpus === 'precedent').length;
+    merged.set('okf', {
+      id: 'okf',
+      label: 'OKF 카탈로그',
+      summary: `인용한 법령·판례 ${legalCited}건과 사용한 색인을 카탈로그 ${used.length}개 항목의 출처로 연결`,
+      items: used.map(entry => `${entry.title} — ${entry.type}${entry.resource ? ` (${entry.resource})` : ''}`)
+    });
+  }
+  const tools = new Map<string, number>();
+  for (const entry of evidence.trace) tools.set(toolNameFor(entry.step), (tools.get(toolNameFor(entry.step)) ?? 0) + 1);
+  merged.set('mcp', {
+    id: 'mcp',
+    label: 'MCP 도구 호출',
+    summary: `법률 MCP 서버의 도구를 ${evidence.toolCalls}회 호출 (한도 ${evidence.maxToolCalls}회)`,
+    items: [...tools].map(([tool, count]) => `${tool} × ${count}`)
+  });
+  merged.set('agent', {
+    id: 'agent',
+    label: '에이전트 판단·검증',
+    summary: [
+      decision.path === 'orchestrated' ? '복합 조사 경로' : '직접 조회 경로',
+      ...(stats ? [`관련성 필터 제외 ${stats.filtered}건`, stats.checked ? `의미 검증 제외 ${stats.removedSentences}문장` : '의미 검증 미수행'] : []),
+      `답변 인용 ${cited.length}건`
+    ].join(' → '),
+    items: cited.map(source => `[${source.citationId}] ${citationLabel(source)}`)
+  });
+  // Retrieval layers are listed in the order they actually ran; catalog, tool and agent summaries close the chain.
+  const ran = [...new Set((evidence.chain ?? []).map(stage => stage.id))];
+  const closing = STAGE_ORDER.filter(id => !ran.includes(id));
+  return [...ran, ...closing].flatMap(id => (merged.has(id) ? [merged.get(id)!] : []));
+}
+
+function renderChain(chain: LegalChainStage[] | undefined): string[] {
+  if (!chain?.length) return ['- 기록된 단계가 없습니다.'];
+  return chain.flatMap((stage, index) => [
+    `${index + 1}. **${stage.label}** — ${stage.summary}`,
+    ...stage.items.slice(0, 6).map(item => `   - ${item}`)
+  ]);
 }
 
 function buildSourceStatus(
@@ -506,7 +972,7 @@ function buildSourceStatus(
   if (sources.length > 0 && citationCount === 0) {
     notes.push('답변 본문에서 확인된 근거를 특정하지 못했습니다. 근거 목록에는 답변에서 실제 인용한 자료만 표시합니다.');
   }
-  for (const failure of evidence.failures) notes.push(`${failure.step}: ${failure.message}`);
+  for (const failure of evidence.failures) notes.push(`${summarizeDiagnosticText(failure.step)}: ${failure.message}`);
   return {
     corpusReady: Boolean(status.laws.ready || status.precedents.ready),
     retrieved: sources.length,
@@ -574,9 +1040,19 @@ export function buildLedger(evidence: LegalEvidence, plannerCalls: number, vecto
     {
       id: 'okf',
       label: 'OKF 상태 번들',
-      state: status.okf.ready ? 'ready' : 'unavailable',
-      detail: status.okf.ready ? '출처·상태 번들 검증 통과 · 단순 형식이며 공식 표준 호환을 주장하지 않음' : 'OKF 번들 검증 실패'
-    }
+      state: evidence.wikiHints && evidence.wikiHints > 0 ? 'used' : status.okf.ready ? 'ready' : 'unavailable',
+      detail: evidence.wikiHints && evidence.wikiHints > 0
+        ? '핵심 조문집의 태그·출처·상태 메타데이터로 조문을 선별하고, 공식 링크가 없는 근거에는 출처 URL을 연결함 · 단순 형식이며 공식 표준 호환을 주장하지 않음'
+        : status.okf.ready ? '출처·상태 번들 검증 통과 · 단순 형식이며 공식 표준 호환을 주장하지 않음' : 'OKF 번들 검증 실패'
+    },
+    ...(evidence.wikiHints === undefined ? [] : [{
+      id: 'wiki' as const,
+      label: 'LLM Wiki 핵심 조문',
+      state: evidence.wikiHints > 0 ? 'used' as const : 'ready' as const,
+      detail: evidence.wikiHints > 0
+        ? `질문과 태그·제목이 맞는 핵심 조문 ${evidence.wikiHints}건을 실제 법령 색인에서 조회해 근거에 추가함`
+        : '핵심 조문집 준비됨 · 이 질문에는 맞는 핵심 조문이 없음'
+    }])
   ];
   return {
     layers,
@@ -660,7 +1136,7 @@ function renderLedger(status: LegalSourceStatus): string[] {
     lines.push('- 실행된 법령 검색 도구가 없습니다.');
   } else {
     for (const tool of ledger.tools) {
-      lines.push(`- \`${tool.tool}\` — ${tool.query} → 기록 ${tool.results}건`);
+      lines.push(`- \`${tool.tool}\` — ${summarizeDiagnosticText(tool.query)} → 기록 ${tool.results}건`);
     }
   }
   lines.push(
@@ -678,13 +1154,18 @@ function noEvidenceGuidance(evidence: LegalEvidence): string {
     '- 사건번호가 있다면 알려 주세요. 예: `2013가합30895`',
     '- 쟁점을 구체적인 법리 용어로 바꿔 보세요. 예: `위약금`, `손해배상`, `부당해고`',
     '',
-    ...evidence.failures.map(failure => `- 실패한 검색 ${failure.step}: ${failure.message}`)
+    ...evidence.failures.map(failure => `- 실패한 검색 ${summarizeDiagnosticText(failure.step)}: ${failure.message}`)
   ].join('\n');
+}
+
+function summarizeDiagnosticText(value: string): string {
+  const display = value.replace(/\s+/g, ' ').trim();
+  return display.length > 100 ? `${display.slice(0, 100)}… (${value.length}자)` : display;
 }
 
 function noEvidenceAnswer(evidence: LegalEvidence): string {
   const status = evidence.failures.length
-    ? `검색 단계에서 자료를 확보하지 못했습니다: ${evidence.failures.map(failure => `${failure.step} (${failure.kind})`).join(', ')}.`
+    ? `검색 단계에서 자료를 확보하지 못했습니다: ${evidence.failures.map(failure => `${summarizeDiagnosticText(failure.step)} (${failure.kind})`).join(', ')}.`
     : '로컬 법령·판례 검색 결과에서 이 요청을 직접 뒷받침하는 기록을 찾지 못했습니다.';
   return [
     status,

@@ -11,6 +11,8 @@ export type McpClientOptions = {
   requestTimeoutMs: number;
   maxResponseCharacters: number;
   restartBudget: number;
+  /** When set, a restart stops counting against the budget after this many ms, so a long-lived server can recover. */
+  restartWindowMs?: number;
   stderrTailCharacters: number;
 };
 
@@ -35,7 +37,7 @@ export class McpStdioClient {
   private child?: ChildProcessWithoutNullStreams;
   private startPromise?: Promise<void>;
   private started = false;
-  private restartsUsed = 0;
+  private restartTimes: number[] = [];
   private closed = false;
   private nextId = 1;
   private buffer = "";
@@ -264,13 +266,17 @@ export class McpStdioClient {
     const existing = this.child;
     if (existing && existing.exitCode === null && !existing.killed)
       return existing;
-    if (this.started && this.restartsUsed >= this.options.restartBudget) {
+    const now = Date.now();
+    const window = this.options.restartWindowMs;
+    if (window !== undefined)
+      this.restartTimes = this.restartTimes.filter((at) => now - at < window);
+    if (this.started && this.restartTimes.length >= this.options.restartBudget) {
       throw new LegalRetrievalError(
         "transport",
         "legal retrieval process is unavailable after its single restart attempt",
       );
     }
-    if (this.started) this.restartsUsed += 1;
+    if (this.started) this.restartTimes.push(now);
     if (!this.startPromise) this.startPromise = this.start();
     try {
       await this.startPromise;

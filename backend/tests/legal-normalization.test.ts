@@ -247,3 +247,21 @@ test('tool errors that mean "no record" are separated from real failures', () =>
   assert.equal(isNotFoundToolError('Error: precedent not found: abc'), true);
   assert.equal(isNotFoundToolError('Error: sqlite3.OperationalError: database is locked'), false);
 });
+
+test('exact article retrieval rejects a cross-reference returned by the local MCP', async () => {
+  const retrieval = new LegalRetrievalService({
+    callTool: async () => ({ text: '푸른하늘법\n\n법률명: 푸른하늘법\n##### 제30조 (목적) 제3조를 참조한다.', isError: false })
+  } as never, { maxToolCalls: 2, maxRetrievalSteps: 2, maxQueryCharacters: 100, maxPrecedentCharacters: 1000 });
+  await assert.rejects(retrieval.getLawArticle('푸른하늘법', '제3조'), /조문/);
+});
+
+test('a missing local article falls back to verified official source data', async () => {
+  const retrieval = new LegalRetrievalService({
+    callTool: async () => ({ text: 'Error: law article not found', isError: true })
+  } as never, { maxToolCalls: 2, maxRetrievalSteps: 2, maxQueryCharacters: 100, maxPrecedentCharacters: 1000 },
+  { read: async () => [lawRecordFromDocument('##### 제3조 ①공식 원문', '푸른하늘법')] });
+  const [article] = await retrieval.getLawArticle('푸른하늘법', '제3조');
+  assert.equal(article?.lawName, '푸른하늘법');
+  assert.equal(article?.articleNumber, '제3조');
+  assert.match(article!.excerpt, /공식 원문/);
+});

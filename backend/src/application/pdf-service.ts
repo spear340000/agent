@@ -1,10 +1,12 @@
 import { PDFDocument, degrees } from "pdf-lib";
+import { PDFParse } from "pdf-parse";
 import type { FileStorage, ManagedFile } from "../domain/managed-file.js";
 import { badRequest, unavailable } from "../shared/app-error.js";
 import { markdownDocumentHtml } from "./markdown-export.js";
 
 const MAX_PDF_PAGES = 2_000;
 const MAX_MERGE_FILES = 100;
+const MAX_PDF_THUMBNAIL_BATCH = 12;
 
 export class PdfService {
   constructor(
@@ -55,6 +57,65 @@ export class PdfService {
         rotation: page.getRotation().angle,
       })),
     };
+  }
+
+  async renderThumbnails(input: {
+    fileId: string;
+    pageNumbers: number[];
+  }): Promise<{
+    pageCount: number;
+    pages: Array<{
+      pageNumber: number;
+      width: number;
+      height: number;
+      dataBase64: string;
+    }>;
+  }> {
+    const { pageNumbers } = input;
+    if (
+      pageNumbers.length < 1 ||
+      pageNumbers.length > MAX_PDF_THUMBNAIL_BATCH ||
+      !pageNumbers.every(
+        (pageNumber) => Number.isSafeInteger(pageNumber) && pageNumber > 0,
+      ) ||
+      new Set(pageNumbers).size !== pageNumbers.length
+    )
+      throw badRequest(
+        `pageNumbers must contain 1 to ${MAX_PDF_THUMBNAIL_BATCH} unique positive page numbers`,
+      );
+
+    const file = await this.files.read(input.fileId);
+    this.assertPdf(file.metadata.name);
+    const document = await this.loadPdf(file.content);
+    const pageCount = document.getPageCount();
+    if (!pageNumbers.every((pageNumber) => pageNumber <= pageCount))
+      throw badRequest("pageNumbers contains an invalid page");
+
+    const parser = new PDFParse({ data: Buffer.from(file.content) });
+    try {
+      const rendered = await parser.getScreenshot({
+        partial: pageNumbers,
+        desiredWidth: 180,
+        imageBuffer: true,
+        imageDataUrl: false,
+      });
+      if (rendered.pages.length !== pageNumbers.length)
+        throw badRequest("one or more PDF pages could not be rendered");
+      return {
+        pageCount,
+        pages: rendered.pages.map((page) => ({
+          pageNumber: page.pageNumber,
+          width: page.width,
+          height: page.height,
+          dataBase64: Buffer.from(page.data).toString("base64"),
+        })),
+      };
+    } catch (error) {
+      if (error instanceof Error && "statusCode" in error) throw error;
+      throw badRequest("PDF page thumbnails could not be rendered");
+    } finally {
+      await parser.destroy().catch(() => undefined);
+    }
   }
 
   async merge(input: {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { OpenAiProvider } from '../src/infrastructure/llm/openai-provider.js';
+import { ModelProviderError } from '../src/infrastructure/llm/model-provider-error.js';
 
 test('exhausted credits surface a safe actionable error without futile retries or secret leakage', async () => {
   const original = globalThis.fetch;
@@ -54,6 +55,23 @@ test('provider retries transient HTTP failures with a bounded retry count', asyn
     const provider = new OpenAiProvider({ apiKey: 'test-secret', model: 'test', baseUrl: 'https://example.com' });
     assert.equal(await provider.complete({ system: 's', user: 'u' }), 'ok');
     assert.equal(calls, 3);
+  } finally { globalThis.fetch = original; }
+});
+
+test('an exhausted upstream 503 is identified as eligible for model failover without exposing its body', async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; return Response.json({ error: { message: 'PRIVATE_UPSTREAM_DETAIL' } }, { status: 503 }); };
+  try {
+    const provider = new OpenAiProvider({ apiKey: 'test-secret', model: 'test', baseUrl: 'https://example.com', maxAttempts: 1 });
+    await assert.rejects(() => provider.complete({ system: 's', user: 'u' }), error => {
+      assert.ok(error instanceof ModelProviderError);
+      assert.equal(error.fallbackEligible, true);
+      assert.match(error.message, /HTTP 503/);
+      assert.doesNotMatch(error.message, /PRIVATE_UPSTREAM_DETAIL|test-secret/);
+      return true;
+    });
+    assert.equal(calls, 1);
   } finally { globalThis.fetch = original; }
 });
 

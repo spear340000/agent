@@ -1,4 +1,5 @@
 import type { ModelProvider } from '../domain/model-provider.js';
+import { runWithModelAttempts, summarizeModelAttempts, type ModelAttempt } from '../infrastructure/llm/model-attempts.js';
 import type { Task, TaskStep } from '../domain/task.js';
 import type { TaskRepository } from '../domain/task-repository.js';
 import type { BrowserUseService, WebSource } from '../tools/browser-use.js';
@@ -8,17 +9,27 @@ import type { TaskEventBus } from './task-event-bus.js';
 import type {
   LegalEvidence,
   LegalPlan,
+  LegalRetrievalStep,
   LegalSource
 } from '../domain/legal-source.js';
 import type { LegalRouteDecision } from './legal/legal-request-router.js';
 import type { LegalRunOutput, LegalWorkflow } from './legal/legal-workflow.js';
 import { defaultLegalTitle, legalRetrievalMode } from './legal/legal-workflow.js';
-import { assignCitationIds } from '../infrastructure/legal/legal-retrieval-service.js';
+import { assignCitationIds, describeStep } from '../infrastructure/legal/legal-retrieval-service.js';
 import { createHash } from 'node:crypto';
 import { findInvalidCitations } from './source-citations.js';
 import { conflict, notFound } from '../shared/app-error.js';
 
 type Plan = { title: string; searchQueries: string[]; outline: string[] };
+/** Planned steps with no records, counting a narrowed gap retry of the same search as coverage. */
+function uncoveredSteps(evidence: LegalEvidence, expected: LegalRetrievalStep[]): LegalRetrievalStep[] {
+  const hits = evidence.trace.filter(entry => entry.results > 0).map(entry => entry.step);
+  return expected.filter(step => !hits.some(hit =>
+    describeStep(hit) === describeStep(step) ||
+    (hit.kind === step.kind && 'query' in hit && 'query' in step && step.query.startsWith(hit.query))
+  ));
+}
+
 type LegalEvidenceCheck = { lawCount: number; precedentCount: number; graphCount: number; toolCalls: number; issues: string[]; sufficient: boolean };
 const STEP_TITLES = ['Plan task', 'Read source files', 'Research the web', 'Analyze evidence', 'Generate cited DOCX'];
 const DOCUMENT_PREFIX: Record<ExtractedDocument['format'], string> = { pdf: 'PDF', docx: 'DOCX', xlsx: 'XLSX', pptx: 'PPTX', text: 'TXT' };
@@ -36,7 +47,8 @@ function summarizeSource(source: LegalSource): Record<string, unknown> {
     officialUrl: source.officialUrl,
     date: source.date,
     statusMarkers: source.statusMarkers,
-    truncated: source.truncated
+    truncated: source.truncated,
+    provenance: source.provenance
   };
 }
 
@@ -50,7 +62,7 @@ export function planLegalSteps(task: Pick<Task, 'sourceFileIds'>, decision: Lega
   items.push({ key: 'legal:retrieve', title: orchestrated ? '제한된 근거 수집' : '법령·판례 근거 확인' });
   if (decision.needsWeb) items.push({ key: 'legal:web', title: '공개 웹 자료 확인' });
   if (orchestrated) items.push({ key: 'legal:verify', title: '근거 검증' });
-  items.push({ key: 'legal:write', title: decision.draftKind ? '근거 기반 답변·초안 작성' : '근거 기반 답변 작성' });
+  items.push({ key: 'legal:write:v2', title: decision.draftKind ? '근거 기반 답변·초안 작성' : '근거 기반 답변 작성' });
   return items;
 }
 
@@ -99,6 +111,25 @@ export class AgentService {
   }
 
   async run(taskId: string): Promise<void> {
+    const attempts: ModelAttempt[] = [];
+    try {
+      await runWithModelAttempts(attempts, () => this.runTask(taskId));
+    } finally {
+      this.recordModelAttempts(taskId, attempts);
+    }
+  }
+
+  private recordModelAttempts(taskId: string, attempts: readonly ModelAttempt[]): void {
+    if (attempts.length === 0) return;
+    const { finalModel, fellBack, failedModels } = summarizeModelAttempts(attempts);
+    const message = [
+      finalModel ? `최종 응답 모델: ${finalModel}` : '응답한 모델이 없습니다.',
+      fellBack ? `대체 모델 사용 · 실패한 모델: ${failedModels.join(', ')}` : ''
+    ].filter(Boolean).join(' · ');
+    this.event(taskId, 'model.attempts', '모델 사용 기록', message, fellBack ? 'warning' : 'completed', { finalModel, fellBack, attempts });
+  }
+
+  private async runTask(taskId: string): Promise<void> {
     if (this.activeTasks.has(taskId)) return;
     this.activeTasks.add(taskId);
     const controller = new AbortController(); this.controllers.set(taskId, controller);
@@ -181,7 +212,7 @@ export class AgentService {
       ? await stageStep<LegalPlan>({ prompt: task.prompt, title: task.title, decision }, async () => workflow.plan({ task, decision, documents: docs, signal }))
       : decision;
     const plannedSteps = 'retrievalSteps' in plan ? plan.retrievalSteps : plan.steps;
-    const evidence = await stageStep<LegalEvidence>({ steps: plannedSteps }, async () => workflow.retrieve(plan, signal));
+    const evidence = await stageStep<LegalEvidence>({ steps: plannedSteps, retrievalVersion: 2 }, async () => workflow.retrieve(plan, signal));
     const sourceStatus = workflow.executionStatus(evidence, decision);
     this.event(taskId, 'legal.retrieval', '법령·판례 검색 완료', `${evidence.sources.length}건의 실제 검색 근거를 확보했습니다.`, 'completed', {
       intent: decision.intent,
@@ -193,14 +224,22 @@ export class AgentService {
     const webSources = decision.needsWeb
       ? await stageStep<WebSource[]>({ queries: decision.webQueries, sourceUrls: task.sourceUrls }, async () => this.researchLegal(decision.webQueries, task.sourceUrls, signal))
       : [];
+    let writeEvidence = evidence;
     if (decision.path === 'orchestrated') {
       const verification = this.verifyEvidence(evidence, plan);
       await stageStep(verification, async () => verification);
+      const gaps = uncoveredSteps(evidence, plannedSteps);
+      if (gaps.length > 0) {
+        writeEvidence = {
+          ...evidence,
+          failures: [...evidence.failures, ...gaps.map(step => ({ step: describeStep(step), kind: 'not-found', message: '이 쟁점에서는 확인된 근거가 없습니다. 해당 쟁점은 단정하지 말고 근거가 확인되지 않았다고 쓰세요.' }))]
+        };
+      }
     }
     const baseDocument = this.revisionDocument(taskId);
     const output = await stageStep<LegalRunOutput>(
-      { prompt: task.prompt, decision, evidence, docs: docs.map(document => ({ fileName: document.fileName, format: document.format, length: document.text.length })), web: webSources.map(source => source.url), baseDocument },
-      async () => this.writeLegalOutput(task, decision, plan, evidence, docs, webSources, baseDocument, signal)
+      { generationVersion: 3, prompt: task.prompt, decision, evidence, docs: docs.map(document => ({ fileName: document.fileName, format: document.format, length: document.text.length })), web: webSources.map(source => source.url), baseDocument },
+      async () => this.writeLegalOutput(task, decision, plan, writeEvidence, docs, webSources, baseDocument, signal)
     );
     this.publishLegalAnswer(taskId, output);
     return output;
@@ -219,13 +258,15 @@ export class AgentService {
       issues.push('계획된 판례 검색에서 확인된 판례가 없습니다.');
     }
     for (const failure of evidence.failures) issues.push(`${failure.step}: ${failure.message}`);
+    const uncovered = uncoveredSteps(evidence, expected);
+    for (const step of uncovered) issues.push(`쟁점 근거 미확보: ${describeStep(step)}`);
     return {
       lawCount,
       precedentCount,
       graphCount,
       toolCalls: evidence.toolCalls,
       issues,
-      sufficient: evidence.sources.length > 0
+      sufficient: evidence.sources.length > 0 && uncovered.length === 0
     };
   }
 
@@ -245,12 +286,22 @@ export class AgentService {
     }
     const extra = assignCitationIds([...workflow.buildDocumentRecords(docs), ...workflow.buildWebRecords(webSources)]);
     const sources = [...evidence.sources, ...extra].slice(0, 60);
+    if (sources.length === 0 && evidence.failures.length > 0) {
+      throw new Error(`법률 근거 검색에 실패하여 답변을 생성하지 못했습니다. ${[...new Set(evidence.failures.map(failure => failure.message))].join(' ')}`);
+    }
     const title = 'retrievalSteps' in plan && plan.title ? plan.title : defaultLegalTitle(decision, docs);
-    const answer = await workflow.synthesize({
+    const relevance = await workflow.selectRelevantSources(task.prompt, sources, signal, Boolean(decision.article?.lawName));
+    // The relation graph starts from the records that survived the relevance check, so each layer works on what the
+    // previous one handed over; linked precedents join the evidence with their route recorded.
+    const isLegal = (source: LegalSource): boolean => source.corpus === 'law' || source.corpus === 'precedent' || source.corpus === 'graph';
+    const answerEvidence = await workflow.linkPrecedentsViaGraph({ ...evidence, sources: relevance.sources.filter(isLegal) }, signal);
+    const promptSources = [...answerEvidence.sources, ...relevance.sources.filter(source => !isLegal(source))];
+    const outputSources = [...answerEvidence.sources, ...sources.filter(source => !isLegal(source))];
+    const synthesized = await workflow.synthesize({
       task,
       decision,
-      evidence,
-      sources,
+      evidence: answerEvidence,
+      sources: promptSources,
       documents: docs,
       webSources,
       baseDocument,
@@ -258,8 +309,18 @@ export class AgentService {
       title,
       signal
     });
-    workflow.assertPublishable(answer, sources);
-    const output = workflow.buildOutput({ decision, answer, evidence, sources, documents: docs, webSources, title, toolCalls: evidence.toolCalls });    if (signal.aborted) throw new Error('task cancelled');
+    const verified = await workflow.verifyClaims(synthesized, outputSources, signal);
+    const answer = verified.answer;
+    const notes = [
+      ...(relevance.dropped > 0 ? [`질문과 관련 없어 보이는 검색 결과 ${relevance.dropped}건은 답변 근거에서 제외했습니다.`] : []),
+      ...(verified.removed > 0 ? [`인용한 근거가 주장을 뒷받침하지 않는 문장 ${verified.removed}개를 검증 단계에서 제외했습니다.`] : []),
+      ...(!verified.checked ? ['주장과 근거의 일치 검증을 수행하지 못했습니다. 답변 속 인용을 직접 확인해 주세요.'] : [])
+    ];
+    workflow.assertPublishable(answer, outputSources);
+    const output = workflow.buildOutput({
+      decision, answer, evidence: answerEvidence, sources: outputSources, documents: docs, webSources, title, toolCalls: answerEvidence.toolCalls, notes,
+      agentStats: { filtered: relevance.dropped, removedSentences: verified.removed, checked: verified.checked }
+    });    if (signal.aborted) throw new Error('task cancelled');
     const file = await this.documents.createMarkdownReport({ outputName: output.title, markdown: output.markdown });
     if (signal.aborted) throw new Error('task cancelled');
     const artifact = this.tasks.addArtifact(task.id, { name: file.name, kind: 'document', mimeType: file.mimeType, content: output.markdown, fileId: file.id });
