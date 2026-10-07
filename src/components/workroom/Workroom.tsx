@@ -1,581 +1,1022 @@
 'use client'
-// 작업 목록, 진행 상태, 문서 패널을 조합하고 전체 화면 상태를 관리하는 핵심 컨테이너다.
-import { useEffect, useMemo, useState } from 'react'
-import type {
-  CSSProperties,
-  KeyboardEvent,
-  PointerEvent as ReactPointerEvent
-} from 'react'
+
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Check,
-  ChevronDown,
-  Download,
-  FileText,
+  FolderOpen,
   Menu,
+  Moon,
   PanelRight,
-  Pause,
-  Play,
-  Plus,
-  Search,
-  X
+  RefreshCw,
+  Settings,
+  Sun
 } from 'lucide-react'
-import Composer from './Composer'
-import DocumentConstellation from './DocumentConstellation'
-import { DocumentPreview, Sources, downloadDocument } from './Documents'
 import {
-  createMockTask,
-  getExampleTask,
-  runMockTask,
-  sendMockMessage
+  cancelTask,
+  createTask,
+  downloadFile,
+  getFileContent,
+  getTaskDetails,
+  getFile,
+  listTasks,
+  request,
+  rerunTask,
+  saveTaskDocument,
+  uploadSourceFile,
+  watchTask
 } from '@/api/workroom'
+import type { BackendTask, ManagedFile } from '@/api/workroom'
+import { officeApi } from '@/api/automation'
+import FileToolsWorkspace from '@/components/tools/FileToolsWorkspace'
+import ConnectionDialog from './ConnectionDialog'
+import useBackendConnection from './useBackendConnection'
+import { persistDocumentDraft, restoreDocumentDraft } from './documentDrafts'
+import Composer from './Composer'
+import DocumentWorkspace from './DocumentWorkspace'
+import TaskContextPanel from './TaskContextPanel'
+import WorkfolioSidebar from './WorkfolioSidebar'
+import WorkfolioSplitLayout from './WorkfolioSplitLayout'
+import SystemExplorer, { type SystemTopic } from './SystemExplorer'
+import { downloadDocument } from './Documents'
+import { applySavedDocument } from './documentSave'
+import { getDocumentOutline, prepareFinalDocument } from './documentModel'
 import {
-  stageMeta,
-  stageOrder,
-  type Source,
-  type Task,
-  type TaskState
-} from './types'
-const STORAGE_KEY = 'workroom-tasks-v2'
-const SIDEBAR_WIDTH_KEY = 'workroom-sidebar-width-v1'
-const DEFAULT_SIDEBAR_WIDTH = 265
-const MIN_SIDEBAR_WIDTH = 210
-const MAX_SIDEBAR_WIDTH = 380
-function readTasks() {
-  try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-    return Array.isArray(value) ? (value as Task[]) : []
-  } catch {
-    return []
-  }
-}
-function stateLabel(state: TaskState) {
+  summarizeDocumentChanges,
+  toTaskSummary,
+  toWorkroomTask
+} from './taskAdapters'
+import type { Source, Task, TaskState } from './types'
+import { stageMeta } from './types'
+import { friendlyErrorMessage } from './displayText'
+
+type SaveFailure = { taskId: string; message: string }
+type ExportFormat = 'md' | 'docx' | 'xlsx' | 'pdf'
+type ColorTheme = 'light' | 'dark'
+const THEME_STORAGE_KEY = 'workfolio-color-theme-v1'
+
+function taskStateLabel(state: TaskState): string {
   if (state === 'completed') return '완료'
   if (state === 'paused') return '일시정지'
-  if (state === 'failed') return '오류'
+  if (state === 'failed') return '실패'
+  if (state === 'cancelled') return '취소됨'
+  if (state === 'queued') return '대기 중'
+  if (state === 'running') return '진행 중'
   return stageMeta[state].label
 }
+
+function documentStatus(task: Task): { title: string; detail: string } {
+  if (task.state === 'failed') {
+    return {
+      title: '문서를 만들지 못했습니다',
+      detail: task.error || '작업을 다시 실행하거나 요청 내용을 수정해 주세요.'
+    }
+  }
+  if (task.state === 'cancelled') {
+    return {
+      title: '작업이 취소되었습니다',
+      detail: '필요하면 작업 컨텍스트에서 추가 요청을 보낼 수 있습니다.'
+    }
+  }
+  if (task.state === 'completed') {
+    return {
+      title: '문서 결과물이 없습니다',
+      detail: '작업은 완료됐지만 백엔드에서 문서 결과물을 반환하지 않았습니다.'
+    }
+  }
+  if (task.state === 'queued') {
+    return {
+      title: '작업 대기 중',
+      detail: '백엔드 작업 대기열에서 시작을 기다리고 있습니다.'
+    }
+  }
+  if (task.state === 'paused') {
+    return {
+      title: '작업이 일시정지되었습니다',
+      detail: '백엔드에서 작업을 다시 시작할 때까지 기다려 주세요.'
+    }
+  }
+  return {
+    title: stageMeta[task.stage].label,
+    detail: stageMeta[task.stage].detail
+  }
+}
+
 export default function Workroom() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all')
-  const [mobileSidebar, setMobileSidebar] = useState(false)
-  const [rightTab, setRightTab] = useState<'document' | 'sources'>('document')
-  const [editing, setEditing] = useState(false)
-  const [revision, setRevision] = useState('')
-  const [notice, setNotice] = useState('')
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [mobileContextOpen, setMobileContextOpen] = useState(false)
+  const [theme, setTheme] = useState<ColorTheme>('light')
+  const [finalPreview, setFinalPreview] = useState(false)
+  const {
+    connection,
+    ready,
+    status: backendStatus,
+    capabilities,
+    error: connectionError,
+    reconnect,
+    connect
+  } = useBackendConnection()
+  const [connectionOpen, setConnectionOpen] = useState(false)
+  const [view, setView] = useState<'tasks' | 'tools'>('tasks')
+  const [sidebarSection, setSidebarSection] = useState<'chat' | 'system'>(
+    'chat'
+  )
+  const toolsActive = sidebarSection === 'chat' && view === 'tools'
+  const [systemTopic, setSystemTopic] = useState<SystemTopic>('wiki')
+  const initializedServer = useRef('')
+  const uploadedFiles = useRef(new WeakMap<File, ManagedFile>())
+  const currentConnection = useRef(connection)
+  currentConnection.current = connection
   const [loaded, setLoaded] = useState(false)
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
-  const [resizingSidebar, setResizingSidebar] = useState(false)
-  const active = tasks.find((task) => task.id === activeId)
+  const [notice, setNotice] = useState('')
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null)
+  const [saveFailure, setSaveFailure] = useState<SaveFailure | null>(null)
+
   useEffect(() => {
-    const saved = readTasks()
-    setTasks(saved.length ? saved : [getExampleTask()])
-    const savedSidebarWidth = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY))
-    if (Number.isFinite(savedSidebarWidth)) {
-      setSidebarWidth(
-        Math.min(
-          MAX_SIDEBAR_WIDTH,
-          Math.max(MIN_SIDEBAR_WIDTH, savedSidebarWidth)
+    try {
+      const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
+      if (savedTheme === 'light' || savedTheme === 'dark') setTheme(savedTheme)
+    } catch {
+      // Keep light mode when browser storage is unavailable.
+    }
+  }, [])
+
+  function toggleTheme() {
+    const nextTheme = theme === 'light' ? 'dark' : 'light'
+    setTheme(nextTheme)
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, nextTheme)
+    } catch {
+      // Theme switching still works for this session when storage is unavailable.
+    }
+  }
+
+  const active = tasks.find((task) => task.id === activeId)
+  const activeTaskId = active?.id
+  const activeTaskState = active?.state
+  const documentHeading = active
+    ? getDocumentOutline(active.document).find((heading) => heading.level === 1)
+        ?.title
+    : undefined
+
+  useEffect(() => {
+    if (!ready) return
+    if (backendStatus !== 'online') {
+      if (backendStatus === 'offline') setLoaded(true)
+      return
+    }
+    let disposed = false
+    let loading = false
+    async function load() {
+      if (loading) return
+      loading = true
+      try {
+        const { items } = await listTasks(connection)
+        if (disposed) return
+        setTasks((current) => [
+          ...items.map((item) => {
+            const summary = toTaskSummary(item)
+            const previous = current.find((task) => task.id === item.id)
+            return previous
+              ? previous.updatedAt > summary.updatedAt
+                ? previous
+                : {
+                    ...previous,
+                    title: summary.title,
+                    state: summary.state,
+                    stage: summary.stage,
+                    updatedAt: summary.updatedAt,
+                    error: summary.error
+                  }
+              : summary
+          }),
+          ...current.filter(
+            (task) => !items.some((item) => item.id === task.id)
+          )
+        ])
+        if (initializedServer.current !== connection.baseUrl) {
+          initializedServer.current = connection.baseUrl
+          try {
+            const id = localStorage.getItem(
+              `workfolio-active:${connection.baseUrl}`
+            )
+            if (items.some((item) => item.id === id)) setActiveId(id)
+          } catch {
+            /* Optional workspace state. */
+          }
+        }
+      } catch (error) {
+        if (!disposed)
+          setNotice(
+            friendlyErrorMessage(error, '작업 목록을 불러오지 못했습니다.')
+          )
+      } finally {
+        loading = false
+        if (!disposed) setLoaded(true)
+      }
+    }
+    void load()
+    const timer = setInterval(() => void load(), 15_000)
+    return () => {
+      disposed = true
+      clearInterval(timer)
+    }
+  }, [connection, ready, backendStatus])
+
+  const updateTaskDetails = useCallback(
+    (
+      details: Awaited<ReturnType<typeof getTaskDetails>>,
+      providedSources?: Source[]
+    ) => {
+      if (currentConnection.current !== connection) return
+      setTasks((current) => {
+        const previous = current.find((task) => task.id === details.task.id)
+        if (
+          previous &&
+          previous.updatedAt > (Date.parse(details.task.updatedAt) || 0)
+        )
+          return current
+        const mapped = toWorkroomTask(details, {
+          sources: [...(previous?.sources ?? []), ...(providedSources ?? [])],
+          messages: previous?.messages ?? [],
+          document: previous?.document ?? '',
+          documentDirty: previous?.documentDirty ?? false,
+          revisionBaseline: previous?.revisionBaseline
+        })
+        let restored = mapped
+        if (!previous?.documentDirty) {
+          try {
+            restored = restoreDocumentDraft(
+              mapped,
+              connection.baseUrl,
+              localStorage
+            )
+          } catch {
+            /* Server document remains usable. */
+          }
+        }
+        if (previous?.revisionBaseline && mapped.state === 'completed') {
+          const pendingMessage = [...restored.messages]
+            .reverse()
+            .find(
+              (message) =>
+                message.text === previous.revisionBaseline?.request &&
+                message.kind !== 'system'
+            )
+          restored = {
+            ...restored,
+            revisionBaseline: undefined,
+            messages: pendingMessage
+              ? restored.messages.map((message) =>
+                  message.id === pendingMessage.id
+                    ? {
+                        ...message,
+                        changeSummary: summarizeDocumentChanges(
+                          previous.revisionBaseline!.document,
+                          mapped.document
+                        )
+                      }
+                    : message
+                )
+              : restored.messages
+          }
+        }
+        if (!previous) return [restored, ...current]
+        return current.map((task) => (task.id === mapped.id ? restored : task))
+      })
+    },
+    [connection]
+  )
+
+  useEffect(() => {
+    if (
+      !activeTaskId ||
+      !activeTaskState ||
+      !['queued', 'running'].includes(activeTaskState)
+    ) {
+      return
+    }
+    const controller = new AbortController()
+    void watchTask(
+      activeTaskId,
+      updateTaskDetails,
+      controller.signal,
+      connection
+    ).catch((error: unknown) => {
+      if (!controller.signal.aborted) {
+        setNotice(
+          friendlyErrorMessage(error, '실시간 진행 상태를 불러오지 못했습니다.')
+        )
+      }
+    })
+    return () => controller.abort()
+  }, [activeTaskId, activeTaskState, updateTaskDetails, connection])
+
+  const refreshTask = useCallback(
+    async (id: string, signal?: AbortSignal) => {
+      try {
+        const details = await getTaskDetails(id, connection, fetch, signal)
+        const metadata = await Promise.allSettled(
+          details.task.sourceFileIds.map((fileId) =>
+            getFile(fileId, connection)
+          )
+        )
+        if (signal?.aborted || currentConnection.current !== connection) return
+        const sources: Source[] = metadata.flatMap((result) =>
+          result.status === 'fulfilled'
+            ? [
+                {
+                  id: result.value.file.id,
+                  fileId: result.value.file.id,
+                  name: result.value.file.name,
+                  kind: 'file' as const
+                }
+              ]
+            : []
+        )
+        updateTaskDetails(details, sources)
+      } catch (error) {
+        if (signal?.aborted || currentConnection.current !== connection) return
+        setNotice(
+          error instanceof Error ? error.message : '작업을 불러오지 못했습니다.'
+        )
+      }
+    },
+    [updateTaskDetails, connection]
+  )
+
+  useEffect(() => {
+    const controller = new AbortController()
+    if (activeId && backendStatus === 'online')
+      void refreshTask(activeId, controller.signal)
+    return () => controller.abort()
+  }, [activeId, activeTaskState, backendStatus, refreshTask])
+
+  useEffect(() => {
+    if (!active) return
+    const timer = setTimeout(() => {
+      try {
+        persistDocumentDraft(active, connection.baseUrl, localStorage)
+      } catch {
+        if (active.documentDirty)
+          setNotice(
+            '브라우저에 초안을 보관하지 못했습니다. 문서를 서버에 저장해 주세요.'
+          )
+      }
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [active, connection.baseUrl])
+
+  const hasUnsavedChanges = tasks.some((task) => task.documentDirty)
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+    const protect = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', protect)
+    return () => window.removeEventListener('beforeunload', protect)
+  }, [hasUnsavedChanges])
+
+  function openTask(id: string | null) {
+    if (active?.documentDirty) {
+      try {
+        persistDocumentDraft(active, connection.baseUrl, localStorage)
+      } catch {
+        setNotice('초안을 보관하지 못했습니다. 먼저 저장해 주세요.')
+        return
+      }
+    }
+    setActiveId(id)
+    setFinalPreview(false)
+    setView('tasks')
+    try {
+      if (id) localStorage.setItem(`workfolio-active:${connection.baseUrl}`, id)
+      else localStorage.removeItem(`workfolio-active:${connection.baseUrl}`)
+    } catch {
+      /* Optional workspace state. */
+    }
+    setMobileSidebarOpen(false)
+    setMobileContextOpen(false)
+    setSaveFailure(null)
+  }
+
+  async function prepareSources(sources: Source[]) {
+    if (currentConnection.current !== connection)
+      throw new Error('백엔드 연결이 변경되었습니다. 다시 요청해 주세요.')
+    const cache = uploadedFiles.current
+    const files = sources.filter((source) => source.kind === 'file')
+    const links = sources.filter((source) => source.kind === 'link')
+    if (files.length > 5 || links.length > 5)
+      throw new Error('파일과 링크는 각각 최대 5개까지 추가할 수 있습니다.')
+    const uploaded: Source[] = []
+    for (const source of files) {
+      if (source.file) {
+        const file =
+          cache.get(source.file) ??
+          (await uploadSourceFile(source.file, connection))
+        cache.set(source.file, file)
+        if (currentConnection.current !== connection)
+          throw new Error('백엔드 연결이 변경되었습니다. 다시 요청해 주세요.')
+        uploaded.push({
+          id: file.id,
+          fileId: file.id,
+          name: file.name,
+          kind: 'file',
+          status: 'queued'
+        })
+      } else if (source.fileId) uploaded.push(source)
+      else throw new Error(`${source.name}: 파일을 다시 첨부해 주세요.`)
+    }
+    return {
+      sources: [...uploaded, ...links],
+      fileIds: uploaded.flatMap((source) =>
+        source.fileId ? [source.fileId] : []
+      ),
+      urls: links.flatMap((source) => (source.url ? [source.url] : []))
+    }
+  }
+
+  async function startTask(
+    request: string,
+    sources: Source[],
+    workflow: 'legal' | 'document' = 'legal'
+  ): Promise<boolean> {
+    try {
+      if (!loaded || backendStatus !== 'online') {
+        throw new Error(
+          '백엔드가 연결되지 않았습니다. 서버 상태를 확인한 뒤 다시 시도해 주세요.'
+        )
+      }
+      if (workflow === 'legal' && capabilities?.model.configured === false) {
+        throw new Error(
+          '모델 제공자 API 키가 설정되지 않아 작업을 시작할 수 없습니다.'
+        )
+      }
+
+      const prepared = await prepareSources(sources)
+
+      const created = await createTask(
+        connection,
+        request,
+        prepared.fileIds,
+        prepared.urls,
+        fetch,
+        workflow
+      )
+      if (currentConnection.current !== connection)
+        throw new Error(
+          '이전 백엔드에 작업은 접수됐지만 연결이 변경되어 화면을 갱신하지 않았습니다.'
+        )
+      setTasks((current) => [
+        { ...toTaskSummary(created.task), sources: prepared.sources },
+        ...current
+      ])
+      openTask(created.task.id)
+      setNotice('작업 요청을 백엔드에 전달했습니다.')
+      void refreshTask(created.task.id)
+      return true
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : '작업 요청에 실패했습니다.'
+      )
+      return false
+    }
+  }
+
+  async function submitTaskRequest(
+    request: string,
+    kind: 'revision' | 'followup' = 'followup',
+    sources: Source[] = []
+  ): Promise<boolean> {
+    if (!active || !request.trim()) return false
+    try {
+      if (active.documentDirty) {
+        const { artifact } = await saveTaskDocument(
+          active.id,
+          active.document,
+          connection
+        )
+        if (currentConnection.current !== connection) return false
+        setTasks((current) =>
+          current.map((task) =>
+            task.id === active.id
+              ? applySavedDocument(task, artifact, active.document)
+              : task
+          )
+        )
+      }
+      const prepared = await prepareSources(sources)
+      const { task: accepted } = await sendRevision(
+        active.id,
+        kind,
+        request.trim(),
+        prepared
+      )
+      if (currentConnection.current !== connection) return false
+      setTasks((current) =>
+        current.map((task) =>
+          task.id === active.id
+            ? {
+                ...task,
+                state: accepted.status,
+                stage: 'planning',
+                error: undefined,
+                revisionBaseline: {
+                  document: active.document,
+                  request: request.trim()
+                },
+                sources: [...task.sources, ...prepared.sources]
+              }
+            : task
         )
       )
+      void refreshTask(active.id)
+      setNotice(
+        kind === 'revision'
+          ? '문서 수정 요청을 전달했습니다.'
+          : '추가 요청을 전달했습니다.'
+      )
+      return true
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : '요청을 전달하지 못했습니다.'
+      )
+      return false
     }
-    setLoaded(true)
-  }, [])
-  useEffect(() => {
-    if (loaded) localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks))
-  }, [tasks, loaded])
-  useEffect(() => {
-    if (loaded) {
-      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth))
-    }
-  }, [sidebarWidth, loaded])
-  useEffect(() => {
-    if (!resizingSidebar) return
-    document.body.classList.add('is-resizing-sidebar')
-    return () => document.body.classList.remove('is-resizing-sidebar')
-  }, [resizingSidebar])
-  const visibleTasks = useMemo(
-    () =>
-      tasks.filter(
-        (task) =>
-          filter === 'all' ||
-          (filter === 'completed'
-            ? task.state === 'completed'
-            : task.state !== 'completed')
-      ),
-    [tasks, filter]
-  )
-  function updateTask(next: Task) {
-    setTasks((current) =>
-      current.map((task) => (task.id === next.id ? next : task))
+  }
+
+  function sendRevision(
+    id: string,
+    kind: 'revision' | 'followup',
+    message: string,
+    prepared: { fileIds: string[]; urls: string[] }
+  ) {
+    return request<{ task: BackendTask }>(
+      connection,
+      `/api/tasks/${encodeURIComponent(id)}/revise`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          kind,
+          message,
+          sourceFileIds: prepared.fileIds,
+          sourceUrls: prepared.urls
+        })
+      }
     )
   }
-  function openTask(id: string | null) {
-    setActiveId(id)
-    setMobileSidebar(false)
-    setRightTab('document')
-    setEditing(false)
-    setRevision('')
+
+  async function cancelActiveTask() {
+    if (!active) return
+    try {
+      updateTaskDetails(await cancelTask(active.id, connection))
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : '작업 취소에 실패했습니다.'
+      )
+    }
   }
-  function startTask(request: string, sources: Source[]) {
-    const task = createMockTask(request, sources)
-    setTasks((current) => [task, ...current])
-    openTask(task.id)
-    void runMockTask(task, updateTask)
+
+  async function rerunActiveTask() {
+    if (!active) return
+    try {
+      updateTaskDetails(await rerunTask(active.id, connection))
+      setNotice('작업을 다시 실행했습니다.')
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : '작업 재실행에 실패했습니다.'
+      )
+    }
   }
-  async function requestRevision() {
-    if (!active || !revision.trim()) return
-    const updated = await sendMockMessage(active, revision.trim(), 'revision')
-    updateTask({ ...updated, state: 'writing', stage: 'writing' })
-    setRevision('')
-    setNotice('수정 요청을 작업에 추가했습니다.')
-    void runMockTask(updated, updateTask)
+
+  async function saveActiveDocument() {
+    if (
+      !active ||
+      active.state !== 'completed' ||
+      !active.documentDirty ||
+      savingTaskId
+    )
+      return
+    const { id, document } = active
+    setSavingTaskId(id)
+    setSaveFailure(null)
+    try {
+      const { artifact } = await saveTaskDocument(id, document, connection)
+      if (currentConnection.current !== connection) return
+      setTasks((current) =>
+        current.map((task) =>
+          task.id === id ? applySavedDocument(task, artifact, document) : task
+        )
+      )
+      setNotice('문서 버전을 백엔드에 저장했습니다.')
+    } catch (error) {
+      setSaveFailure({
+        taskId: id,
+        message:
+          error instanceof Error ? error.message : '문서 저장에 실패했습니다.'
+      })
+    } finally {
+      setSavingTaskId((current) => (current === id ? null : current))
+    }
   }
-  async function download(format: 'md' | 'docx') {
+
+  async function exportDocument(format: ExportFormat) {
     if (!active?.document) return
-    await downloadDocument(active, format)
-    setNotice(`${format.toUpperCase()} 파일을 다운로드했습니다.`)
+    try {
+      const finalDocument = prepareFinalDocument(
+        active.document,
+        documentHeading || active.title
+      )
+      const finalTask = { ...active, document: finalDocument }
+      if (format === 'docx' && backendStatus === 'online') {
+        const { file } = await officeApi.markdown(connection, {
+          outputName: active.title,
+          markdown: finalDocument
+        })
+        await downloadFile(file.id, file.name, connection)
+      } else if (
+        (format === 'xlsx' || format === 'pdf') &&
+        backendStatus === 'online'
+      ) {
+        const { file } = await officeApi.exportMarkdown(connection, {
+          outputName: active.title,
+          markdown: finalDocument,
+          format
+        })
+        await downloadFile(file.id, file.name, connection)
+      } else if (format === 'md' || format === 'docx') {
+        await downloadDocument(finalTask, format)
+      } else {
+        throw new Error('Excel 및 PDF 내보내기에는 백엔드 연결이 필요합니다.')
+      }
+      setNotice(`${format.toUpperCase()} 파일을 다운로드했습니다.`)
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : '다운로드에 실패했습니다.'
+      )
+    }
   }
-  function resizeSidebar(clientX: number) {
-    setSidebarWidth(
-      Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, clientX))
+
+  async function previewDocumentFormat(format: 'xlsx' | 'pdf'): Promise<Blob> {
+    if (!active?.document) throw new Error('미리볼 문서가 없습니다.')
+    if (backendStatus !== 'online')
+      throw new Error(
+        `${format === 'xlsx' ? 'Excel' : 'PDF'} 미리보기에는 백엔드 연결이 필요합니다.`
+      )
+    const markdown = prepareFinalDocument(
+      active.document,
+      documentHeading || active.title
+    )
+    const { file } = await officeApi.exportMarkdown(connection, {
+      outputName: active.title,
+      markdown,
+      format
+    })
+    return getFileContent(file.id, connection)
+  }
+
+  function changeDocument(value: string) {
+    if (!active) return
+    setTasks((current) =>
+      current.map((task) =>
+        task.id === active.id
+          ? {
+              ...task,
+              document: value,
+              documentDirty: value !== (task.savedDocument ?? '')
+            }
+          : task
+      )
+    )
+    setSaveFailure((current) =>
+      current?.taskId === active.id ? null : current
     )
   }
-  function handleResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    event.currentTarget.setPointerCapture(event.pointerId)
-    setResizingSidebar(true)
-    resizeSidebar(event.clientX)
-  }
-  function handleResizePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
-    resizeSidebar(event.clientX)
-  }
-  function handleResizePointerEnd(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    }
-    setResizingSidebar(false)
-  }
-  function handleResizeKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const amount = event.shiftKey ? 25 : 10
-    if (event.key === 'ArrowLeft') {
-      event.preventDefault()
-      setSidebarWidth((width) => Math.max(MIN_SIDEBAR_WIDTH, width - amount))
-    } else if (event.key === 'ArrowRight') {
-      event.preventDefault()
-      setSidebarWidth((width) => Math.min(MAX_SIDEBAR_WIDTH, width + amount))
-    } else if (event.key === 'Home') {
-      event.preventDefault()
-      setSidebarWidth(MIN_SIDEBAR_WIDTH)
-    } else if (event.key === 'End') {
-      event.preventDefault()
-      setSidebarWidth(MAX_SIDEBAR_WIDTH)
-    }
-  }
+
+  const connectionLabel =
+    backendStatus === 'checking'
+      ? '백엔드 확인 중'
+      : backendStatus === 'online'
+        ? '백엔드 연결됨'
+        : '백엔드 연결 안 됨'
+
   return (
-    <div className="workroom">
-      <header className="app-header">
-        <div className="header-left">
-          <button
-            className="sidebar-toggle icon-button"
-            onClick={() => setMobileSidebar((open) => !open)}
-            aria-label="작업 메뉴 열기"
-          >
-            <Menu size={19} />
-          </button>
-          <div className="brand-mark">W</div>
-          <span className="brand">Workroom</span>
-        </div>
-        <div className="header-context">
-          <span className="status-dot" /> 자료 기반 문서 작업
-        </div>
-        <button className="header-command" type="button">
-          <Search size={15} /> 작업 검색 <kbd>⌘ K</kbd>
+    <div
+      className={`workfolio ${finalPreview ? 'workfolio--final-preview' : ''}`}
+      data-theme={theme}
+    >
+      <header className="workfolio-header">
+        <button
+          className="workfolio-header__menu"
+          type="button"
+          aria-label="작업 탐색 열기"
+          onClick={() => setMobileSidebarOpen(true)}
+        >
+          <Menu aria-hidden="true" size={19} />
         </button>
-      </header>
-      <div
-        className={`workspace ${active ? 'has-task' : ''} ${mobileSidebar ? 'sidebar-open' : ''}`}
-        style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
-      >
-        {mobileSidebar && (
-          <button
-            className="sidebar-backdrop"
-            onClick={() => setMobileSidebar(false)}
-            aria-label="메뉴 닫기"
-          />
-        )}
-        <aside className="sidebar" aria-label="작업 목록">
-          <button className="new-task" onClick={() => openTask(null)}>
-            <Plus size={17} /> 새 작업
-          </button>
-          <div className="sidebar-heading">
-            <span>작업 공간</span>
-            <button type="button" aria-label="작업 검색">
-              <Search size={14} />
-            </button>
-          </div>
-          <nav className="filter-tabs" aria-label="작업 필터">
-            {(
-              [
-                ['all', '전체'],
-                ['active', '진행 중'],
-                ['completed', '완료']
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                aria-pressed={filter === value}
-                onClick={() => setFilter(value)}
-              >
-                {label}
-                <span>
-                  {
-                    tasks.filter(
-                      (task) =>
-                        value === 'all' ||
-                        (value === 'completed'
-                          ? task.state === 'completed'
-                          : task.state !== 'completed')
-                    ).length
-                  }
-                </span>
-              </button>
-            ))}
-          </nav>
-          <div className="history">
-            {visibleTasks.map((task) => (
-              <button
-                className={`history-item ${task.id === activeId ? 'selected' : ''}`}
-                key={task.id}
-                onClick={() => openTask(task.id)}
-              >
-                <span className="history-icon">
-                  <FileText size={15} />
-                </span>
-                <span className="history-copy">
-                  <strong>{task.title}</strong>
-                  <small>
-                    {stateLabel(task.state)} ·{' '}
-                    {new Date(task.updatedAt).toLocaleDateString('ko-KR', {
-                      month: 'short',
-                      day: 'numeric'
-                    })}
-                  </small>
-                </span>
-                <ChevronDown size={14} className="history-chevron" />
-              </button>
-            ))}
-          </div>
-          {!visibleTasks.length && (
-            <div className="empty-history">
-              표시할 작업이 없습니다.
-              <br />새 작업을 시작해 보세요.
-            </div>
-          )}
-          <div className="sidebar-footer">
-            <div className="profile-avatar">오</div>
-            <div>
-              <strong>오수혁</strong>
-              <small>개인 작업 공간</small>
-            </div>
-            <button aria-label="계정 메뉴">
-              <ChevronDown size={15} />
-            </button>
-          </div>
-          <div
-            className={`sidebar-resizer ${resizingSidebar ? 'is-resizing' : ''}`}
-            role="separator"
-            aria-label="사이드바 너비 조절"
-            aria-orientation="vertical"
-            aria-valuemin={MIN_SIDEBAR_WIDTH}
-            aria-valuemax={MAX_SIDEBAR_WIDTH}
-            aria-valuenow={sidebarWidth}
-            tabIndex={0}
-            onDoubleClick={() => setSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
-            onKeyDown={handleResizeKeyDown}
-            onPointerDown={handleResizePointerDown}
-            onPointerMove={handleResizePointerMove}
-            onPointerUp={handleResizePointerEnd}
-            onPointerCancel={handleResizePointerEnd}
-            title="드래그하여 너비 조절 · 더블클릭하여 기본값 복원"
-          />
-        </aside>
-        <main className="main-area">
-          {!active ? (
-            <>
-              <DocumentConstellation />
-              <section className="start">
-                <span className="start-kicker">NEW WORKSPACE</span>
-                <h1>
-                  어떤 문서를
-                  <br />
-                  <em>만들어 볼까요?</em>
-                </h1>
-                <p>
-                  주제, 파일, 링크를 입력하면 필요한 자료를 모으고
-                  <br />
-                  목적에 맞는 문서 초안을 만들어 드립니다.
-                </p>
-                <Composer onSubmit={startTask} />
-              </section>
-            </>
+        <div className="workfolio-header__brand">Workfolio</div>
+        <button
+          className="workfolio-header__action"
+          type="button"
+          aria-label="문서 도구 열기"
+          aria-pressed={toolsActive}
+          onClick={() => {
+            setSidebarSection('chat')
+            setView(toolsActive ? 'tasks' : 'tools')
+          }}
+        >
+          <FolderOpen size={17} />
+          <span>문서 도구</span>
+        </button>
+        <div
+          className={`workfolio-header__connection workfolio-header__connection--${backendStatus}`}
+          role="status"
+        >
+          <span aria-hidden="true" />
+          <span>{connectionLabel}</span>
+          {backendStatus === 'online' &&
+          capabilities?.model.configured === false ? (
+            <span className="workfolio-header__model-warning">
+              · 모델 제공자 설정 필요
+              {capabilities.model.provider
+                ? ` (${capabilities.model.provider})`
+                : ''}
+            </span>
+          ) : null}
+        </div>
+        <button
+          className="workfolio-header__theme"
+          type="button"
+          aria-label={
+            theme === 'dark' ? '화이트 모드로 전환' : '다크 모드로 전환'
+          }
+          title={theme === 'dark' ? '화이트 모드로 전환' : '다크 모드로 전환'}
+          onClick={toggleTheme}
+        >
+          {theme === 'dark' ? (
+            <Sun aria-hidden="true" size={17} />
           ) : (
-            <section className="task">
-              <div className="task-topbar">
-                <div>
-                  <button
-                    className="back-button"
-                    onClick={() => openTask(null)}
-                  >
-                    ← 모든 작업
-                  </button>
-                  <h1>{active.title}</h1>
-                </div>
-                <div className={`state-badge state-${active.state}`}>
-                  <span /> {stateLabel(active.state)}
-                </div>
-              </div>
-              <div className="request-block">
-                <span className="block-label">작업 요청</span>
-                <p>{active.request}</p>
-              </div>
-              <section className="progress-section">
-                <div className="section-heading">
-                  <div>
-                    <span className="block-label">WORKFLOW</span>
-                    <h2>작업 진행</h2>
-                  </div>
-                  {active.state !== 'completed' &&
-                    active.state !== 'failed' && (
-                      <button
-                        className="pause-button"
-                        onClick={() =>
-                          updateTask({
-                            ...active,
-                            state:
-                              active.state === 'paused'
-                                ? active.stage
-                                : 'paused'
-                          })
+            <Moon aria-hidden="true" size={17} />
+          )}
+        </button>
+        {backendStatus === 'offline' && (
+          <button
+            className="workfolio-header__action"
+            type="button"
+            aria-label="백엔드 다시 연결"
+            onClick={reconnect}
+          >
+            <RefreshCw size={16} />
+          </button>
+        )}
+        <button
+          className="workfolio-header__action"
+          type="button"
+          aria-label="백엔드 연결 설정"
+          onClick={() => setConnectionOpen(true)}
+        >
+          <Settings size={17} />
+        </button>
+        {active ? (
+          <button
+            className="workfolio-header__context-toggle"
+            type="button"
+            aria-label="작업 정보 열기"
+            aria-expanded={mobileContextOpen}
+            onClick={() => setMobileContextOpen((open) => !open)}
+          >
+            <PanelRight aria-hidden="true" size={17} />
+            <span>작업 정보</span>
+          </button>
+        ) : null}
+      </header>
+
+      <div className="workfolio-layout">
+        <WorkfolioSidebar
+          theme={theme}
+          onThemeToggle={toggleTheme}
+          tasks={tasks}
+          activeTaskId={activeId}
+          filter={filter}
+          onFilterChange={setFilter}
+          onOpenTask={openTask}
+          section={sidebarSection}
+          onSectionChange={(section) => {
+            setSidebarSection(section)
+            setView('tasks')
+          }}
+          toolsActive={toolsActive}
+          onOpenTools={() => {
+            setSidebarSection('chat')
+            setView('tools')
+          }}
+          connectionLabel={connectionLabel}
+          backendStatus={backendStatus}
+          onOpenConnection={() => setConnectionOpen(true)}
+          onReconnect={reconnect}
+          systemTopic={systemTopic}
+          onSystemTopicChange={setSystemTopic}
+          mobileOpen={mobileSidebarOpen}
+          onMobileOpenChange={setMobileSidebarOpen}
+        />
+
+        <main className="workfolio-main">
+          {sidebarSection === 'system' ? (
+            <SystemExplorer
+              capabilities={capabilities}
+              backendStatus={backendStatus}
+              connection={connection}
+              tasks={tasks}
+              onRetry={reconnect}
+              topic={systemTopic}
+              onTopicChange={setSystemTopic}
+            />
+          ) : toolsActive ? (
+            <FileToolsWorkspace
+              connection={connection}
+              capabilities={capabilities}
+              online={backendStatus === 'online'}
+              onClose={() => setView('tasks')}
+            />
+          ) : active ? (
+            <WorkfolioSplitLayout
+              contextDrawerOpen={mobileContextOpen}
+              context={
+                <TaskContextPanel
+                  task={active}
+                  mobileOpen={mobileContextOpen}
+                  onMobileOpenChange={setMobileContextOpen}
+                  onCancel={() => void cancelActiveTask()}
+                  onFollowup={submitTaskRequest}
+                  onDraftFromAnswer={
+                    active.legal
+                      ? () => {
+                          void submitTaskRequest(
+                            '이 답변과 확인된 근거를 바탕으로 제출 가능한 법률 문서 초안을 작성해 주세요. 인용한 근거는 그대로 유지하세요.',
+                            'revision'
+                          )
                         }
-                      >
-                        {active.state === 'paused' ? (
-                          <>
-                            <Play size={14} /> 계속하기
-                          </>
-                        ) : (
-                          <>
-                            <Pause size={14} /> 잠시 멈추기
-                          </>
-                        )}
-                      </button>
-                    )}
-                </div>
-                <ol className="progress">
-                  {stageOrder.map((stage) => {
-                    const currentIndex = stageOrder.indexOf(
-                      active.stage as (typeof stageOrder)[number]
-                    )
-                    const index = stageOrder.indexOf(stage)
-                    const done =
-                      active.state === 'completed' || currentIndex > index
-                    const current =
-                      active.state !== 'paused' &&
-                      active.state !== 'failed' &&
-                      currentIndex === index
-                    return (
-                      <li
-                        className={`${done ? 'done' : ''} ${current ? 'current' : ''}`}
-                        key={stage}
-                      >
-                        <span className="progress-mark">
-                          {done ? <Check size={14} /> : index + 1}
-                        </span>
-                        <div>
-                          <strong>{stageMeta[stage].label}</strong>
-                          <small>{stageMeta[stage].detail}</small>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ol>
-                <p className="progress-status" role="status">
-                  {active.state === 'paused'
-                    ? '작업을 잠시 멈췄습니다.'
-                    : active.state === 'failed'
-                      ? active.error || '작업 중 문제가 발생했습니다.'
-                      : active.state === 'completed'
-                        ? '문서가 준비되었습니다. 오른쪽에서 확인해 보세요.'
-                        : stageMeta[active.stage].detail}
-                </p>
-              </section>
-              <details className="materials" open>
-                <summary>
-                  사용한 자료 <span>{active.sources.length}</span>
-                  <ChevronDown size={15} />
-                </summary>
-                <Sources sources={active.sources} />
-              </details>
-              {active.messages.map((message) => (
-                <div className="message follow-up" key={message.id}>
-                  <span className="block-label">
-                    {message.kind === 'revision' ? '수정 요청' : '추가 요청'}
-                  </span>
-                  <p>{message.text}</p>
-                </div>
-              ))}
-              <div className="follow-up-composer">
-                <Composer
-                  compact
-                  onSubmit={(text) => {
-                    updateTask({
-                      ...active,
-                      messages: [
-                        ...active.messages,
-                        {
-                          id: crypto.randomUUID(),
-                          kind: 'followup',
-                          text,
-                          createdAt: Date.now()
-                        }
-                      ]
-                    })
-                    setNotice('추가 요청을 작업에 추가했습니다.')
-                  }}
+                      : undefined
+                  }
                 />
+              }
+              workArea={
+                <section
+                  className="workfolio-document-column"
+                  aria-label="문서 작업 공간"
+                >
+                  {active.document ? (
+                    <DocumentWorkspace
+                      title={documentHeading || active.title}
+                      value={active.document}
+                      hasPersistedDocument={Boolean(
+                        active.artifactFileId || active.savedDocument
+                      )}
+                      previewMode={finalPreview}
+                      dirty={Boolean(active.documentDirty)}
+                      saving={savingTaskId === active.id}
+                      canSave={active.state === 'completed'}
+                      saveError={
+                        saveFailure?.taskId === active.id
+                          ? saveFailure.message
+                          : null
+                      }
+                      onChange={changeDocument}
+                      onSave={saveActiveDocument}
+                      onExport={(format) => void exportDocument(format)}
+                      onFormatPreview={previewDocumentFormat}
+                      onPreviewModeChange={setFinalPreview}
+                    />
+                  ) : (
+                    <div
+                      className={`workfolio-document-state workfolio-document-state--${active.state}`}
+                      role={active.state === 'failed' ? 'alert' : 'status'}
+                    >
+                      <span className="workfolio-document-state__label">
+                        {taskStateLabel(active.state)}
+                      </span>
+                      <h1>{documentStatus(active).title}</h1>
+                      <p>{documentStatus(active).detail}</p>
+                      {active.state === 'failed' ? (
+                        <div className="workfolio-document-state__actions">
+                          <button
+                            className="workfolio-primary"
+                            type="button"
+                            onClick={() => void rerunActiveTask()}
+                          >
+                            <RefreshCw size={15} />
+                            다시 실행
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConnectionOpen(true)}
+                          >
+                            연결 설정 확인
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </section>
+              }
+            />
+          ) : (
+            <section
+              className="workfolio-start"
+              aria-labelledby="workfolio-start-title"
+            >
+              <div className="workfolio-start__heading">
+                <h1 id="workfolio-start-title">법률 질문과 문서 초안</h1>
+                <p>
+                  법령·판례에서 근거를 찾고, 필요한 법률 문서 초안을 작성합니다.
+                </p>
               </div>
+              {!loaded ? (
+                <p className="workfolio-start__status" role="status">
+                  백엔드와 작업 목록을 확인하고 있습니다.
+                </p>
+              ) : null}
+              {loaded && backendStatus === 'offline' ? (
+                <p className="workfolio-start__warning" role="alert">
+                  {connectionError || '백엔드에 연결되지 않았습니다.'} 자동으로
+                  다시 확인합니다.
+                </p>
+              ) : null}
+              {loaded && capabilities?.model.configured === false ? (
+                <p className="workfolio-start__warning" role="status">
+                  모델 제공자 API 키가 설정되지 않아 법률 답변을 시작할 수
+                  없습니다.
+                </p>
+              ) : null}
+              {loaded &&
+              capabilities?.legalRetrieval &&
+              capabilities.legalRetrieval.state === 'unavailable' ? (
+                <p className="workfolio-start__warning" role="status">
+                  {capabilities.legalRetrieval.message} 인용 없는 법률 답변은
+                  제공하지 않습니다.
+                </p>
+              ) : null}
+              {loaded &&
+              capabilities?.legalRetrieval &&
+              capabilities.legalRetrieval.state === 'degraded' ? (
+                <p className="workfolio-start__warning" role="status">
+                  {capabilities.legalRetrieval.message}
+                </p>
+              ) : null}
+              <p className="workfolio-start__privacy">
+                질문 내용과 검색된 조문·판례 일부가{' '}
+                {capabilities?.model.providers?.length
+                  ? `모델 제공자(${capabilities.model.providers.join(', ')})`
+                  : '모델 제공자'}
+                에게 전송됩니다. 법령 검색은 이 컴퓨터 안에서만 실행되며, 첨부한
+                자료는 이 작업의 근거로만 사용되고 법령 저장소에 등록되지
+                않습니다.
+              </p>
+              <Composer
+                onSubmit={startTask}
+                disabled={!loaded || backendStatus !== 'online'}
+                legalUnavailable={capabilities?.model.configured === false}
+              />
             </section>
           )}
         </main>
-        {active && (
-          <aside className="document-panel" aria-label="문서와 출처">
-            <div className="panel-header">
-              <div className="panel-tabs">
-                <button
-                  aria-pressed={rightTab === 'document'}
-                  onClick={() => setRightTab('document')}
-                >
-                  문서 <span>{active.document ? '1' : '0'}</span>
-                </button>
-                <button
-                  aria-pressed={rightTab === 'sources'}
-                  onClick={() => setRightTab('sources')}
-                >
-                  출처 <span>{active.sources.length}</span>
-                </button>
-              </div>
-              <button
-                className="panel-close"
-                onClick={() => openTask(null)}
-                aria-label="문서 패널 닫기"
-              >
-                <PanelRight size={16} />
-              </button>
-            </div>
-            {rightTab === 'sources' ? (
-              <Sources sources={active.sources} />
-            ) : (
-              <>
-                {active.document ? (
-                  <>
-                    <div className="document-toolbar">
-                      <span>
-                        마지막 저장{' '}
-                        {new Date(active.updatedAt).toLocaleTimeString(
-                          'ko-KR',
-                          { hour: '2-digit', minute: '2-digit' }
-                        )}
-                      </span>
-                      <button
-                        className="small-button"
-                        onClick={() => setEditing((value) => !value)}
-                      >
-                        {editing ? '미리보기' : '직접 편집'}
-                      </button>
-                    </div>
-                    {editing ? (
-                      <textarea
-                        className="document-editor"
-                        value={active.document}
-                        onChange={(event) =>
-                          updateTask({
-                            ...active,
-                            document: event.target.value,
-                            updatedAt: Date.now()
-                          })
-                        }
-                      />
-                    ) : (
-                      <DocumentPreview text={active.document} />
-                    )}
-                    <div className="revision-form">
-                      <label htmlFor="revision">수정 요청</label>
-                      <div className="revision-input">
-                        <input
-                          id="revision"
-                          value={revision}
-                          onChange={(event) => setRevision(event.target.value)}
-                          placeholder="어떤 부분을 바꿀까요?"
-                        />
-                        <button
-                          onClick={requestRevision}
-                          disabled={!revision.trim()}
-                          aria-label="수정 요청 보내기"
-                        >
-                          <ArrowUpIcon />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="downloads">
-                      <span>내보내기</span>
-                      <div>
-                        <button onClick={() => download('md')}>
-                          <Download size={13} /> Markdown
-                        </button>
-                        <button onClick={() => download('docx')}>
-                          <Download size={13} /> DOCX
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="document-empty">
-                    <FileText size={28} />
-                    <h2>문서를 준비하고 있어요</h2>
-                    <p>
-                      작업이 끝나면 이곳에서
-                      <br />
-                      문서를 확인하고 수정할 수 있습니다.
-                    </p>
-                  </div>
-                )}
-              </>
-            )}
-          </aside>
-        )}
       </div>
-      {notice && (
-        <div className="notice" role="status">
+
+      {connectionOpen && (
+        <ConnectionDialog
+          connection={connection}
+          onClose={() => setConnectionOpen(false)}
+          onConnect={(next, remember) => {
+            for (const task of tasks.filter((item) => item.documentDirty))
+              persistDocumentDraft(task, connection.baseUrl, localStorage)
+            setTasks([])
+            setActiveId(null)
+            setView('tasks')
+            setLoaded(false)
+            setSavingTaskId(null)
+            setSaveFailure(null)
+            setNotice('')
+            uploadedFiles.current = new WeakMap()
+            initializedServer.current = ''
+            connect(next, remember)
+          }}
+        />
+      )}
+
+      {notice ? (
+        <div className="workfolio-notice" role="status">
           <span>{notice}</span>
-          <button onClick={() => setNotice('')} aria-label="알림 닫기">
-            <X size={15} />
+          <button
+            type="button"
+            onClick={() => setNotice('')}
+            aria-label="알림 닫기"
+          >
+            닫기
           </button>
         </div>
-      )}
+      ) : null}
     </div>
-  )
-}
-function ArrowUpIcon() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M8 12V4m0 0L4.8 7.2M8 4l3.2 3.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   )
 }

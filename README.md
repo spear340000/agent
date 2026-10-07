@@ -1,122 +1,46 @@
-# Agent UI
+# Workroom
 
-A modern chat interface for AgentOS built with Next.js, Tailwind CSS, and TypeScript. This template provides a ready-to-use UI for connecting to and interacting with your AgentOS instances through the Agno platform.
+자료를 모으고 문서 초안을 다듬는 작업 공간의 프론트엔드입니다. 현재는 화면과 작업 흐름을 확인하기 위한 시연 버전입니다.
 
-<img src="https://agno-public.s3.us-east-1.amazonaws.com/assets/agent_ui_banner.svg" alt="agent-ui" style="border-radius: 10px; width: 100%; max-width: 800px;" />
+## 현재 구현 범위
 
-## Features
+- 작업 생성, 목록·필터, 진행 단계 표시, 사이드바 크기 조절
+- 파일·링크 첨부 UI와 자료 목록
+- 문서 미리보기, 직접 편집, Markdown·DOCX 다운로드
+- 작업과 문서의 브라우저 로컬 저장
 
-- 🔗 **AgentOS Integration**: Seamlessly connect to local and live AgentOS instances
-- 💬 **Modern Chat Interface**: Clean design with real-time streaming support
-- 🧩 **Tool Calls Support**: Visualizes agent tool calls and their results
-- 🧠 **Reasoning Steps**: Displays agent reasoning process (when available)
-- 📚 **References Support**: Show sources used by the agent
-- 🖼️ **Multi-modality Support**: Handles various content types including images, video, and audio
-- 🎨 **Customizable UI**: Built with Tailwind CSS for easy styling
-- 🧰 **Built with Modern Stack**: Next.js, TypeScript, shadcn/ui, Framer Motion, and more
+작업 진행과 문서 초안은 브라우저에서 모의 실행합니다. 첨부 파일은 이름만 기록하며 실제 업로드·내용 분석은 하지 않습니다. 링크도 수집하지 않습니다. Workroom의 작업 흐름은 아직 백엔드 API에 연결되지 않았습니다.
 
-## Version Support
+## 로컬 실행
 
-- **Main Branch**: Supports Agno v2.x (recommended)
-- **v1 Branch**: Supports Agno v1.x for legacy compatibility
-
-## Getting Started
-
-### Prerequisites
-
-Before setting up Agent UI, you need a running AgentOS instance. If you haven't created one yet, check out our [Creating Your First OS](/agent-os/creating-your-first-os) guide.
-
-> **Note**: Agent UI connects to AgentOS instances through the Agno platform. Make sure your AgentOS is running before attempting to connect.
-
-### Installation
-
-### Automatic Installation (Recommended)
+Node.js 22.12 이상(22 LTS) 또는 24 LTS와 Corepack이 필요합니다. 프로젝트는 pnpm 10.14.0을 사용합니다.
 
 ```bash
-npx create-agent-ui@latest
+git clone --branch frontend https://github.com/spear340000/agent.git
+cd agent
+corepack pnpm install --frozen-lockfile
+corepack pnpm dev
 ```
 
-### Manual Installation
+브라우저에서 http://localhost:3000 을 엽니다. Windows PowerShell에서 Corepack 명령이 실행되지 않으면 `corepack.cmd pnpm`을 사용하세요.
 
-1. Clone the repository:
+## 주요 파일
+
+| 역할                   | 경로                                    |
+| ---------------------- | --------------------------------------- |
+| 첫 페이지              | `src/app/page.tsx`                      |
+| 화면 상태와 작업 목록  | `src/components/workroom/Workroom.tsx`  |
+| 요청·첨부 입력         | `src/components/workroom/Composer.tsx`  |
+| 문서 미리보기·다운로드 | `src/components/workroom/Documents.tsx` |
+| 시연용 작업 흐름       | `src/api/workroom.ts`                   |
+| 화면 스타일            | `src/app/workroom.css`                  |
+
+## 검사
 
 ```bash
-git clone https://github.com/agno-agi/agent-ui.git
-cd agent-ui
+corepack pnpm run lint
+corepack pnpm run format
+corepack pnpm run typecheck
 ```
 
-2. Install dependencies:
-
-```bash
-pnpm install
-```
-
-3. Start the development server:
-
-```bash
-pnpm dev
-```
-
-4. Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-## Connecting to Your AgentOS
-
-Agent UI connects directly to your AgentOS instance, allowing you to interact with your agents through a modern chat interface.
-
-> **Prerequisites**: You need a running AgentOS instance before you can connect Agent UI to it. If you haven't created one yet, check out our [Creating Your First OS](https://docs.agno.com/agent-os/creating-your-first-os) guide.
-
-## Step-by-Step Connection Process
-
-### 1. Configure the Endpoint
-
-By default, Agent UI connects to `http://localhost:7777`. You can easily change this by:
-
-1. Hovering over the endpoint URL in the left sidebar
-2. Clicking the edit option to modify the connection settings
-
-### 2. Choose Your Environment
-
-- **Local Development**: Use `http://localhost:7777` (default) or your custom local port
-- **Production**: Enter your production AgentOS HTTPS URL
-
-> **Warning**: Make sure your AgentOS is actually running on the specified endpoint before attempting to connect.
-
-### 3. Configure Authentication (Optional)
-
-If your AgentOS instance requires authentication, you can configure it in two ways:
-
-#### Option 1: Environment Variable (Recommended)
-
-Set the `OS_SECURITY_KEY` environment variable:
-
-```bash
-# In your .env.local file or shell environment
-NEXT_PUBLIC_OS_SECURITY_KEY=your_auth_token_here
-```
-
-> **Note**: This uses the same environment variable as AgentOS, so if you're running both on the same machine, you only need to set it once. The token will be automatically loaded when the application starts.
-
-#### Option 2: UI Configuration
-
-1. In the left sidebar, locate the "Auth Token" section
-2. Click on the token field to edit it
-3. Enter your authentication token
-4. The token will be securely stored and included in all API requests
-
-> **Security Note**: Authentication tokens are stored locally in global store and are included as Bearer tokens in API requests to your AgentOS instance.
-
-### 4. Test the Connection
-
-Once you've configured the endpoint:
-
-1. The Agent UI will automatically attempt to connect to your AgentOS
-2. If successful, you'll see your agents available in the chat interface
-3. If there are connection issues, check that your AgentOS is running and accessible. Check out the troubleshooting guide [here](https://docs.agno.com/faq/agentos-connection)
-
-## Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution guidelines.
-
-## License
-
-This project is licensed under the [MIT License](./LICENSE).
+GitHub Actions는 푸시마다 의존성을 설치하고 lint·format·typecheck를 실행합니다.

@@ -3,6 +3,8 @@ export type Source = {
   id: string
   name: string
   kind: 'file' | 'link'
+  fileId?: string
+  file?: File
   url?: string
   status?: 'queued' | 'collecting' | 'ready' | 'error'
 }
@@ -13,20 +15,57 @@ export type WorkflowStage =
   | 'writing'
   | 'review'
   | 'completed'
-export type TaskState = WorkflowStage | 'paused' | 'failed'
+export type TaskState =
+  | WorkflowStage
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'failed'
+  | 'cancelled'
 export type TaskMessage = {
   id: string
   kind: 'revision' | 'followup' | 'system'
   text: string
   scope?: string
+  changeSummary?: {
+    location: string
+    changes: string[]
+    method: string
+  }
   createdAt: number
 }
+export type TaskStep = {
+  id: string
+  title: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  progress: number
+  error?: string
+}
+export type LegalAnswerView = {
+  intent: string
+  path: 'direct' | 'orchestrated'
+  answer: string
+  citations: import('@/api/workroom').LegalCitation[]
+  sourceStatus: import('@/api/workroom').LegalSourceStatus
+  plannerCalls: number
+  toolCalls: number
+  artifactId?: string
+  fileId?: string
+}
+export type LegalLayerState =
+  | 'used'
+  | 'ready'
+  | 'degraded'
+  | 'unused'
+  | 'unavailable'
 export type Task = {
   id: string
   title: string
   request: string
   sources: Source[]
   messages: TaskMessage[]
+  revisionBaseline?: { document: string; request: string }
+  steps: TaskStep[]
   stage: WorkflowStage
   state: TaskState
   document: string
@@ -34,6 +73,14 @@ export type Task = {
   createdAt: number
   updatedAt: number
   error?: string
+  savedDocument?: string
+  artifactFileId?: string
+  artifactName?: string
+  artifactMimeType?: string
+  sourceFileIds?: string[]
+  documentDirty?: boolean
+  legal?: LegalAnswerView
+  modelUse?: TaskModelUse
 }
 export const stageMeta: Record<
   WorkflowStage,
@@ -65,9 +112,25 @@ export const stageOrder: WorkflowStage[] = [
   'writing',
   'review'
 ]
-export function makeDraft(task: Pick<Task, 'title' | 'request' | 'sources'>) {
-  const sourceLines = task.sources.length
-    ? task.sources.map((source) => `- ${source.name}`).join('\n')
-    : '- 아직 첨부된 자료가 없습니다.'
-  return `# ${task.title}\n\n> 자료 기반으로 생성된 문서 초안입니다.\n\n## 요청 내용\n${task.request}\n\n## 핵심 내용\n수집한 자료를 바탕으로 핵심 내용을 정리합니다.\n\n## 실행 방안\n- 목적과 기대 결과를 명확히 합니다.\n- 필요한 작업과 일정을 정리합니다.\n\n## 참고 자료\n${sourceLines}`
+
+export const legalIntentLabels: Record<string, string> = {
+  'article-lookup': '조문 확인',
+  'case-lookup': '사건번호 조회',
+  'precedent-question': '판례 조사',
+  'legal-question': '법률 답변',
+  'legal-draft': '법률 문서 초안',
+  'legal-research': '복합 법률 조사',
+  'non-legal': '문서 작업'
+}
+
+export const legalPathLabels: Record<string, string> = {
+  direct: '직접 조회',
+  orchestrated: '복합 조사'
+}
+
+/** Which model actually answered this task, from its `model.attempts` event. */
+export type TaskModelUse = {
+  finalModel: string | null
+  fellBack: boolean
+  failedModels: string[]
 }
