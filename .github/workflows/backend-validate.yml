@@ -1,0 +1,30 @@
+name: Validate Backend
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      # The legal data bundle (~2.9 GB) is in Git LFS and is not needed: tests that use it skip without it.
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # node:sqlite (used by the graph reader) needs Node 22.5 or newer.
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Backend tests
+        run: npm run test:backend
