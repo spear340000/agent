@@ -32,6 +32,7 @@ import {
 } from '@/api/workroom'
 import EvidenceChain from './EvidenceChain'
 import MarkdownView from './MarkdownView'
+import { safeHttpUrl } from './safe-http-url'
 import { legalIntentLabels, stageMeta, type Task } from './types'
 
 type Props = {
@@ -1116,9 +1117,9 @@ export default function SystemExplorer({
           ) : null}
         </div>
         <h3>
-          {item.officialUrl ? (
+          {safeHttpUrl(item.officialUrl) ? (
             <a
-              href={item.officialUrl}
+              href={safeHttpUrl(item.officialUrl)}
               target="_blank"
               rel="noreferrer noopener"
             >
@@ -1605,9 +1606,9 @@ export default function SystemExplorer({
                           ? ` · ${citation.date.kind === 'decision' ? '선고' : '개정'} ${citation.date.value}`
                           : ''}
                       </span>
-                      {citation.officialUrl ? (
+                      {safeHttpUrl(citation.officialUrl) ? (
                         <a
-                          href={citation.officialUrl}
+                          href={safeHttpUrl(citation.officialUrl)}
                           target="_blank"
                           rel="noreferrer noopener"
                         >

@@ -5,6 +5,63 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import TaskContextPanel from './TaskContextPanel.js'
 import type { Task } from './types.js'
 
+test('citation URLs allow HTTP(S) but never render unsafe addresses as links', () => {
+  for (const [officialUrl, clickable] of [
+    ['https://www.law.go.kr/', true],
+    ['http://example.com/law', true],
+    ['javascript:alert(1)', false],
+    [' JaVaScRiPt:alert(1)', false],
+    ['java\nscript:alert(1)', false],
+    ['data:text/html,<script>alert(1)</script>', false],
+    ['//example.com/law', false],
+    ['/relative-law', false],
+    ['not a URL', false]
+  ] as const) {
+    const markup = renderToStaticMarkup(
+      createElement(TaskContextPanel, {
+        task: {
+          ...createTask('completed'),
+          legal: {
+            intent: 'article-lookup',
+            path: 'direct',
+            answer: 'Verified answer [L1].',
+            citations: [
+              {
+                citationId: 'L1',
+                recordId: 'law:1',
+                corpus: 'law',
+                label: 'Citation title',
+                officialUrl
+              }
+            ],
+            sourceStatus: {
+              corpusReady: true,
+              retrieved: 1,
+              degraded: [],
+              currentness: 'unverified',
+              notes: [],
+              failures: []
+            },
+            plannerCalls: 0,
+            toolCalls: 1
+          }
+        },
+        mobileOpen: false,
+        onMobileOpenChange: () => undefined,
+        onCancel: () => undefined,
+        onFollowup: async () => true
+      })
+    )
+    assert.equal(
+      /<a\b[^>]*>Citation title<\/a>/.test(markup),
+      clickable,
+      officialUrl
+    )
+    assert.match(markup, /Citation title/)
+    if (clickable) assert.ok(markup.includes(`href="${officialUrl}"`))
+  }
+})
+
 function createTask(state: Task['state']): Task {
   return {
     id: 'task-real-1',
