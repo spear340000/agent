@@ -55,7 +55,11 @@ export function friendlyErrorMessage(error: unknown, fallback: string): string {
 
 /** Backend failure text for a task: known infrastructure errors become Korean guidance, anything else is kept. */
 export function friendlyTaskError(message: string): string {
-  if (/legal retrieval process is unavailable|legal retrieval process did not start|process exited/i.test(message)) {
+  if (
+    /legal retrieval process is unavailable|legal retrieval process did not start|process exited/i.test(
+      message
+    )
+  ) {
     return '법령 검색 서버에 연결하지 못했습니다. 서버가 복구된 뒤 "다시 실행"을 눌러 주세요.'
   }
   if (/timed out|timeout/i.test(message)) {

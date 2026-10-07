@@ -178,12 +178,12 @@ export default function PdfTools({
               </label>
             ))}
             {!pdfs.length && (
-            <p role="status">
-              {filesLoading
-                ? '파일 목록을 불러오는 중입니다.'
-                : 'PDF 파일이 없습니다. 상단에서 .pdf 파일을 업로드해 주세요.'}
-            </p>
-          )}
+              <p role="status">
+                {filesLoading
+                  ? '파일 목록을 불러오는 중입니다.'
+                  : 'PDF 파일이 없습니다. 상단에서 .pdf 파일을 업로드해 주세요.'}
+              </p>
+            )}
           </fieldset>
         )}
         {operation !== 'inspect' && (
@@ -221,13 +221,13 @@ export default function PdfTools({
           </label>
         )}
         <ToolButton
-        busy={busy}
-        disabled={
-          disabled ||
-          !pdfs.length ||
-          (operation === 'merge' && selected.length < 2)
-        }
-      />
+          busy={busy}
+          disabled={
+            disabled ||
+            !pdfs.length ||
+            (operation === 'merge' && selected.length < 2)
+          }
+        />
       </form>
       {inspection && (
         <section

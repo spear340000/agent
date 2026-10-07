@@ -970,9 +970,9 @@ export default function Workroom() {
                 {capabilities?.model.providers?.length
                   ? `모델 제공자(${capabilities.model.providers.join(', ')})`
                   : '모델 제공자'}
-                에게 전송됩니다.
-                법령 검색은 이 컴퓨터 안에서만 실행되며, 첨부한 자료는 이 작업의
-                근거로만 사용되고 법령 저장소에 등록되지 않습니다.
+                에게 전송됩니다. 법령 검색은 이 컴퓨터 안에서만 실행되며, 첨부한
+                자료는 이 작업의 근거로만 사용되고 법령 저장소에 등록되지
+                않습니다.
               </p>
               <Composer
                 onSubmit={startTask}

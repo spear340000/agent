@@ -17,11 +17,14 @@ const LAYER_RULES: { label: string; test: (route: string) => boolean }[] = [
  * The layers a cited record went through, as short labels in the order they appear in its recorded route, so the
  * reader can see at a glance that, for example, a precedent came from the graph and was checked against the ontology.
  */
-export function routeLayers(provenance: readonly string[] | undefined): string[] {
+export function routeLayers(
+  provenance: readonly string[] | undefined
+): string[] {
   const layers: string[] = []
   for (const route of provenance ?? []) {
     for (const rule of LAYER_RULES) {
-      if (rule.test(route) && !layers.includes(rule.label)) layers.push(rule.label)
+      if (rule.test(route) && !layers.includes(rule.label))
+        layers.push(rule.label)
     }
   }
   return layers

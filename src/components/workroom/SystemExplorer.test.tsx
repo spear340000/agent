@@ -110,8 +110,22 @@ test('overview shows the provider and model in use, and the model that answered 
       providers: ['Groq', 'NVIDIA', 'OpenAI']
     }
   } as RuntimeCapabilities
-  const answered = { ...task, id: 'answered', updatedAt: 99, modelUse: { finalModel: 'Groq · qwen/qwen3.8-27b', fellBack: true, failedModels: ['Groq · openai/gpt-oss-120b'] } }
-  const stale = { ...task, id: 'stale', updatedAt: 1, modelUse: { finalModel: 'NVIDIA · old', fellBack: false, failedModels: [] } }
+  const answered = {
+    ...task,
+    id: 'answered',
+    updatedAt: 99,
+    modelUse: {
+      finalModel: 'Groq · qwen/qwen3.8-27b',
+      fellBack: true,
+      failedModels: ['Groq · openai/gpt-oss-120b']
+    }
+  }
+  const stale = {
+    ...task,
+    id: 'stale',
+    updatedAt: 1,
+    modelUse: { finalModel: 'NVIDIA · old', fellBack: false, failedModels: [] }
+  }
   const render = (tasks: Task[]) =>
     renderToStaticMarkup(
       createElement(SystemExplorer, {
@@ -127,12 +141,20 @@ test('overview shows the provider and model in use, and the model that answered 
   const markup = render([stale, answered])
   assert.match(markup, /Groq · [\s\S]*openai\/gpt-oss-120b/)
   assert.match(markup, /최근 작업 실제 응답: Groq · qwen\/qwen3\.8-27b/)
-  assert.doesNotMatch(markup, /Groq → NVIDIA/, 'the fallback chain is not shown')
-  assert.doesNotMatch(markup, /NVIDIA · old/, 'only the most recently updated task counts')
+  assert.doesNotMatch(
+    markup,
+    /Groq → NVIDIA/,
+    'the fallback chain is not shown'
+  )
+  assert.doesNotMatch(
+    markup,
+    /NVIDIA · old/,
+    'only the most recently updated task counts'
+  )
   assert.doesNotMatch(render([]), /최근 작업 실제 응답/)
 })
 
-test('the overview shows the order the components work in, and the flow tab shows this task\'s chain', () => {
+test("the overview shows the order the components work in, and the flow tab shows this task's chain", () => {
   const render = (topic: 'overview' | 'flow', tasks: Task[]) =>
     renderToStaticMarkup(
       createElement(SystemExplorer, {
@@ -147,7 +169,10 @@ test('the overview shows the order the components work in, and the flow tab show
     )
   const overview = render('overview', [])
   assert.match(overview, /질문 하나가 지나가는 순서/)
-  assert.match(overview, /RAG 검색[\s\S]*LLM Wiki[\s\S]*에이전트[\s\S]*관계 그래프[\s\S]*온톨로지[\s\S]*MCP 도구[\s\S]*OKF[\s\S]*답변 검증/)
+  assert.match(
+    overview,
+    /RAG 검색[\s\S]*LLM Wiki[\s\S]*에이전트[\s\S]*관계 그래프[\s\S]*온톨로지[\s\S]*MCP 도구[\s\S]*OKF[\s\S]*답변 검증/
+  )
 
   const chained: Task = {
     ...task,
@@ -156,8 +181,18 @@ test('the overview shows the order the components work in, and the flow tab show
       sourceStatus: {
         ...task.legal!.sourceStatus,
         chain: [
-          { id: 'rag', label: 'RAG 검색 (키워드 + 벡터)', summary: '법령 2건', items: [] },
-          { id: 'graph', label: '관계 그래프', summary: '인용 판례 1건 추가', items: ['83다카1442 —인용→ 민법 제398조'] }
+          {
+            id: 'rag',
+            label: 'RAG 검색 (키워드 + 벡터)',
+            summary: '법령 2건',
+            items: []
+          },
+          {
+            id: 'graph',
+            label: '관계 그래프',
+            summary: '인용 판례 1건 추가',
+            items: ['83다카1442 —인용→ 민법 제398조']
+          }
         ]
       }
     }
@@ -165,5 +200,9 @@ test('the overview shows the order the components work in, and the flow tab show
   const flow = render('flow', [chained])
   assert.match(flow, /이 작업에서 지식 계층이 이어진 순서/)
   assert.match(flow, /관계 그래프[\s\S]*인용 판례 1건 추가/)
-  assert.doesNotMatch(render('flow', [task]), /이 작업에서 지식 계층이 이어진 순서/, 'no chain, no section')
+  assert.doesNotMatch(
+    render('flow', [task]),
+    /이 작업에서 지식 계층이 이어진 순서/,
+    'no chain, no section'
+  )
 })

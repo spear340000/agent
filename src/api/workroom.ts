@@ -55,7 +55,12 @@ export type ManagedFile = {
   createdAt: string
 }
 export type RuntimeCapabilities = {
-  model: { configured: boolean; provider: string | null; name: string; providers?: string[] }
+  model: {
+    configured: boolean
+    provider: string | null
+    name: string
+    providers?: string[]
+  }
   browserUse: { available: boolean }
   computerUse: { available: boolean; platform: string }
   legalRetrieval: LegalRetrievalCapability

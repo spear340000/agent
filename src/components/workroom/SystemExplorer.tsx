@@ -1470,7 +1470,10 @@ export default function SystemExplorer({
             </article>
           </div>
           <h2>질문 하나가 지나가는 순서</h2>
-          <ol className="system-explorer__pipeline" aria-label="지식 계층 연결 순서">
+          <ol
+            className="system-explorer__pipeline"
+            aria-label="지식 계층 연결 순서"
+          >
             {PIPELINE.map((step) => (
               <li key={step.title}>
                 <strong>{step.title}</strong>
@@ -1563,11 +1566,14 @@ export default function SystemExplorer({
                     >
                       <h3>이 작업에서 지식 계층이 이어진 순서</h3>
                       <p className="system-explorer__note">
-                        각 단계는 앞 단계의 결과를 받아 다음 단계에 넘깁니다. 예를
-                        들어 관계 그래프는 관련성 검토를 통과한 조문에서만 출발하고,
-                        온톨로지가 허용한 관계만 판례 원문 확인으로 이어집니다.
+                        각 단계는 앞 단계의 결과를 받아 다음 단계에 넘깁니다.
+                        예를 들어 관계 그래프는 관련성 검토를 통과한 조문에서만
+                        출발하고, 온톨로지가 허용한 관계만 판례 원문 확인으로
+                        이어집니다.
                       </p>
-                      <EvidenceChain stages={selectedTask.legal.sourceStatus.chain} />
+                      <EvidenceChain
+                        stages={selectedTask.legal.sourceStatus.chain}
+                      />
                     </section>
                   ) : null}
                   {selectedTask.legal.sourceStatus.failures.length ? (
