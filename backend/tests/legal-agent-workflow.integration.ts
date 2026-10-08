@@ -119,12 +119,14 @@ function buildAgent(input: {
   files: MemoryFiles;
   model: ModelProvider;
   retrieval: LegalRetrievalService;
+  claimVerification?: boolean;
   browser?: { searchMany: (queries: string[], limit: number) => Promise<never[]>; visitMany: (urls: string[]) => Promise<never[]> };
 }) {
   const router = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 });
   const workflow = new LegalWorkflow({
     retrieval: input.retrieval,
     model: input.model,
+    claimVerification: input.claimVerification,
     limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
   });
   const legal: LegalAgentHooks = { enabled: true, route: decision => router.route(decision), workflow };
@@ -953,36 +955,41 @@ test('citation handles stay stable and legal readiness is reported separately fr
   assert.deepEqual(sources.map(source => source.citationId), ['L1', 'P1']);
 });
 
-test('an orchestrated issue that returned nothing is re-searched with a narrower query', async () => {
+test('an issue that found nothing is retried with leading terms, while an errored one is repeated verbatim', async () => {
   const longQuery = '개인정보 유출 사고 통지 의무 과태료 형사처벌 요건 책임';
   const plan = { title: 't', issue: 'i', retrievalSteps: [{ kind: 'search-laws', query: longQuery }], draft: false, needsWeb: false, webQueries: [] };
-  const calls: string[] = [];
-  const retrieval = {
-    retrieve: async (steps: Array<{ kind: string; query?: string }>) => {
-      calls.push(steps[0]!.query!);
-      const hit = steps[0]!.query !== longQuery;
-      return {
-        sources: hit ? [{ ...lawSource, citationId: 'L1' }] : [],
-        status: STATUS,
-        degraded: [],
-        failures: [],
-        toolCalls: 1,
-        maxToolCalls: 12,
-        steps,
-        trace: steps.map(step => ({ step: step as never, results: hit ? 1 : 0 }))
-      };
-    }
-  } as unknown as LegalRetrievalService;
-  const workflow = new LegalWorkflow({
-    retrieval,
-    model: { complete: async () => { throw new Error('retrieval must not invoke a model'); } },
-    limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
-  });
-  const evidence = await workflow.retrieve(plan as never, new AbortController().signal);
-  assert.equal(calls.length, 2);
-  assert.equal(calls[1], '개인정보 유출 사고 통지');
-  assert.deepEqual(evidence.sources.map(source => source.citationId), ['L1']);
-  assert.equal(evidence.toolCalls, 2);
+  const run = async (failure: boolean) => {
+    const calls: string[] = [];
+    const retrieval = {
+      retrieve: async (steps: Array<{ kind: string; query?: string }>) => {
+        calls.push(steps[0]!.query!);
+        const hit = calls.length === 2;
+        return {
+          sources: hit ? [{ ...lawSource, citationId: 'L1' }] : [],
+          status: STATUS,
+          steps,
+          trace: [{ step: steps[0]!, results: hit ? 1 : 0 }],
+          failures: !hit && failure ? [{ step: `법령 검색: ${steps[0]!.query!}`, kind: 'transport', message: 'x' }] : [],
+          degraded: [],
+          toolCalls: 1,
+          maxToolCalls: 12
+        };
+      }
+    };
+    const workflow = new LegalWorkflow({
+      retrieval: retrieval as never,
+      model: { complete: async () => '' },
+      limits: { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 }
+    });
+    const evidence = await workflow.retrieve(plan as never, new AbortController().signal);
+    return { calls, evidence };
+  };
+  const empty = await run(false);
+  assert.equal(empty.calls.length, 2);
+  assert.equal(empty.calls[1], '개인정보 유출 사고 통지');
+  assert.deepEqual(empty.evidence.sources.map(source => source.citationId), ['L1']);
+  const errored = await run(true);
+  assert.equal(errored.calls[1], longQuery, 'a failed step is retried exactly as planned');
 });
 
 test('a weak direct search is re-run once with statutory-term queries, and a failed rewrite changes nothing', async () => {
@@ -1046,10 +1053,43 @@ test('claim verification drops sentences their cited record does not support, an
   assert.deepEqual(await broken.verifyClaims(answer, sources, signal), { answer, removed: 0, checked: false });
 
   const allFlagged = new LegalWorkflow({ claimVerification: true, retrieval, limits, model: { complete: async () => '{"unsupported":[1,2,3]}' } });
-  assert.equal((await allFlagged.verifyClaims(answer, sources, signal)).removed, 0, 'an answer is never emptied by the check');
+  const rejected = await allFlagged.verifyClaims(answer, sources, signal);
+  assert.equal(rejected.removed, 3, 'unsupported claims are never restored');
+  assert.doesNotMatch(rejected.answer, /위약벌|감액이 가능합니다|\[L1\]/);
+  assert.ok(rejected.answer.trim().length > 0, 'a useful evidence-limitation explanation remains');
+  assert.equal(judge.assertPublishable(rejected.answer, sources).citationless, true);
 
   const off = new LegalWorkflow({ retrieval, limits, model: { complete: async () => { throw new Error('model must not be called when verification is off'); } } });
-  assert.deepEqual(await off.verifyClaims(answer, sources, signal), { answer, removed: 0, checked: true });
+  assert.deepEqual(await off.verifyClaims(answer, sources, signal), { answer, removed: 0, checked: false });
+});
+
+test('malformed claim-verification responses never claim successful verification', async () => {
+  const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
+  const answer = '근거를 검토했습니다 [L1].';
+  for (const reply of ['{}', 'null', '[]', '{"unsupported":null}', '{"unsupported":["1"]}', '{"unsupported":[2]}']) {
+    const workflow = new LegalWorkflow({ claimVerification: true, retrieval: {} as LegalRetrievalService, limits, model: { complete: async () => reply } });
+    const result = await workflow.verifyClaims(answer, [lawSource], new AbortController().signal);
+    assert.equal(result.checked, false, reply);
+  }
+  const uncited = new LegalWorkflow({ claimVerification: true, retrieval: {} as LegalRetrievalService, limits, model: { complete: async () => { throw new Error('no cited claims to verify'); } } });
+  assert.equal((await uncited.verifyClaims('추가 사실관계를 확인해 주세요.', [lawSource], new AbortController().signal)).checked, false);
+});
+
+test('a task whose claims all fail verification publishes only the evidence limitation, not the rejected answer', async () => {
+  await withWorkspace(async ({ tasks, files }) => {
+    const rejectedAnswer = '이 행위는 언제나 형사처벌 대상입니다 [L1].';
+    const model: ModelProvider = { complete: async ({ system }) => system.startsWith('You audit') ? '{"unsupported":[1]}' : rejectedAnswer };
+    const { agent } = buildAgent({ tasks, files, model, retrieval: stubRetrieval([lawSource]).retrieval, claimVerification: true });
+    const task = tasks.createTask('민법 제398조를 설명해 주세요.');
+    await agent.run(task.id);
+    await agent.drain();
+    assert.equal(tasks.getTask(task.id)?.status, 'completed');
+    const artifact = tasks.artifacts(task.id)[0]!;
+    assert.match(artifact.content, /법적 결론을 제시할 수 없습니다/);
+    assert.doesNotMatch(artifact.content, /언제나 형사처벌/);
+    const answerEvent = tasks.events(task.id).find(event => event.type === 'legal.answer');
+    assert.deepEqual(answerEvent?.metadata?.citations, []);
+  });
 });
 
 test('rewrite also looks up proposed articles, and a proposed article that does not exist is discarded silently', async () => {
@@ -1099,7 +1139,9 @@ test('relevance filtering drops clearly unrelated law records, keeps the rest, a
   assert.equal((await filter.selectRelevantSources('x', sources.slice(0, 3), signal, false)).dropped, 0, 'small result sets are left alone');
 
   const unsure = new LegalWorkflow({ relevanceFilter: true, retrieval, limits, model: { complete: async () => '{"relevant":[]}' } });
-  assert.equal((await unsure.selectRelevantSources('x', sources, signal, false)).dropped, 0, 'an empty answer never empties the list');
+  const empty = await unsure.selectRelevantSources('x', sources, signal, false);
+  assert.equal(empty.dropped, 4, 'an explicit empty relevance result removes all unrelated candidates');
+  assert.deepEqual(empty.sources, []);
   const broken = new LegalWorkflow({ relevanceFilter: true, retrieval, limits, model: { complete: async () => 'oops' } });
   assert.equal((await broken.selectRelevantSources('x', sources, signal, false)).sources.length, 4);
   const off = new LegalWorkflow({ retrieval, limits, model: { complete: async () => { throw new Error('model must not be called when the filter is off'); } } });

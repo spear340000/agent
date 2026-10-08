@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { checkEdge, parseOkfPage, parseOntology, precedentsCitingArticle } from '../src/application/legal/legal-knowledge-chain.ts';
-import type { LegalSource } from '../src/domain/legal-source.ts';
+import type { LegalChainStage, LegalLedger, LegalSource } from '../src/domain/legal-source.ts';
+import { reconcileLedger } from '../src/application/legal/legal-workflow.ts';
 
 const TTL = `@prefix legal: <https://knowledge-rag.local/legal/> .
 legal:Article a rdfs:Class ;
@@ -53,4 +54,25 @@ test('precedents citing an article are taken only for the right law, the right a
   assert.equal(found.citations[0]!.property, 'citesArticle');
   assert.equal(found.edges, 3);
   assert.equal(precedentsCitingArticle(graph, '민법', '제750조', contract, 1).citations.length, 1, 'the limit is respected');
+});
+
+test('the layer table agrees with the evidence chain about which layers ran', () => {
+  const layer = (id: LegalLedger['layers'][number]['id'], state: LegalLedger['layers'][number]['state']) => ({ id, label: id, state, detail: 'before' });
+  const ledger: LegalLedger = {
+    layers: [layer('graph', 'ready'), layer('ontology', 'ready'), layer('okf', 'ready'), layer('vector', 'ready'), layer('wiki', 'ready')],
+    tools: [], toolCalls: 0, maxToolCalls: 12, planner: { calls: 0, mode: 'not-used' }
+  };
+  const chain: LegalChainStage[] = [
+    { id: 'graph', label: 'g', summary: '그래프 요약', items: [] },
+    { id: 'ontology', label: 'o', summary: '온톨로지 요약', items: [] }
+  ];
+  const next = reconcileLedger(ledger, chain);
+  const state = (id: string) => next.layers.find(item => item.id === id)!;
+  assert.equal(state('graph').state, 'used');
+  assert.equal(state('graph').detail, '그래프 요약');
+  assert.equal(state('ontology').state, 'used');
+  assert.equal(state('okf').state, 'ready', 'a layer absent from the chain is left as it was');
+  assert.equal(state('vector').state, 'ready');
+  const unavailable = reconcileLedger({ ...ledger, layers: [layer('graph', 'unavailable')] }, chain);
+  assert.equal(unavailable.layers[0]!.state, 'unavailable');
 });
