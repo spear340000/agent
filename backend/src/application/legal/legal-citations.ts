@@ -41,6 +41,22 @@ const INVISIBLE_CHARACTERS = /[​-‍⁠﻿]/g;
 // failing the whole answer. Kana is never Korean, so it goes wherever it is; Han characters only when next to Hangul.
 const STRAY_FOREIGN_CHARACTERS = /[぀-ヿ]+|(?<=[가-힣぀-ヿ])[一-鿿]+|[一-鿿]+(?=[가-힣぀-ヿ])/g;
 
+/**
+ * A retrieved decision named by its case number but without its [P#] id escapes both the citation list and the claim
+ * check. Tie each such mention to the retrieved record so the sentence is verified against that judgment's text.
+ */
+export function attachCaseCitations(text: string, sources: readonly LegalSource[]): string {
+  let result = text;
+  for (const source of sources) {
+    const caseNumber = source.caseNumber?.replace(/[\s,]+$/u, '');
+    if (source.corpus !== 'precedent' || !caseNumber) continue;
+    const escape = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const mention = new RegExp(`${escape(caseNumber)}(?!\\d)(?![^\\n\\[]{0,12}\\[${escape(source.citationId)}\\])`, 'gu');
+    result = result.replace(mention, match => `${match} [${source.citationId}]`);
+  }
+  return result;
+}
+
 export function normalizeLegalCitations(rawText: string, validCitationIds: readonly string[]): string {
   const text = rawText.replace(INVISIBLE_CHARACTERS, '').replace(STRAY_FOREIGN_CHARACTERS, '');
   const valid = new Set(validCitationIds);

@@ -22,7 +22,7 @@ import { precedentsCitingArticle, type LegalKnowledgeChain, type OkfEntry } from
 import { fitEvidenceToBudget, relevantExcerpt } from './legal-evidence-budget.js';
 import { describeLawDate } from '../../infrastructure/legal/legal-normalization.js';
 import type { NormalizedRecord } from '../../infrastructure/legal/legal-normalization.js';
-import { validateLegalAnswer, normalizeLegalCitations, legalCitationIds, dropUnsupportedSentences, splitAnswerParts, joinAnswerParts, citedSourcesOf } from './legal-citations.js';
+import { validateLegalAnswer, normalizeLegalCitations, attachCaseCitations, legalCitationIds, dropUnsupportedSentences, splitAnswerParts, joinAnswerParts, citedSourcesOf } from './legal-citations.js';
 import type { LegalIntent, LegalRouteDecision } from './legal-request-router.js';
 
 export type LegalWorkflowLimits = {
@@ -112,8 +112,9 @@ const SYSTEM_PROMPT = [
 ].join('\n');
 
 const REWRITE_SYSTEM = [
-  'You rewrite search queries. Output only JSON: {"queries":[string],"articles":[{"lawName":string,"articleNumber":string}]}.',
+  'You rewrite search queries. Output only JSON: {"queries":[string],"precedentQueries":[string],"articles":[{"lawName":string,"articleNumber":string}]}.',
   'Rewrite a colloquial Korean legal question into 1 or 2 short search queries (at most 6 words each) made of statutory terms, for a Korean statute full-text index. The index does not weight law names, so keep queries topical.',
+  'In "precedentQueries", give at most 1 short query (at most 6 words) of the doctrinal terms a court decision would use. When the question asks how two legal concepts differ (for example 위약벌 and 손해배상 예정액), name both concepts so the decisions that distinguish them are found.',
   'In "articles", list at most 3 statute articles that most directly govern the question, only when you are confident of both the exact law name and the article number (for example {"lawName":"근로기준법","articleNumber":"제23조"}). The system looks each one up and discards any that do not exist, so leave the list empty rather than guess.',
   'Never answer the question.'
 ].join('\n');
@@ -450,11 +451,15 @@ ${listing}`,
     if (budget <= 0) return evidence;
     try {
       const raw = await this.deps.model.complete({ system: REWRITE_SYSTEM, expectedOutputTokens: 600, user: `QUESTION\n${searchStep.query}`, signal: AbortSignal.any([signal, AbortSignal.timeout(REWRITE_TIMEOUT_MS)]) });
-      const parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')) as { queries?: unknown; articles?: unknown };
+      const parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')) as { queries?: unknown; precedentQueries?: unknown; articles?: unknown };
       const queries = [...new Set(asArray(parsed.queries)
         .filter((item): item is string => typeof item === 'string')
         .map(item => sanitizeLegalQuery(item, this.deps.limits.maxQueryCharacters))
         .filter(item => item && item !== searchStep.query))].slice(0, 2);
+      const precedentQueries = [...new Set(asArray(parsed.precedentQueries)
+        .filter((item): item is string => typeof item === 'string')
+        .map(item => sanitizeLegalQuery(item, this.deps.limits.maxQueryCharacters))
+        .filter(item => item && item !== searchStep.query))].slice(0, 1);
       const articles = asArray(parsed.articles).flatMap((item): LegalRetrievalStep[] => {
         if (!item || typeof item !== 'object') return [];
         const { lawName, articleNumber } = item as { lawName?: unknown; articleNumber?: unknown };
@@ -462,10 +467,12 @@ ${listing}`,
         if (typeof lawName !== 'string' || !lawName.trim() || !/^제\d+조(?:의\d+)?$/.test(number)) return [];
         return [{ kind: 'law-article', lawName: sanitizeLegalQuery(lawName, 60), articleNumber: number }];
       }).slice(0, 3);
-      const extraSteps: LegalRetrievalStep[] = [...queries.map(query => ({ kind: 'search-laws' as const, query, limit: 5 })), ...articles].slice(0, budget);
+      const extraSteps: LegalRetrievalStep[] = [...queries.map(query => ({ kind: 'search-laws' as const, query, limit: 5 })), ...precedentQueries.map(query => ({ kind: 'search-precedents' as const, query, limit: 5 })), ...articles].slice(0, budget);
       if (extraSteps.length === 0) return evidence;
       const extra = tagSources(await this.deps.retrieval.retrieve(extraSteps, signal), source =>
-        source.kind === 'law-article' && articles.some(step => step.kind === 'law-article' && step.articleNumber === source.articleNumber)
+        source.corpus === 'precedent'
+          ? `질의 재작성(LLM)이 개념 구별을 위해 제안한 판례 검색 "${precedentQueries.join('", "')}" → MCP search_precedents`
+          : source.kind === 'law-article' && articles.some(step => step.kind === 'law-article' && step.articleNumber === source.articleNumber)
           ? '질의 재작성(LLM)이 제안한 후보 조문 → MCP get_law_article로 원문 확인'
           : `질의 재작성(LLM) "${queries.join('", "')}" → MCP search_laws`);
       // A guessed article that does not exist is expected and must not surface as a retrieval failure.
@@ -524,14 +531,14 @@ ${listing}`,
     const system = `${SYSTEM_PROMPT}${mode === 'orchestrated' ? '\n이 요청은 여러 쟁점을 포함하므로 쟁점별로 나누어 정리하고 쟁점마다 근거 ID를 붙이세요.' : ''}`;
     const user = this.buildSynthesisUser(input);
     const validIds = sources.map(source => source.citationId);
-    let answer = normalizeLegalCitations((await this.deps.model.complete({ system, user, signal: input.signal })).trim(), validIds);
+    let answer = attachCaseCitations(normalizeLegalCitations((await this.deps.model.complete({ system, user, signal: input.signal })).trim(), validIds), sources);
     if (input.signal.aborted) throw new Error('task cancelled');
     const rejected = validateLegalAnswer({ text: answer, sources });
     const retrievalPlanOutput = isRetrievalPlanOutput(answer);
     const placeholderAnswer = isUninformativeAnswer(answer);
     const uninformative = placeholderAnswer || retrievalPlanOutput;
     if (rejected.valid && !uninformative) return answer;
-    answer = normalizeLegalCitations(
+    answer = attachCaseCitations(normalizeLegalCitations(
       (
         await this.deps.model.complete({
           system,
@@ -563,7 +570,7 @@ ${listing}`,
         })
       ).trim(),
       validIds
-    );
+    ), sources);
     const afterRepair = validateLegalAnswer({ text: answer, sources });
     if (afterRepair.unretrievedArticles.length > 0 || afterRepair.mismatchedClaims.length > 0 || afterRepair.unsupportedCurrentness.length > 0) {
       const pruned = dropUnsupportedSentences(answer, sources);

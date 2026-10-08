@@ -208,3 +208,12 @@ test('step plans only include stages that actually run', () => {
   const directWithWeb = planLegalSteps({ sourceFileIds: [] }, route('현재 시행 중인 위약금 기준과 공식 링크를 알려 주세요.'));
   assert.deepEqual(directWithWeb.map(step => step.key), ['legal:retrieve', 'legal:web', 'legal:write:v2']);
 });
+
+test('a question comparing concepts under a cited article also searches law and precedents', () => {
+  const decision = router.route({ prompt: '민법 제398조 위약벌과 손해배상 예정액의 차이를 알려주세요.' });
+  assert.equal(decision.intent, 'legal-question');
+  assert.deepEqual(decision.steps.map(step => step.kind), ['law-article', 'search-laws', 'search-precedents']);
+  const plain = router.route({ prompt: '민법 제398조 알려줘' });
+  assert.equal(plain.intent, 'article-lookup');
+  assert.deepEqual(plain.steps.map(step => step.kind), ['law-article']);
+});

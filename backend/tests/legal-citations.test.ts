@@ -7,6 +7,7 @@ import {
   legalCitationIds,
   dropUnsupportedSentences,
   normalizeLegalCitations,
+  attachCaseCitations,
   validateLegalAnswer
 } from '../src/application/legal/legal-citations.ts';
 import type { LegalSource } from '../src/domain/legal-source.ts';
@@ -198,4 +199,13 @@ test('stray Chinese or Japanese characters fused to Korean are removed instead o
   assert.equal(normalizeLegalCitations('민법(民法) 제398조 [L1]', ['L1']), '민법(民法) 제398조 [L1]', 'a parenthesised Han term is kept');
   const cleaned = normalizeLegalCitations('형사责이 있습니다 [L1]', ['L1']);
   assert.deepEqual(validateLegalAnswer({ text: cleaned, sources: [source({ citationId: 'L1' })] }).foreignScript, []);
+});
+
+test('a retrieved decision named by case number is tied to its record id exactly once', () => {
+  const sources = [source({ citationId: 'P1', corpus: 'precedent', kind: 'precedent', caseNumber: '2018다248855,' } as never)];
+  const text = '대법원 2018다248855 판결은 위약벌을 다룹니다. 또 2018다248855 [P1] 은 이미 인용됐습니다. 2018다2488551은 다른 사건입니다.';
+  const tied = attachCaseCitations(text, sources);
+  assert.equal(tied, '대법원 2018다248855 [P1] 판결은 위약벌을 다룹니다. 또 2018다248855 [P1] 은 이미 인용됐습니다. 2018다2488551은 다른 사건입니다.');
+  assert.equal(attachCaseCitations(tied, sources), tied, 'applying it again changes nothing');
+  assert.equal(attachCaseCitations('2018다248855', [source({ citationId: 'L1' })]), '2018다248855', 'only precedent records are matched');
 });
