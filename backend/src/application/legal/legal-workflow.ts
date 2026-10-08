@@ -1039,13 +1039,14 @@ function buildSourceStatus(
     notes.push('답변 본문에서 확인된 근거를 특정하지 못했습니다. 근거 목록에는 답변에서 실제 인용한 자료만 표시합니다.');
   }
   for (const failure of evidence.failures) notes.push(`${summarizeDiagnosticText(failure.step)}: ${failure.message}`);
+  const uniqueNotes = [...new Set(notes)];
   return {
     corpusReady: Boolean(status.laws.ready || status.precedents.ready),
     retrieved: sources.length,
     cited: citationCount,
     degraded: evidence.degraded,
     currentness: sources.some(source => Boolean(source.date)) ? 'record-dated' : 'unverified',
-    notes,
+    notes: uniqueNotes,
     failures: evidence.failures,
     ledger: buildLedger(evidence, plannerCalls, vectorState)
   };
