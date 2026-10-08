@@ -110,3 +110,15 @@ test('omitsEmptyOutline', () => {
   )
   assert.equal(markup, '')
 })
+
+test('export preview shows the final document without request and draft sections', () => {
+  const markup = renderWorkspace({
+    previewMode: true,
+    initialMode: 'view',
+    value:
+      '# 기능 점검 문서\n\n## 요청\n제외할 요청입니다.\n\n## 초안 구조 예시\n제외할 구조입니다.\n\n## 결과\n유지할 본문입니다.'
+  })
+  assert.match(markup, /유지할 본문입니다\./)
+  assert.doesNotMatch(markup, /제외할 요청|제외할 구조/)
+  assert.match(markup, /Markdown 다운로드/)
+})

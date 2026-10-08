@@ -3,8 +3,37 @@ import test from 'node:test'
 import {
   applyDocumentCommand,
   getDocumentOutline,
-  getDocumentSaveStatus
+  getDocumentSaveStatus,
+  prepareFinalDocument
 } from './documentModel.js'
+
+test('preview and export omit request scaffolding while preserving document content', () => {
+  const markdown = [
+    '# 기능 점검 문서',
+    '',
+    '## 요청',
+    '기능을 확인해 주세요.',
+    '',
+    '## 초안 구조 예시',
+    '### 임시 구성',
+    '내보내지 않을 안내입니다.',
+    '',
+    '## 점검 결과',
+    '실제 문서 본문입니다.',
+    '',
+    '| 항목 | 상태 |',
+    '| --- | --- |',
+    '| 첨부 | 확인 |'
+  ].join('\n')
+  const finalDocument = prepareFinalDocument(markdown, '기능 점검 문서')
+  assert.doesNotMatch(finalDocument, /기능을 확인|임시 구성|초안 구조|내보내지/)
+  assert.match(finalDocument, /## 점검 결과\n실제 문서 본문입니다\./)
+  assert.match(finalDocument, /\| 첨부 \| 확인 \|/)
+  assert.equal(
+    prepareFinalDocument(finalDocument, '기능 점검 문서'),
+    finalDocument
+  )
+})
 
 test('extractsOutlineAndOffsetsAcrossLineEndings', () => {
   const markdown = [
