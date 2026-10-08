@@ -764,7 +764,16 @@ const PIPELINE: { title: string; role: string }[] = [
   { title: '답변 검증', role: '근거가 뒷받침하지 않는 문장을 제거' }
 ]
 
-export default function SystemExplorer({
+export default function SystemExplorer(props: Props) {
+  return (
+    <SystemExplorerSession
+      key={JSON.stringify([props.connection.baseUrl, props.connection.token])}
+      {...props}
+    />
+  )
+}
+
+function SystemExplorerSession({
   capabilities,
   backendStatus,
   onRetry,
@@ -809,6 +818,8 @@ export default function SystemExplorer({
   >({})
   const autoLoadedTopics = useRef(new Set<string>())
   const autoLoadingTopics = useRef(new Set<string>())
+  const libraryRequestIds = useRef(new Map<string, number>())
+  const libraryRequestSequence = useRef(0)
   const [catalogItems, setCatalogItems] = useState<LegalCatalogEntry[]>([])
   const [catalogError, setCatalogError] = useState('')
   const [catalogLoading, setCatalogLoading] = useState(false)
@@ -857,20 +868,25 @@ export default function SystemExplorer({
     const initialQuery = '민법'
     const searchKey = `${topic}:${corpus}:${initialQuery}`
     const tab = topic
+    const requestId = ++libraryRequestSequence.current
+    libraryRequestIds.current.set(tab, requestId)
     autoLoadingTopics.current.add(tab)
     patchLibrary(tab, { loading: true })
     void searchLegalLibrary(initialQuery, corpus, connection)
       .then(({ items }) => {
+        if (libraryRequestIds.current.get(tab) !== requestId) return
         patchLibrary(tab, { items, error: '', searchKey })
         autoLoadedTopics.current.add(tab)
       })
       .catch(() => {
+        if (libraryRequestIds.current.get(tab) !== requestId) return
         patchLibrary(tab, {
           error:
             '자료 검색을 완료하지 못했습니다. 백엔드 상태를 확인한 뒤 다시 시도해 주세요.'
         })
       })
       .finally(() => {
+        if (libraryRequestIds.current.get(tab) !== requestId) return
         autoLoadingTopics.current.delete(tab)
         patchLibrary(tab, { loading: false })
       })
@@ -880,6 +896,8 @@ export default function SystemExplorer({
     event?.preventDefault()
     if (!libraryQuery.trim()) return
     const tab = topic
+    const requestId = ++libraryRequestSequence.current
+    libraryRequestIds.current.set(tab, requestId)
     patchLibrary(tab, { loading: true, error: '' })
     try {
       const corpus =
@@ -893,19 +911,24 @@ export default function SystemExplorer({
         corpus,
         connection
       )
+      if (libraryRequestIds.current.get(tab) !== requestId) return
       patchLibrary(tab, {
         items,
         searchKey: `${tab}:${corpus}:${libraryQuery}`
       })
       autoLoadedTopics.current.add(tab)
     } catch {
+      if (libraryRequestIds.current.get(tab) !== requestId) return
       patchLibrary(tab, {
         items: [],
         error:
           '자료 검색을 완료하지 못했습니다. 백엔드 상태를 확인한 뒤 다시 시도해 주세요.'
       })
     } finally {
-      patchLibrary(tab, { loading: false })
+      if (libraryRequestIds.current.get(tab) === requestId) {
+        autoLoadingTopics.current.delete(tab)
+        patchLibrary(tab, { loading: false })
+      }
     }
   }
 

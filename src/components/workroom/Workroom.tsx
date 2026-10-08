@@ -94,10 +94,51 @@ function documentStatus(task: Task): { title: string; detail: string } {
       detail: '백엔드에서 작업을 다시 시작할 때까지 기다려 주세요.'
     }
   }
+  const running = task.steps.find((step) => step.status === 'running')
+  if (running) {
+    const done = task.steps.filter((step) => step.status === 'completed').length
+    return {
+      title: running.title,
+      detail: `전체 ${task.steps.length}단계 중 ${done + 1}번째를 처리하고 있습니다.`
+    }
+  }
   return {
     title: stageMeta[task.stage].label,
     detail: stageMeta[task.stage].detail
   }
+}
+
+/** Real steps and the latest backend events, so a running task shows what is happening instead of a fixed phrase. */
+function RunProgress({ task }: { task: Task }) {
+  const steps = task.steps
+  const activity = task.activity ?? []
+  if (steps.length === 0 && activity.length === 0) return null
+  return (
+    <div className="workfolio-run-progress">
+      {steps.length > 0 ? (
+        <ol aria-label="진행 단계">
+          {steps.map((step) => (
+            <li key={step.id} data-status={step.status}>
+              <span aria-hidden="true" />
+              {step.title}
+              {step.status === 'running' ? ' · 진행 중' : ''}
+              {step.status === 'completed' ? ' · 완료' : ''}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {activity.length > 0 ? (
+        <ul aria-label="실시간 진행 기록">
+          {activity.map((item) => (
+            <li key={item.id}>
+              <strong>{item.title}</strong>
+              {item.detail ? <span>{item.detail}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
 }
 
 export default function Workroom() {
@@ -899,6 +940,10 @@ export default function Workroom() {
                       </span>
                       <h1>{documentStatus(active).title}</h1>
                       <p>{documentStatus(active).detail}</p>
+                      {active.state === 'running' ||
+                      active.state === 'queued' ? (
+                        <RunProgress task={active} />
+                      ) : null}
                       {active.state === 'failed' ? (
                         <div className="workfolio-document-state__actions">
                           <button
