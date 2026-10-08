@@ -55,3 +55,32 @@ test('chat history is only shown inside the Chat tab', () => {
   assert.match(system, /RAG 검색/)
   assert.match(system, /LLM Wiki/)
 })
+
+test('the chat search box only appears once there are enough chats to need it', () => {
+  const many = renderToStaticMarkup(
+    createElement(WorkfolioSidebar, {
+      tasks: Array.from({ length: 9 }, (_, index) => ({
+        ...task,
+        id: `task-${index}`
+      })),
+      activeTaskId: null,
+      filter: 'all',
+      onFilterChange: () => undefined,
+      onOpenTask: () => undefined,
+      section: 'chat',
+      onSectionChange: () => undefined,
+      toolsActive: false,
+      onOpenTools: () => undefined,
+      connectionLabel: '연결',
+      backendStatus: 'online',
+      onOpenConnection: () => undefined,
+      onReconnect: () => undefined,
+      systemTopic: 'overview',
+      onSystemTopicChange: () => undefined,
+      mobileOpen: false,
+      onMobileOpenChange: () => undefined
+    })
+  )
+  assert.match(many, /채팅 검색/)
+  assert.doesNotMatch(render('chat'), /채팅 검색/)
+})
