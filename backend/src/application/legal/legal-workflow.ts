@@ -617,6 +617,15 @@ ${listing}`,
     if (isUninformativeAnswer(answer) || isRetrievalPlanOutput(answer)) {
       throw new LegalRetrievalError('tool-error', 'legal answer generation returned no substantive answer or a retrieval tool plan after one repair attempt');
     }
+    // Mentions of articles that were never retrieved are removed sentence by sentence; when that leaves nothing or still
+    // fails the check, answer within the evidence that was retrieved instead of failing the whole task.
+    const finalCheck = validateLegalAnswer({ text: answer, sources });
+    const onlyUnretrieved = finalCheck.invalidCitations.length === 0 && finalCheck.foreignScript.length === 0
+      && finalCheck.unsupportedCurrentness.length === 0 && finalCheck.unretrievedArticles.length > 0;
+    if (!finalCheck.valid && onlyUnretrieved) {
+      reportProgress('근거 범위로 답변 축소', `확보하지 않은 조문 ${finalCheck.unretrievedArticles.length}건 언급이 남아 확보한 근거만으로 답변을 다시 구성`);
+      return evidenceLimitedAnswer(sources, finalCheck.unretrievedArticles);
+    }
     return answer;
   }
 
@@ -1239,6 +1248,20 @@ function noEvidenceGuidance(evidence: LegalEvidence): string {
 function summarizeDiagnosticText(value: string): string {
   const display = value.replace(/\s+/g, ' ').trim();
   return display.length > 100 ? `${display.slice(0, 100)}… (${value.length}자)` : display;
+}
+
+/** An answer that stays inside the retrieved records when the model's draft kept naming law that was never retrieved. */
+export function evidenceLimitedAnswer(sources: readonly LegalSource[], unretrieved: readonly string[]): string {
+  const retrieved = sources.filter(source => source.corpus === 'law' || source.corpus === 'precedent').slice(0, 8);
+  const laws = [...new Set(unretrieved.map(ref => /([가-힣A-Za-z·]+?(?:법|령|규칙))\s*제\d/u.exec(ref)?.[1] ?? '').filter(Boolean))].slice(0, 8);
+  return [
+    '질문이 여러 법률에 걸쳐 있어, 확보하지 못한 조문을 근거 없이 단정하지 않기 위해 확보한 근거 범위에서만 정리합니다.',
+    retrieved.length > 0
+      ? `확보한 근거:\n${retrieved.map(source => `- ${citationLabel(source)} [${source.citationId}]`).join('\n')}`
+      : '확보한 법령·판례 근거가 없습니다.',
+    laws.length > 0 ? `원문을 확보하지 못해 판단하지 않은 법률: ${laws.join(', ')}.` : '',
+    '쟁점을 나누어 질문하거나 법령명과 조문 번호를 지정하면 해당 근거를 찾아 답변할 수 있습니다.'
+  ].filter(Boolean).join('\n\n');
 }
 
 function noEvidenceAnswer(evidence: LegalEvidence): string {
