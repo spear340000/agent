@@ -8,7 +8,7 @@ const MAX_RATE_LIMIT_WAIT_MS = 45_000;
 export class OpenAiProvider implements ModelProvider {
   private readonly limiter?: TokenRateLimiter;
 
-  constructor(private readonly options: { apiKey?: string; model: string; baseUrl: string; maxInputCharacters?: number; maxOutputBytes?: number; maxAttempts?: number; tokensPerMinute?: number; now?: () => number }) {
+  constructor(private readonly options: { apiKey?: string; model: string; baseUrl: string; maxInputCharacters?: number; maxOutputBytes?: number; maxAttempts?: number; tokensPerMinute?: number; failFastOnRateLimit?: boolean; now?: () => number }) {
     if (options.tokensPerMinute !== undefined) this.limiter = new TokenRateLimiter(options.tokensPerMinute, options.now);
     if (options.maxInputCharacters !== undefined && (!Number.isSafeInteger(options.maxInputCharacters) || options.maxInputCharacters < 1)) throw new Error('maxInputCharacters must be a positive integer');
     if (options.maxOutputBytes !== undefined && (!Number.isSafeInteger(options.maxOutputBytes) || options.maxOutputBytes < 1)) throw new Error('maxOutputBytes must be a positive integer');
@@ -64,6 +64,13 @@ export class OpenAiProvider implements ModelProvider {
         if (input.signal?.aborted) throw new Error('model request cancelled');
         if (failure.error?.type === 'insufficient_quota' || ['credit_balance_exhausted', 'insufficient_quota', 'billing_not_active'].includes(String(failure.error?.code))) {
           throw new ModelProviderError('모델 API 크레딧이 소진되었습니다. 설정된 모델 제공자 계정의 잔액·한도를 확인하세요.', false, true);
+        }
+        const rateLimited = response.status === 429;
+        if (rateLimited && this.options.failFastOnRateLimit) {
+          // Another provider is configured: skip this model for a while instead of retrying it on every call.
+          const header = Number(response.headers.get('retry-after'));
+          const cooldown = Number.isFinite(header) && header > 0 ? Math.min(header * 1000, 120_000) : 30_000;
+          throw new ModelProviderError('model provider returned HTTP 429. 모델 제공자의 요청 한도에 도달해 잠시 이 모델을 건너뜁니다.', true, false, cooldown);
         }
         if (attempt < maxAttempts - 1 && [408, 429, 500, 502, 503, 504].includes(response.status)) {
           const retryAfter = Number(response.headers.get('retry-after'));

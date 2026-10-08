@@ -359,3 +359,27 @@ test('the provider settles its rate reservation from the usage the API reports',
     globalThis.fetch = realFetch;
   }
 });
+
+test('a rate-limited model is skipped until its cooldown ends instead of being retried on every call', async () => {
+  let clock = 1_000;
+  const calls: string[] = [];
+  const provider = new ModelFailoverProvider([
+    { name: 'limited', complete: async () => { calls.push('limited'); throw new ModelProviderError('HTTP 429', true, false, 30_000); } },
+    { name: 'backup', complete: async () => { calls.push('backup'); return 'answer'; } },
+  ], { now: () => clock });
+
+  await provider.complete({ system: 's', user: 'u' });
+  await provider.complete({ system: 's', user: 'u' });
+  assert.deepEqual(calls, ['limited', 'backup', 'backup'], 'the second call does not touch the limited model');
+  clock += 31_000;
+  await provider.complete({ system: 's', user: 'u' });
+  assert.deepEqual(calls, ['limited', 'backup', 'backup', 'limited', 'backup'], 'after the cooldown it is tried again');
+});
+
+test('when every model is cooling down they are all tried again rather than failing outright', async () => {
+  const provider = new ModelFailoverProvider([
+    { name: 'only', complete: async () => { throw new ModelProviderError('HTTP 429', true, false, 30_000); } },
+  ], { now: () => 1_000 });
+  await assert.rejects(() => provider.complete({ system: 's', user: 'u' }));
+  await assert.rejects(() => provider.complete({ system: 's', user: 'u' }), /모든 모델 제공자/);
+});
