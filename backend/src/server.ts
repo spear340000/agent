@@ -57,7 +57,7 @@ const model = new ModelFailoverProvider(configuredModelEndpoints.map((endpoint) 
     baseUrl: endpoint.baseUrl,
     ...(endpoint.maxInputCharacters ? { maxInputCharacters: endpoint.maxInputCharacters } : {}),
     ...(endpoint.tokensPerMinute ? { tokensPerMinute: endpoint.tokensPerMinute } : {}),
-    failFastOnRateLimit: configuredModelEndpoints.length > 1,
+    failFastOnRateLimit: configuredModelEndpoints.length > 1 && process.env.MODEL_RATE_LIMIT_FAIL_FAST !== 'false',
     maxAttempts: 2,
   });
   return { name: `${endpoint.name} · ${endpoint.model}`, failureDomain: endpoint.baseUrl, complete: (input) => provider.complete(input) };
