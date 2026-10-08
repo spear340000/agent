@@ -9,6 +9,7 @@ import type {
 import { LEGAL_CHAIN_STAGE_IDS } from '@/api/workroom'
 import type {
   LegalAnswerView,
+  TaskActivity,
   TaskModelUse,
   Source,
   Task,
@@ -203,6 +204,26 @@ function ledgerFrom(value: unknown): LegalLedger | undefined {
   }
 }
 
+const ACTIVITY_TYPES = new Set([
+  'legal.routed',
+  'legal.retrieval',
+  'legal.answer',
+  'step.started',
+  'step.completed'
+])
+
+/** Backend events worth showing a person while they wait: routing, retrieval and step changes. */
+export function activityFromEvents(events: BackendEvent[]): TaskActivity[] {
+  return events
+    .filter((event) => ACTIVITY_TYPES.has(event.type) && event.title)
+    .map((event) => ({
+      id: String(event.id),
+      title: event.title,
+      detail: event.type.startsWith('step.') ? '' : event.message
+    }))
+    .slice(-8)
+}
+
 export function modelUseFromEvents(
   events: BackendEvent[]
 ): TaskModelUse | undefined {
@@ -384,6 +405,9 @@ export function toWorkroomTask(
       const legal = legalAnswerFromEvents(details.events)
       return legal ? { legal } : {}
     })(),
+    ...(details.events.length > 0
+      ? { activity: activityFromEvents(details.events) }
+      : {}),
     ...(() => {
       const modelUse = modelUseFromEvents(details.events)
       return modelUse ? { modelUse } : {}

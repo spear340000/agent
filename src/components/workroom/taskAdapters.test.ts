@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { modelUseFromEvents, toWorkroomTask } from './taskAdapters.js'
+import {
+  activityFromEvents,
+  modelUseFromEvents,
+  toWorkroomTask
+} from './taskAdapters.js'
 import type { TaskDetails } from '@/api/workroom'
 
 test('a planning failure does not leave pending sources pretending to be actively collected', () => {
@@ -425,4 +429,28 @@ test('the model that actually answered, and any failed fallbacks, come from the 
     { finalModel: 'backup', fellBack: true, failedModels: ['primary'] }
   )
   assert.equal(modelUseFromEvents([]), undefined)
+})
+
+test('running tasks show routing, retrieval and step events but not internal ones', () => {
+  const event = (id: number, type: string, title: string, message = '') => ({
+    id,
+    taskId: 't',
+    type,
+    title,
+    message,
+    status: 'completed',
+    createdAt: '2026-01-01T00:00:00Z'
+  })
+  const activity = activityFromEvents([
+    event(1, 'legal.routed', '요청 분류 완료', '직접 조회 경로로 처리합니다.'),
+    event(2, 'step.started', '법령·판례 근거 확인', 'started.'),
+    event(3, 'model.attempts', '모델 사용 기록', 'x'),
+    event(4, 'legal.retrieval', '법령·판례 검색 완료', '13건')
+  ])
+  assert.deepEqual(
+    activity.map((item) => item.title),
+    ['요청 분류 완료', '법령·판례 근거 확인', '법령·판례 검색 완료']
+  )
+  assert.equal(activity[1]!.detail, '')
+  assert.equal(activity[2]!.detail, '13건')
 })
