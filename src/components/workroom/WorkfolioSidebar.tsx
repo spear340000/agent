@@ -140,12 +140,15 @@ export default function WorkfolioSidebar({
     }
   }, [resizing])
 
+  const [search, setSearch] = useState('')
+  const needle = search.trim().toLowerCase()
   const visibleTasks = tasks.filter(
     (task) =>
-      filter === 'all' ||
-      (filter === 'completed'
-        ? task.state === 'completed'
-        : !['completed', 'cancelled', 'failed'].includes(task.state))
+      (filter === 'all' ||
+        (filter === 'completed'
+          ? task.state === 'completed'
+          : !['completed', 'cancelled', 'failed'].includes(task.state))) &&
+      (needle === '' || task.title.toLowerCase().includes(needle))
   )
 
   function openTask(id: string | null) {
@@ -290,6 +293,17 @@ export default function WorkfolioSidebar({
                 )
               })}
             </nav>
+
+            {tasks.length > 8 ? (
+              <input
+                className="workfolio-sidebar__search"
+                type="search"
+                value={search}
+                placeholder="채팅 검색"
+                aria-label="채팅 검색"
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            ) : null}
 
             <div className="workfolio-sidebar__history">
               {visibleTasks.map((task) => (
