@@ -18,14 +18,26 @@ export class OpenAiProvider implements ModelProvider {
     const maxInputCharacters = this.options.maxInputCharacters ?? 200_000;
     if (input.system.length + input.user.length > maxInputCharacters) throw new ModelProviderError(`model input exceeds the configured limit of ${maxInputCharacters} characters`, true);
     if (!this.options.apiKey) throw new ModelProviderError('모델 제공자 API 키가 설정되지 않았습니다.');
-    let reservation: { tokens: number } | undefined;
+    let reservation: { tokens: number; settled?: boolean } | undefined;
     if (this.limiter) {
       const tokens = estimateTokens(input.system.length + input.user.length, input.expectedOutputTokens);
       const wait = this.limiter.waitMs(tokens);
-      if (wait > MAX_RATE_LIMIT_WAIT_MS) throw new ModelProviderError('provider token rate window is full; using the next provider.', true);
+      if (wait > MAX_RATE_LIMIT_WAIT_MS) {
+        const reason = Number.isFinite(wait) ? `분당 토큰 한도에 도달했습니다(약 ${Math.ceil(wait / 1000)}초 뒤에 여유가 생겨 대기하지 않고 다음 모델로 전환합니다).` : '이 요청은 분당 토큰 한도보다 커서 이 모델로 보낼 수 없어 다음 모델로 전환합니다.';
+        throw new ModelProviderError(reason, true);
+      }
       if (wait > 0) await this.delay(0, input.signal, wait);
       reservation = this.limiter.record(tokens);
     }
+    try {
+      return await this.send(input, reservation);
+    } catch (error) {
+      // A request that failed before any usage was reported must not keep occupying the provider's token window.
+      if (reservation) this.limiter?.release(reservation);
+      throw error;
+    }
+  }
+  private async send(input: { system: string; user: string; signal?: AbortSignal }, reservation?: { tokens: number; settled?: boolean }): Promise<string> {
     const endpoint = `${this.options.baseUrl.replace(/\/+$/, '')}/chat/completions`;
     const maxAttempts = this.options.maxAttempts ?? 3;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {

@@ -2,7 +2,7 @@ const WINDOW_MS = 60_000;
 
 /** Rolling one-minute token budget for a provider tier that rejects requests over its tokens-per-minute limit. */
 export class TokenRateLimiter {
-  private events: Array<{ at: number; tokens: number }> = [];
+  private events: Array<{ at: number; tokens: number; settled?: boolean }> = [];
 
   constructor(private readonly tokensPerMinute: number, private readonly now: () => number = Date.now) {
     if (!Number.isSafeInteger(tokensPerMinute) || tokensPerMinute < 1) throw new Error('tokensPerMinute must be a positive integer');
@@ -22,15 +22,22 @@ export class TokenRateLimiter {
     return WINDOW_MS;
   }
 
-  record(tokens: number): { tokens: number } {
+  record(tokens: number): { tokens: number; settled?: boolean } {
     const event = { at: this.now(), tokens };
     this.events.push(event);
     return event;
   }
 
   /** Replaces a reservation with the provider's reported usage once the response is in. */
-  settle(event: { tokens: number }, actualTokens: number): void {
+  settle(event: { tokens: number; settled?: boolean }, actualTokens: number): void {
     if (Number.isFinite(actualTokens) && actualTokens > 0) event.tokens = actualTokens;
+    event.settled = true;
+  }
+
+  /** Gives back a reservation for a request that failed before the provider reported any usage. */
+  release(event: { tokens: number; settled?: boolean }): void {
+    if (event.settled) return;
+    this.events = this.events.filter(entry => entry !== event);
   }
 }
 
