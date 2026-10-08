@@ -44,6 +44,8 @@ const LAW_REFERENCE_PATTERN = /(?:법률|법|령|규칙|조칙)[^\n]{0,16}제\d+
 const ISSUE_SEPARATOR = /[?？]|그리고|또한|한편|뿐만\s*아니라|게다가/g;
 const PROMPT_NOISE = /[\r\n]+/g;
 
+/** Asking how concepts differ needs decisions and related law, not just the cited article's text. */
+const COMPARISON_QUESTION = /차이|구별|구분|비교|다른가|다릅니까|어떻게\s*다르|같은가|동일한가/;
 const OUTPUT_SHAPE = /초안|서식|양식|작성|써\s|만들|정식|서류/;
 const WEB_NEEDED = /최신|현재|요즘|오늘|공지|고시|발표|공식\s*(?:사이트|출처|링크)|원문\s*링크|링크|https?:\/\//i;
 
@@ -115,9 +117,10 @@ export class LegalRequestRouter {
     const longSearch = !article?.lawName && !caseNumber && input.prompt.length > (this.limits.maxDirectQueryCharacters ?? 300);
     const orchestrated = manyAttachments || multiIssue || complexDraft || longSearch;
 
+    const comparison = COMPARISON_QUESTION.test(prompt);
     const intent: LegalIntent = caseNumber
       ? 'case-lookup'
-      : article && !mentionsDraft
+      : article && !mentionsDraft && !comparison
         ? 'article-lookup'
         : orchestrated
           ? 'legal-research'
@@ -133,6 +136,7 @@ export class LegalRequestRouter {
     const path: LegalPath = orchestrated ? 'orchestrated' : 'direct';
     const queries = buildQueries(prompt, intent);
     const steps = orchestrated ? [] : this.directSteps(input.prompt, intent, article, caseNumber);
+    if (comparison && article?.lawName && !orchestrated && !caseNumber) steps.splice(1, 0, { kind: 'search-laws', query: input.prompt, limit: 5 });
     return this.decision(path, intent, reasons, prompt, input.prompt, attachmentCount, {
       article,
       caseNumber,

@@ -1021,6 +1021,23 @@ test('a weak direct search is re-run once with statutory-term queries, and a fai
   assert.equal(calls.some(call => call.includes('근로기준법')), false);
 });
 
+test('the rewrite also searches precedents for the doctrinal terms of a question that asks how two concepts differ', async () => {
+  const router = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 });
+  const decision = router.route({ prompt: '위약벌과 손해배상 예정액은 어떻게 다른가요?' });
+  const calls: string[] = [];
+  const retrieval = {
+    retrieve: async (steps: StubStep[]) => {
+      calls.push(...steps.map(step => `${step.kind}:${step.query ?? ''}`));
+      return { sources: [{ ...lawSource, relevance: 0.2 }], status: STATUS, degraded: [], failures: [], toolCalls: steps.length, maxToolCalls: 12, steps, trace: steps.map(step => ({ step: step as never, results: 1 })) };
+    }
+  } as unknown as LegalRetrievalService;
+  const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
+  const workflow = new LegalWorkflow({ queryRewrite: true, retrieval, limits, model: { complete: async () => '{"queries":["손해배상 예정"],"precedentQueries":["위약벌 손해배상예정 구별"]}' } });
+  await workflow.retrieve(decision, new AbortController().signal);
+  assert.ok(calls.includes('search-precedents:위약벌 손해배상예정 구별'), 'the concept-distinguishing precedent query is searched');
+  assert.ok(calls.includes('search-laws:손해배상 예정'));
+});
+
 test('query rewriting is off unless enabled, so direct lookups never call the model', async () => {
   const router = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 });
   const decision = router.route({ prompt: '회사에서 갑자기 잘렸어요 어떻게 하나요?' });
