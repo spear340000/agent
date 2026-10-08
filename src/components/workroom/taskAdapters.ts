@@ -249,11 +249,29 @@ export function modelUseFromEvents(
         .map((attempt) => String(attempt.model))
     )
   ]
+  const totals = isRecord(metadata.totals) ? metadata.totals : undefined
+  const count = (value: unknown): number =>
+    typeof value === 'number' && Number.isFinite(value) ? value : 0
   return {
     finalModel:
       typeof metadata.finalModel === 'string' ? metadata.finalModel : null,
     fellBack: metadata.fellBack === true,
-    failedModels
+    failedModels,
+    ...(totals
+      ? {
+          totals: {
+            calls: count(totals.calls),
+            failedCalls: count(totals.failedCalls),
+            promptTokens: count(totals.promptTokens),
+            completionTokens: count(totals.completionTokens),
+            totalMs: count(totals.totalMs),
+            tokensPerSecond:
+              typeof totals.tokensPerSecond === 'number'
+                ? totals.tokensPerSecond
+                : null
+          }
+        }
+      : {})
   }
 }
 

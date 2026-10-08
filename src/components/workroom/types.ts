@@ -143,4 +143,15 @@ export type TaskModelUse = {
   finalModel: string | null
   fellBack: boolean
   failedModels: string[]
+  totals?: TaskModelTotals
+}
+
+/** Everything the model calls of one task cost: how many, how many tokens, how long, and how fast. */
+export type TaskModelTotals = {
+  calls: number
+  failedCalls: number
+  promptTokens: number
+  completionTokens: number
+  totalMs: number
+  tokensPerSecond: number | null
 }
