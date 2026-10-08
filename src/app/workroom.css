@@ -5871,3 +5871,10 @@
   font-size: 0.82rem;
   margin: 8px 0;
 }
+
+.workfolio-activity__time {
+  margin-left: 8px;
+  color: var(--muted, #7b746c);
+  font-size: 0.75rem;
+  font-weight: 400;
+}

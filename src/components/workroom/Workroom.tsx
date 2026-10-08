@@ -129,7 +129,10 @@ function RunProgress({ task }: { task: Task }) {
         </ol>
       ) : null}
       {activity.length > 0 ? (
-        <ActivityLog activity={activity.slice(-14)} />
+        <ActivityLog
+          activity={activity.slice(-14)}
+          startedAt={activity[0]!.at}
+        />
       ) : null}
     </div>
   )

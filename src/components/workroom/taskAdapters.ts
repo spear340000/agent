@@ -223,6 +223,7 @@ export function activityFromEvents(events: BackendEvent[]): TaskActivity[] {
         : []
       return {
         id: String(event.id),
+        at: Date.parse(event.createdAt) || 0,
         title: event.title,
         detail: event.type.startsWith('step.') ? '' : event.message,
         ...(items.length > 0 ? { items } : {})

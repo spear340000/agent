@@ -89,6 +89,8 @@ export type TaskActivity = {
   title: string
   detail: string
   items?: string[]
+  /** When the backend reported it, in epoch milliseconds. */
+  at: number
 }
 export const stageMeta: Record<
   WorkflowStage,
