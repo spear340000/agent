@@ -1080,6 +1080,15 @@ test('claim verification drops sentences their cited record does not support, an
   assert.deepEqual(await off.verifyClaims(answer, sources, signal), { answer, removed: 0, checked: false });
 });
 
+test('a verifier false alarm on a sentence that quotes its record is ignored', async () => {
+  const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
+  const quote = { ...lawSource, citationId: 'L1', excerpt: '고의 또는 과실로 인한 위법행위로 타인에게 손해를 가한 자는 그 손해를 배상할 책임이 있다.' };
+  const answer = '고의 또는 과실로 인한 위법행위로 타인에게 손해를 가한 자는 그 손해를 배상할 책임이 있다 [L1].';
+  const workflow = new LegalWorkflow({ claimVerification: true, retrieval: {} as LegalRetrievalService, limits, model: { complete: async () => '{"unsupported":[1]}' } });
+  const result = await workflow.verifyClaims(answer, [quote], new AbortController().signal);
+  assert.deepEqual(result, { answer, removed: 0, checked: true });
+});
+
 test('malformed claim-verification responses never claim successful verification', async () => {
   const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
   const answer = '근거를 검토했습니다 [L1].';

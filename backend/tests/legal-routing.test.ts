@@ -95,7 +95,10 @@ test('a case number lookup prefers the case-number tool', () => {
   const decision = route('2013가합30895 판례의 판결요지를 알려 주세요.');
   assert.equal(decision.intent, 'case-lookup');
   assert.equal(decision.caseNumber, '2013가합30895');
-  assert.deepEqual(decision.steps, [{ kind: 'case-number', caseNumber: '2013가합30895' }]);
+  assert.deepEqual(decision.steps, [
+    { kind: 'case-number', caseNumber: '2013가합30895' },
+    { kind: 'precedent', id: '2013가합30895', maxChars: 6_000 }
+  ]);
 });
 
 test('a precedent question searches precedents instead of statutes only', () => {
