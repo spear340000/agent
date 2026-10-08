@@ -502,6 +502,26 @@ test('an explicitly document-mode task never starts the legal retrieval process'
   });
 });
 
+test('a draft that keeps naming law that was never retrieved is replaced by an answer within the retrieved evidence', async () => {
+  await withWorkspace(async ({ tasks, files }) => {
+    const model: ModelProvider = {
+      complete: async ({ system }) => {
+        if (system.startsWith('Return only valid JSON')) throw new Error('planner must not run');
+        return '형법 제314조와 개인정보보호법 제28조, 부정경쟁방지법 제2조가 함께 문제됩니다 [L1].';
+      }
+    };
+    const stub = stubRetrieval([lawSource]);
+    const { agent } = buildAgent({ tasks, files, model, retrieval: stub.retrieval });
+    const task = tasks.createTask('민법 제398조가 정하는 손해배상 예정이 어떻게 되나요?');
+    await agent.run(task.id);
+    await agent.drain();
+    assert.equal(tasks.getTask(task.id)?.status, 'completed', String(tasks.getTask(task.id)?.error));
+    const artifact = tasks.artifacts(task.id)[0]!;
+    assert.match(artifact.content, /확보한 근거 범위/);
+    assert.doesNotMatch(artifact.content, /형법 제314조|부정경쟁방지법 제2조/);
+  });
+});
+
 test('an answer that invents a citation is repaired once and then rejected', async () => {
   await withWorkspace(async ({ tasks, files }) => {
     let answers = 0;
