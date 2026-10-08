@@ -77,13 +77,20 @@ export function matchWikiHints(question: string, hints: readonly WikiHint[], max
 export class LegalWikiHints {
   private loaded?: Promise<WikiHint[]>;
 
-  constructor(private readonly wikiRoot: string) {}
+  /** `wikiRoots` are read in order; a folder that does not exist is skipped, so a repository supplement is optional. */
+  constructor(wikiRoots: string | readonly string[]) {
+    this.wikiRoots = typeof wikiRoots === 'string' ? [wikiRoots] : [...wikiRoots];
+  }
+
+  private readonly wikiRoots: string[];
 
   private load(): Promise<WikiHint[]> {
     this.loaded ??= (async () => {
-      const files = (await readdir(this.wikiRoot)).filter(name => /core\.md$|조문|핵심/u.test(name) || name.endsWith('.md'));
-      const pages = await Promise.all(files.map(async name => parseWikiCore(await readFile(path.join(this.wikiRoot, name), 'utf8').catch(() => ''))));
-      return pages.flat();
+      const pages = await Promise.all(this.wikiRoots.map(async root => {
+        const files = (await readdir(root).catch(() => [] as string[])).filter(name => name.endsWith('.md'));
+        return Promise.all(files.map(async name => parseWikiCore(await readFile(path.join(root, name), 'utf8').catch(() => ''))));
+      }));
+      return pages.flat(2);
     })();
     return this.loaded;
   }

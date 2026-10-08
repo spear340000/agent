@@ -16,6 +16,7 @@ export type ModelFailoverOptions = {
 export class ModelFailoverProvider implements ModelProvider {
   private lastSuccessfulModelName: string | null = null;
   private readonly unhealthyUntil = new Map<string, number>();
+  private readonly rateLimitedUntil = new Map<NamedModelProvider, number>();
   private readonly now: () => number;
 
   constructor(private readonly providers: readonly NamedModelProvider[], private readonly options: ModelFailoverOptions = {}) {
@@ -30,7 +31,10 @@ export class ModelFailoverProvider implements ModelProvider {
   /** Providers whose account is not in cooldown; when every account is in cooldown, all of them are tried again. */
   private candidates(): readonly NamedModelProvider[] {
     const now = this.now();
-    const healthy = this.providers.filter(provider => !provider.failureDomain || (this.unhealthyUntil.get(provider.failureDomain) ?? 0) <= now);
+    const healthy = this.providers.filter(provider =>
+      (!provider.failureDomain || (this.unhealthyUntil.get(provider.failureDomain) ?? 0) <= now) &&
+      (this.rateLimitedUntil.get(provider) ?? 0) <= now
+    );
     return healthy.length > 0 ? healthy : this.providers;
   }
 
@@ -55,6 +59,7 @@ export class ModelFailoverProvider implements ModelProvider {
         recordModelAttempt({ model: provider.name, ok: false, ms: Date.now() - startedAt, error: (error instanceof Error ? error.message : String(error)).slice(0, 200) });
         if (input.signal?.aborted || (error instanceof Error && error.message === 'model request cancelled')) throw new Error('model request cancelled');
         if (!(error instanceof ModelProviderError)) throw error;
+        if (error.retryAfterMs) this.rateLimitedUntil.set(provider, this.now() + error.retryAfterMs);
         if (!error.fallbackEligible) {
           if (!error.crossProviderEligible || !provider.failureDomain) throw error;
           failedDomains.add(provider.failureDomain);

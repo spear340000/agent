@@ -57,6 +57,7 @@ const model = new ModelFailoverProvider(configuredModelEndpoints.map((endpoint) 
     baseUrl: endpoint.baseUrl,
     ...(endpoint.maxInputCharacters ? { maxInputCharacters: endpoint.maxInputCharacters } : {}),
     ...(endpoint.tokensPerMinute ? { tokensPerMinute: endpoint.tokensPerMinute } : {}),
+    failFastOnRateLimit: configuredModelEndpoints.length > 1,
     maxAttempts: 2,
   });
   return { name: `${endpoint.name} · ${endpoint.model}`, failureDomain: endpoint.baseUrl, complete: (input) => provider.complete(input) };
@@ -150,7 +151,7 @@ const legalWorkflow = new LegalWorkflow({
   model,
   queryRewrite: env.legal.queryRewrite,
   claimVerification: env.legal.claimVerification,
-  ...(env.legal.wikiHints ? { wikiHints: new LegalWikiHints(path.join(env.legal.runtimeRoot, "wiki")) } : {}),
+  ...(env.legal.wikiHints ? { wikiHints: new LegalWikiHints([path.join(env.legal.runtimeRoot, "wiki"), path.resolve("backend", "legal", "wiki-supplement")]) } : {}),
   ...(env.legal.knowledgeChain ? { knowledgeChain: new LegalKnowledgeChain({ ontology: env.legal.ontologyPath, okf: env.legal.okfPath }) } : {}),
   relevanceFilter: env.legal.relevanceFilter,
   evidenceBudgetChars: env.legal.evidenceBudgetChars,
