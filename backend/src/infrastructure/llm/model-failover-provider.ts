@@ -1,7 +1,7 @@
 import type { ModelProvider } from '../../domain/model-provider.js';
 import { unavailable } from '../../shared/app-error.js';
 import { ModelProviderError } from './model-provider-error.js';
-import { recordModelAttempt } from './model-attempts.js';
+import { recordModelAttempt, withUsageSlot, type ModelUsage } from './model-attempts.js';
 
 export type NamedModelProvider = ModelProvider & { name: string; failureDomain?: string };
 
@@ -51,9 +51,10 @@ export class ModelFailoverProvider implements ModelProvider {
       }
       const startedAt = Date.now();
       try {
-        const result = await provider.complete(input);
+        const usage: ModelUsage = {};
+        const result = await withUsageSlot(usage, () => provider.complete(input));
         this.lastSuccessfulModelName = provider.name;
-        recordModelAttempt({ model: provider.name, ok: true, ms: Date.now() - startedAt });
+        recordModelAttempt({ model: provider.name, ok: true, ms: Date.now() - startedAt, ...usage });
         return result;
       } catch (error) {
         recordModelAttempt({ model: provider.name, ok: false, ms: Date.now() - startedAt, error: (error instanceof Error ? error.message : String(error)).slice(0, 200) });

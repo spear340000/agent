@@ -226,7 +226,9 @@ test('each task records its own failed and final models, even when tasks run con
   ]);
   assert.deepEqual(a.map(item => [item.model, item.ok]), [['primary', false], ['backup', true]]);
   assert.deepEqual(b.map(item => [item.model, item.ok]), [['primary', false], ['backup', true]]);
-  assert.deepEqual(summarizeModelAttempts(a), { finalModel: 'backup', fellBack: true, failedModels: ['primary'] });
+  const summary = summarizeModelAttempts(a);
+  assert.deepEqual({ finalModel: summary.finalModel, fellBack: summary.fellBack, failedModels: summary.failedModels }, { finalModel: 'backup', fellBack: true, failedModels: ['primary'] });
+  assert.equal(summary.totals.calls, 2);
 });
 
 test('an account that reported exhausted credit is skipped for the cooldown, then retried', async () => {

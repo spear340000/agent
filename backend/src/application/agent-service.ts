@@ -121,12 +121,13 @@ export class AgentService {
 
   private recordModelAttempts(taskId: string, attempts: readonly ModelAttempt[]): void {
     if (attempts.length === 0) return;
-    const { finalModel, fellBack, failedModels } = summarizeModelAttempts(attempts);
+    const { finalModel, fellBack, failedModels, totals } = summarizeModelAttempts(attempts);
     const message = [
       finalModel ? `최종 응답 모델: ${finalModel}` : '응답한 모델이 없습니다.',
-      fellBack ? `대체 모델 사용 · 실패한 모델: ${failedModels.join(', ')}` : ''
+      fellBack ? `대체 모델 사용 · 실패한 모델: ${failedModels.join(', ')}` : '',
+      `모델 호출 ${totals.calls}회 · 입력 ${totals.promptTokens.toLocaleString('ko-KR')} / 출력 ${totals.completionTokens.toLocaleString('ko-KR')} 토큰 · 모델 시간 ${(totals.totalMs / 1000).toFixed(1)}초${totals.tokensPerSecond ? ` · 평균 ${totals.tokensPerSecond.toFixed(0)} tok/s` : ''}`
     ].filter(Boolean).join(' · ');
-    this.event(taskId, 'model.attempts', '모델 사용 기록', message, fellBack ? 'warning' : 'completed', { finalModel, fellBack, attempts });
+    this.event(taskId, 'model.attempts', '모델 사용 기록', message, fellBack ? 'warning' : 'completed', { finalModel, fellBack, attempts, totals });
   }
 
   private async runTask(taskId: string): Promise<void> {
