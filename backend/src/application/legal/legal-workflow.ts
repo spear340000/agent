@@ -134,6 +134,9 @@ const RELEVANCE_TIMEOUT_MS = 20_000;
 /** The verifier sees each cited record through a window sized from this total, so a long judgment is not judged on one paragraph. */
 const CLAIM_EXCERPT_TOTAL_CHARACTERS = 7_000;
 const CLAIM_EXCERPT_MIN_CHARACTERS = 800;
+/** A simple question stops searching once it has what it needs: at most this many rewrite searches and linked decisions. */
+const REWRITE_STEP_LIMIT = 3;
+const LINKED_PRECEDENT_TARGET = 2;
 const QUOTATION_CONTAINMENT = 0.9;
 const CLAIM_EXCERPT_MAX_CHARACTERS = 3_500;
 const DEFAULT_EVIDENCE_BUDGET_CHARS = 6_000;
@@ -276,6 +279,8 @@ export class LegalWorkflow {
       const properties = new Set<string>();
       const totalCiting: string[] = [];
       for (const anchor of anchors) {
+        // Enough confirmed decisions answer the question; searching the second article would only add cost.
+        if (linked.length >= LINKED_PRECEDENT_TARGET) break;
         if (current.maxToolCalls - current.toolCalls < 2) break;
         const article = `${anchor.lawName} ${anchor.articleNumber}`;
         // Read the article's incoming citations straight from the graph database when possible; a label search
@@ -334,7 +339,7 @@ export class LegalWorkflow {
     try {
       const squash = (value: string): string => value.replace(/\s+/g, '');
       const have = new Set(evidence.sources.map(source => `${squash(source.lawName ?? '')}|${squash(source.articleNumber ?? '')}`));
-      const budget = Math.min(3, evidence.maxToolCalls - evidence.toolCalls);
+      const budget = Math.min(2, evidence.maxToolCalls - evidence.toolCalls);
       const matches = (await wiki.find(question, 3)).filter(match => !have.has(`${squash(match.lawName)}|${squash(match.article)}`)).slice(0, Math.max(0, budget));
       let merged: LegalEvidence = { ...evidence, wikiHints: 0 };
       let found = 0;
@@ -470,7 +475,7 @@ ${listing}`,
   async rewriteWeakDirectSearch(steps: LegalRetrievalStep[], evidence: LegalEvidence, signal: AbortSignal): Promise<LegalEvidence> {
     const searchStep = steps.find(step => step.kind === 'search-laws' || step.kind === 'search-all');
     if (!searchStep || !('query' in searchStep)) return evidence;
-    const budget = Math.min(5, evidence.maxToolCalls - evidence.toolCalls);
+    const budget = Math.min(REWRITE_STEP_LIMIT, evidence.maxToolCalls - evidence.toolCalls);
     if (budget <= 0) return evidence;
     try {
       const raw = await this.deps.model.complete({ system: REWRITE_SYSTEM, expectedOutputTokens: 600, user: `QUESTION\n${searchStep.query}`, signal: AbortSignal.any([signal, AbortSignal.timeout(REWRITE_TIMEOUT_MS)]) });
