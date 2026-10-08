@@ -209,19 +209,27 @@ const ACTIVITY_TYPES = new Set([
   'legal.retrieval',
   'legal.answer',
   'step.started',
-  'step.completed'
+  'step.completed',
+  'task.progress'
 ])
 
 /** Backend events worth showing a person while they wait: routing, retrieval and step changes. */
 export function activityFromEvents(events: BackendEvent[]): TaskActivity[] {
   return events
     .filter((event) => ACTIVITY_TYPES.has(event.type) && event.title)
-    .map((event) => ({
-      id: String(event.id),
-      title: event.title,
-      detail: event.type.startsWith('step.') ? '' : event.message
-    }))
-    .slice(-8)
+    .map((event) => {
+      const items = Array.isArray(event.metadata?.items)
+        ? event.metadata.items.map(String)
+        : []
+      return {
+        id: String(event.id),
+        at: Date.parse(event.createdAt) || 0,
+        title: event.title,
+        detail: event.type.startsWith('step.') ? '' : event.message,
+        ...(items.length > 0 ? { items } : {})
+      }
+    })
+    .slice(-60)
 }
 
 export function modelUseFromEvents(

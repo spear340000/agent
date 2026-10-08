@@ -46,6 +46,7 @@ import {
 } from './taskAdapters'
 import type { Source, Task, TaskState } from './types'
 import { stageMeta } from './types'
+import ActivityLog from './ActivityLog'
 import { friendlyErrorMessage } from './displayText'
 
 type SaveFailure = { taskId: string; message: string }
@@ -108,7 +109,7 @@ function documentStatus(task: Task): { title: string; detail: string } {
   }
 }
 
-/** Real steps and the latest backend events, so a running task shows what is happening instead of a fixed phrase. */
+/** Real steps and the backend's own report of what each stage did, so nothing happens out of sight. */
 function RunProgress({ task }: { task: Task }) {
   const steps = task.steps
   const activity = task.activity ?? []
@@ -128,14 +129,10 @@ function RunProgress({ task }: { task: Task }) {
         </ol>
       ) : null}
       {activity.length > 0 ? (
-        <ul aria-label="실시간 진행 기록">
-          {activity.map((item) => (
-            <li key={item.id}>
-              <strong>{item.title}</strong>
-              {item.detail ? <span>{item.detail}</span> : null}
-            </li>
-          ))}
-        </ul>
+        <ActivityLog
+          activity={activity.slice(-14)}
+          startedAt={activity[0]!.at}
+        />
       ) : null}
     </div>
   )

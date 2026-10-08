@@ -454,3 +454,19 @@ test('running tasks show routing, retrieval and step events but not internal one
   assert.equal(activity[1]!.detail, '')
   assert.equal(activity[2]!.detail, '13건')
 })
+
+test('backend progress reports keep their detail lines for display', () => {
+  const activity = activityFromEvents([
+    {
+      id: 7,
+      taskId: 't',
+      type: 'task.progress',
+      title: '문장 검증',
+      message: '근거가 뒷받침하지 않는 문장 1개를 제외',
+      status: 'running',
+      createdAt: '2026-01-01T00:00:00Z',
+      metadata: { items: ['제외: 위약벌은 …'] }
+    }
+  ])
+  assert.deepEqual(activity[0]!.items, ['제외: 위약벌은 …'])
+})

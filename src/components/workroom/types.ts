@@ -84,7 +84,14 @@ export type Task = {
   /** What the backend reported so far, oldest first; shown while the task is still running. */
   activity?: TaskActivity[]
 }
-export type TaskActivity = { id: string; title: string; detail: string }
+export type TaskActivity = {
+  id: string
+  title: string
+  detail: string
+  items?: string[]
+  /** When the backend reported it, in epoch milliseconds. */
+  at: number
+}
 export const stageMeta: Record<
   WorkflowStage,
   { label: string; detail: string }
