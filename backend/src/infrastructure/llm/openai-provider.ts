@@ -1,6 +1,7 @@
 import type { ModelProvider } from '../../domain/model-provider.js';
 import { ModelProviderError } from './model-provider-error.js';
 import { TokenRateLimiter, estimateTokens } from './token-rate-limiter.js';
+import { noteModelUsage } from './model-attempts.js';
 
 /** Longest a request waits for the token window to free up before the next provider is used instead. */
 const MAX_RATE_LIMIT_WAIT_MS = 45_000;
@@ -42,6 +43,7 @@ export class OpenAiProvider implements ModelProvider {
     const maxAttempts = this.options.maxAttempts ?? 3;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       let response: Response;
+      const requestStartedAt = Date.now();
       try {
         response = await fetch(endpoint, {
           method: 'POST',
@@ -81,7 +83,7 @@ export class OpenAiProvider implements ModelProvider {
         const fallbackEligible = ![400, 401, 403, 413, 422].includes(response.status);
         throw new ModelProviderError(`model provider returned HTTP ${response.status}. ${hint}`, fallbackEligible, [401, 403].includes(response.status));
       }
-      let payload: { choices?: Array<{ message?: { content?: string | null } }>; usage?: { total_tokens?: number } };
+      let payload: { choices?: Array<{ message?: { content?: string | null } }>; usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } };
       try {
         const body = await this.readBounded(response, input.signal);
         payload = JSON.parse(body) as typeof payload;
@@ -91,6 +93,9 @@ export class OpenAiProvider implements ModelProvider {
         throw new ModelProviderError('model provider returned invalid JSON');
       }
       if (reservation && this.limiter && typeof payload?.usage?.total_tokens === 'number') this.limiter.settle(reservation, payload.usage.total_tokens);
+      if (typeof payload?.usage?.prompt_tokens === 'number' || typeof payload?.usage?.completion_tokens === 'number') {
+        noteModelUsage({ promptTokens: payload.usage?.prompt_tokens, completionTokens: payload.usage?.completion_tokens, requestMs: Date.now() - requestStartedAt });
+      }
       const content = payload?.choices?.[0]?.message?.content;
       if (typeof content !== 'string' || !content.trim()) throw new ModelProviderError('model provider returned an empty completion');
       return content;
