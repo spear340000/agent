@@ -98,6 +98,7 @@ export type LegalCitation = {
   termMatches?: string[]
   relevance?: number
   date?: { kind: 'amendment' | 'decision'; value: string }
+  provenance?: string[]
 }
 export type LegalLibraryItem = {
   citationId: string
@@ -244,6 +245,7 @@ export type LegalLayerUse = {
     | 'graph'
     | 'ontology'
     | 'okf'
+    | 'wiki'
   label: string
   state: 'used' | 'ready' | 'degraded' | 'unused' | 'unavailable'
   detail: string
@@ -270,6 +272,13 @@ export type LegalSourceStatus = {
   notes: string[]
   failures: { step: string; kind: string; message: string }[]
   ledger?: LegalLedger
+  chain?: LegalChainStage[]
+}
+export type LegalChainStage = {
+  id: 'wiki' | 'rag' | 'graph' | 'ontology' | 'okf' | 'mcp' | 'agent'
+  label: string
+  summary: string
+  items: string[]
 }
 export type LegalAnswer = {
   intent: string

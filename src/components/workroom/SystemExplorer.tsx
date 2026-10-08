@@ -1,6 +1,14 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import {
   Activity,
   ArrowRight,
@@ -11,6 +19,7 @@ import {
   Database,
   GitBranch,
   Network,
+  Route,
   Search,
   Server,
   Workflow
@@ -46,6 +55,7 @@ type Props = {
 export type SystemTopic =
   | 'overview'
   | 'flow'
+  | 'site-flow'
   | 'rag'
   | 'wiki'
   | 'ontology'
@@ -55,12 +65,21 @@ export type SystemTopic =
 const topics: { id: SystemTopic; label: string; icon: typeof Activity }[] = [
   { id: 'overview', label: '개요', icon: Boxes },
   { id: 'flow', label: '에이전틱 플로우', icon: GitBranch },
+  { id: 'site-flow', label: '사이트 동작 흐름', icon: Route },
   { id: 'rag', label: 'RAG 검색', icon: Search },
   { id: 'wiki', label: 'LLM Wiki', icon: BookOpen },
   { id: 'ontology', label: '온톨로지·그래프', icon: Network },
   { id: 'okf', label: 'OKF 메타데이터', icon: Braces },
   { id: 'mcp', label: 'MCP·도구', icon: Workflow }
 ]
+
+const retrievalLayerLabels: Record<string, string> = {
+  used: '이번 작업에서 사용',
+  ready: '준비됨 · 미사용',
+  degraded: '부분 사용',
+  unused: '미사용',
+  unavailable: '사용 불가'
+}
 
 function Status({ ready, label }: { ready: boolean | null; label: string }) {
   const value = ready === null ? '확인 불가' : ready ? '준비됨' : '비활성'
@@ -70,6 +89,202 @@ function Status({ ready, label }: { ready: boolean | null; label: string }) {
     >
       {label} · {value}
     </span>
+  )
+}
+
+function SiteFlowNode({
+  kind = 'step',
+  phase,
+  title,
+  detail,
+  meta,
+  technologies,
+  action
+}: {
+  kind?: 'start' | 'step' | 'planner' | 'tool' | 'result'
+  phase: string
+  title: string
+  detail: string
+  meta?: string
+  technologies?: { name: string; role: string }[]
+  action?: { label: string; onClick: () => void }
+}) {
+  return (
+    <article className={`site-flow__node site-flow__node--${kind}`}>
+      <span className="site-flow__node-kind">{phase}</span>
+      <strong>{title}</strong>
+      <small>{detail}</small>
+      {technologies?.length ? (
+        <dl
+          className="site-flow__technologies"
+          aria-label="이 단계에서 사용하는 기술"
+        >
+          {technologies.map((technology) => (
+            <div key={technology.name}>
+              <dt>{technology.name}</dt>
+              <dd>{technology.role}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {meta ? <span className="site-flow__node-meta">{meta}</span> : null}
+      {action ? (
+        <button
+          className="site-flow__node-action"
+          type="button"
+          onClick={action.onClick}
+        >
+          {action.label}
+          <ArrowRight aria-hidden="true" size={13} />
+        </button>
+      ) : null}
+    </article>
+  )
+}
+
+function SiteFlowArrow() {
+  return (
+    <svg
+      className="site-flow__arrow"
+      viewBox="0 0 64 28"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <path d="M2 14H62M50 4l12 10-12 10" />
+    </svg>
+  )
+}
+
+function SiteFlowDiagram({
+  groups
+}: {
+  groups: { title: string; steps: React.ReactNode[] }[]
+}) {
+  const container = useRef<HTMLDivElement>(null)
+  const markerId = `flow-arrow-${useId().replace(/:/gu, '')}`
+  const [geometry, setGeometry] = useState({
+    width: 0,
+    height: 0,
+    paths: [] as string[]
+  })
+
+  useLayoutEffect(() => {
+    const element = container.current
+    if (!element) return
+    const measure = () => {
+      const origin = element.getBoundingClientRect()
+      const nodes = Array.from(
+        element.querySelectorAll<HTMLElement>('[data-flow-step]')
+      )
+      const paths = nodes.slice(0, -1).map((node, index) => {
+        const from = node.getBoundingClientRect()
+        const to = nodes[index + 1].getBoundingClientRect()
+        const sameColumn = Math.abs(from.left - to.left) < 2
+        if (sameColumn) {
+          if (
+            node.closest('.site-flow__lane') !==
+            nodes[index + 1].closest('.site-flow__lane')
+          ) {
+            const x = from.right - origin.left + 5
+            const y = from.top - origin.top + from.height / 2
+            const targetY = to.top - origin.top + to.height / 2
+            const gutter = origin.width - 12
+            return `M ${x} ${y} H ${gutter - 8} Q ${gutter} ${y} ${gutter} ${y + 8} V ${targetY - 8} Q ${gutter} ${targetY} ${gutter - 8} ${targetY} H ${to.right - origin.left + 9}`
+          }
+          const x = from.left - origin.left + from.width / 2
+          return `M ${x} ${from.bottom - origin.top + 5} V ${to.top - origin.top - 9}`
+        }
+        const startX = from.right - origin.left + 5
+        const startY = from.top - origin.top + from.height / 2
+        const endX = to.left - origin.left - 9
+        const endY = to.top - origin.top + to.height / 2
+        const bendX = (from.right + to.left) / 2 - origin.left
+        return `M ${startX} ${startY} H ${bendX - 10} Q ${bendX} ${startY} ${bendX} ${startY - 10} V ${endY + 10} Q ${bendX} ${endY} ${bendX + 10} ${endY} H ${endX}`
+      })
+      setGeometry({ width: origin.width, height: origin.height, paths })
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    element
+      .querySelectorAll('[data-flow-step]')
+      .forEach((node) => observer.observe(node))
+    measure()
+    return () => observer.disconnect()
+  }, [groups])
+
+  let stepNumber = 0
+  return (
+    <div
+      ref={container}
+      className="site-flow__diagram"
+      style={{ position: 'relative' }}
+      aria-label="요청 접수부터 자료 확보, 결과 생성으로 이어지는 처리 순서"
+    >
+      {geometry.width > 0 ? (
+        <svg
+          className="site-flow__connections"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none'
+          }}
+          viewBox={`0 0 ${geometry.width} ${geometry.height}`}
+          aria-hidden="true"
+        >
+          <defs>
+            <marker
+              id={markerId}
+              viewBox="0 0 12 12"
+              refX="10"
+              refY="6"
+              markerWidth="12"
+              markerHeight="12"
+              markerUnits="userSpaceOnUse"
+              orient="auto"
+            >
+              <path
+                d="M2 2 10 6 2 10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </marker>
+          </defs>
+          {geometry.paths.map((path, index) => (
+            <path key={index} d={path} markerEnd={`url(#${markerId})`} />
+          ))}
+        </svg>
+      ) : null}
+      {groups.map((group) => (
+        <section
+          className="site-flow__lane"
+          key={group.title}
+          aria-label={group.title}
+        >
+          <h3>{group.title}</h3>
+          <ol>
+            {group.steps.map((step) => {
+              const number = ++stepNumber
+              return (
+                <li data-flow-step key={number}>
+                  <span
+                    className="site-flow__step-number"
+                    aria-label={`${number}단계`}
+                  >
+                    {String(number).padStart(2, '0')}
+                  </span>
+                  {step}
+                </li>
+              )
+            })}
+          </ol>
+        </section>
+      ))}
+    </div>
   )
 }
 
@@ -720,6 +935,61 @@ function WorkflowCanvas({ task }: { task: Task }) {
           )
         })}
       </div>
+      {task.legal?.sourceStatus.ledger?.layers.length ? (
+        <section
+          className="system-flow__layers"
+          aria-label="이번 작업의 검색 계층 사용 현황"
+        >
+          <header>
+            <strong>이번 작업의 검색 계층</strong>
+            <span>백엔드가 전달한 실제 사용 기록</span>
+          </header>
+          <ul>
+            {task.legal.sourceStatus.ledger.layers.map((layer) => (
+              <li
+                className={`system-flow__layer system-flow__layer--${layer.state}`}
+                key={layer.id}
+              >
+                <strong>{layer.label}</strong>
+                <span>
+                  {retrievalLayerLabels[layer.state] ?? layer.state}
+                  {layer.detail ? ` · ${layer.detail}` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p>
+            {task.legal.sourceStatus.ledger.layers.find(
+              (layer) => layer.id === 'wiki'
+            )?.state === 'used'
+              ? 'LLM Wiki 핵심 조문을 단서로 사용하고 법령 원문을 다시 확인했습니다.'
+              : task.legal.sourceStatus.ledger.layers.some(
+                    (layer) => layer.id === 'wiki'
+                  )
+                ? '이번 질문에 맞는 LLM Wiki 핵심 조문이 근거에 추가되지 않았습니다.'
+                : '이 작업의 LLM Wiki 사용 기록은 없습니다.'}
+          </p>
+        </section>
+      ) : null}
+      {task.legal?.sourceStatus.chain?.length ? (
+        <section
+          className="system-flow__layers"
+          aria-label="실제 근거 처리 순서"
+        >
+          <header>
+            <strong>백엔드가 기록한 근거 처리 순서</strong>
+            <span>이번 작업에서 실행된 계층만 표시</span>
+          </header>
+          <ol className="system-flow__chain">
+            {task.legal.sourceStatus.chain.map((stage, index) => (
+              <li key={`${stage.id}-${index}`}>
+                <strong>{stage.label}</strong>
+                <span>{stage.summary}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
       {!task.legal?.sourceStatus.ledger && task.steps.length > 0 ? (
         <p className="system-explorer__note">
           이 작업에는 검색 도구 호출 기록이 저장되지 않아 백엔드 실행 단계만
@@ -746,6 +1016,9 @@ export default function SystemExplorer({
   onTopicChange
 }: Props) {
   const retrieval = capabilities?.legalRetrieval
+  const [siteFlowPath, setSiteFlowPath] = useState<
+    'law' | 'file' | 'web' | 'url'
+  >('law')
   const [libraryQuery, setLibraryQuery] = useState('민법')
   const [libraryCorpus, setLibraryCorpus] = useState<
     'law' | 'precedent' | 'graph' | 'all'
@@ -1347,9 +1620,225 @@ export default function SystemExplorer({
     )
   }
 
+  const routeFlowSteps: Record<typeof siteFlowPath, React.ReactNode[]> = {
+    law: [
+      <SiteFlowNode
+        key="legal-rag"
+        kind="tool"
+        phase="기본 검색"
+        title="법령·판례 후보 찾기"
+        detail="질문을 검색어로 바꾸고, 준비된 법령·판례 색인에서 근거 후보를 찾습니다."
+        technologies={[
+          {
+            name: 'RAG · 키워드/벡터',
+            role: '정확한 용어와 의미가 비슷한 자료를 검색해 모델에 줄 근거를 확보'
+          }
+        ]}
+        meta="준비된 검색 계층만 사용"
+        action={{
+          label: 'RAG 검색 열기',
+          onClick: () => onTopicChange('rag')
+        }}
+      />,
+      <SiteFlowNode
+        key="wiki-hints"
+        kind="tool"
+        phase="조건부 보강"
+        title="핵심 조문 보강"
+        detail="질문에 맞는 조문이 있으면 법령 원문을 조회해 검색 근거에 더합니다."
+        technologies={[
+          {
+            name: 'LLM Wiki',
+            role: '정리된 핵심 조문집의 태그·용어를 질문과 대조해 추가 조회할 조문을 제안'
+          }
+        ]}
+        meta="일치 조문이 있을 때만 추가"
+        action={{
+          label: 'Wiki 문서 열기',
+          onClick: () => onTopicChange('wiki')
+        }}
+      />,
+      <SiteFlowNode
+        key="relevance-filter"
+        phase="검색 후 검토"
+        title="질문 관련성 확인"
+        detail="수집한 법령·판례가 질문과 관련 있는지 검토하고 무관한 후보를 제외합니다."
+        technologies={[
+          {
+            name: 'LLM 관련성 필터',
+            role: '검색 결과와 질문을 대조해 다음 관계 탐색에 사용할 조문을 선택'
+          }
+        ]}
+        meta="설정과 검색 결과에 따라 수행"
+      />,
+      <SiteFlowNode
+        key="relation-graph"
+        kind="tool"
+        phase="조건부 관계 검증"
+        title="조문과 판례 연결 확인"
+        detail="관련 조문에서 판례로 이어지는 인용 관계를 찾고, 원문에서도 해당 조문을 인용하는지 확인합니다."
+        technologies={[
+          { name: '관계 그래프', role: '선택된 조문을 인용한 판례 후보 탐색' },
+          {
+            name: '온톨로지',
+            role: '관계 유형·정의역·치역이 법률 관계 정의에 맞는지 검사'
+          },
+          { name: 'MCP', role: '판례 원문을 조회해 실제 참조조문 확인' }
+        ]}
+        meta="관련 조문과 관계가 있을 때 실행"
+        action={{
+          label: '그래프 탐색 열기',
+          onClick: () => onTopicChange('ontology')
+        }}
+      />
+    ],
+    file: [
+      <SiteFlowNode
+        key="file-extract"
+        phase="파일 처리"
+        title="첨부 문서 본문 추출"
+        detail="첨부한 문서에서 읽을 수 있는 내용을 추출합니다."
+      />,
+      <SiteFlowNode
+        key="file-context"
+        phase="자료 전달"
+        title="요청 문맥에 포함"
+        detail="추출한 내용을 요청과 함께 공통 분석 단계로 전달합니다."
+      />
+    ],
+    web: [
+      <SiteFlowNode
+        key="web-search"
+        kind="tool"
+        phase="웹 검색 설정 시"
+        title="SearXNG 검색"
+        detail="검색 환경이 설정된 경우 공개 웹 자료를 찾습니다."
+      />,
+      <SiteFlowNode
+        key="web-sources"
+        kind="tool"
+        phase="검색 결과"
+        title="출처와 함께 자료 전달"
+        detail="검색 결과와 출처 URL을 공통 분석 단계로 전달합니다."
+      />
+    ],
+    url: [
+      <SiteFlowNode
+        key="visit-url"
+        kind="tool"
+        phase="페이지 확인"
+        title="Browser로 URL 열기"
+        detail="사용자가 제공한 주소를 브라우저 도구로 방문합니다."
+      />,
+      <SiteFlowNode
+        key="read-url"
+        phase="본문 추출"
+        title="페이지 내용을 자료로 전달"
+        detail="접근 가능한 페이지 내용을 읽어 공통 분석 단계로 전달합니다."
+      />
+    ]
+  }
+  const flowSteps = [
+    <SiteFlowNode
+      key="user-request"
+      kind="start"
+      phase="사용자 요청"
+      title="문서 작업 요청"
+      detail="질문과 참고 파일·링크를 입력하고 작업을 시작합니다."
+    />,
+    <SiteFlowNode
+      key="frontend-submit"
+      phase="프론트엔드"
+      title="요청·파일 전달"
+      detail="첨부 파일과 요청을 백엔드 API로 보냅니다."
+      meta="POST /api/files · POST /api/tasks"
+    />,
+    <SiteFlowNode
+      key="backend-dispatch"
+      kind="planner"
+      phase="백엔드"
+      title="작업 접수·분배"
+      detail="AgentService가 요청에 맞는 처리 경로를 시작합니다."
+      meta="ApiRouter → TaskService → AgentService"
+    />,
+    ...routeFlowSteps[siteFlowPath],
+    <SiteFlowNode
+      key="analyze-sources"
+      phase="근거 처리"
+      title="요청·자료 분석"
+      detail="확인한 자료와 출처를 묶어 답변·문서 작성에 사용할 근거 문맥을 구성합니다."
+    />,
+    <SiteFlowNode
+      key="generate-document"
+      kind="planner"
+      phase="작성 단계"
+      title="답변·문서 생성"
+      detail="확인한 근거를 바탕으로 답변을 구성하고, 필요한 경우 모델이 문서 초안을 작성합니다."
+      technologies={[
+        {
+          name: 'LLM',
+          role: '사용자 요청과 확보한 근거를 함께 받아 인용을 포함한 답변·초안 작성'
+        }
+      ]}
+      meta={
+        capabilities?.model.configured
+          ? '모델 API · 설정됨'
+          : '모델 API · 현재 비활성'
+      }
+    />,
+    ...(siteFlowPath === 'law'
+      ? [
+          <SiteFlowNode
+            key="verify-answer"
+            phase="생성 후 검증"
+            title="주장·인용 확인"
+            detail="생성된 답변을 인용 근거와 다시 대조하고, 사용한 자료의 출처를 기록합니다."
+            technologies={[
+              {
+                name: 'LLM 의미 검증',
+                role: '인용 문장과 원문을 대조해 근거가 뒷받침하지 않는 문장 제외'
+              },
+              {
+                name: 'OKF 카탈로그',
+                role: '인용 자료와 사용한 색인을 카탈로그의 출처 정보에 연결'
+              }
+            ]}
+            meta="검증 수행 여부는 실제 작업 기록에 표시"
+          />
+        ]
+      : []),
+    <SiteFlowNode
+      key="show-result"
+      kind="result"
+      phase="결과"
+      title="진행·문서 표시"
+      detail="진행 상황을 반영하고 문서 미리보기와 내보내기를 제공합니다."
+      technologies={[
+        {
+          name: 'SSE',
+          role: '백엔드의 진행 이벤트와 결과 갱신을 프론트 화면에 전달'
+        }
+      ]}
+      meta="SSE /api/tasks/:id/events"
+    />
+  ]
+  const flowGroups = [
+    { title: '요청 접수', steps: flowSteps.slice(0, 3) },
+    { title: '자료 확보', steps: routeFlowSteps[siteFlowPath] },
+    {
+      title: '결과 생성',
+      steps: flowSteps.slice(3 + routeFlowSteps[siteFlowPath].length)
+    }
+  ]
+
   return (
     <section
-      className="system-explorer"
+      className={[
+        'system-explorer',
+        topic === 'site-flow' ? 'system-explorer--site-flow' : ''
+      ]
+        .filter(Boolean)
+        .join(' ')}
       aria-labelledby="system-explorer-title"
     >
       <header className="system-explorer__header">
@@ -1424,15 +1913,17 @@ export default function SystemExplorer({
                   <small>
                     {id === 'flow'
                       ? '실행 단계·플래너·검색 도구 호출 기록'
-                      : id === 'rag'
-                        ? '법령·판례 검색 계층과 실행 상태'
-                        : id === 'wiki'
-                          ? '법률 지식 항목과 출처 구조'
-                          : id === 'ontology'
-                            ? '관계 그래프와 온톨로지 상태'
-                            : id === 'okf'
-                              ? '출처·날짜·정규화 메타데이터 상태'
-                              : 'MCP 서버와 연결 도구 현황'}
+                      : id === 'site-flow'
+                        ? '화면 요청부터 백엔드 처리와 결과 표시까지'
+                        : id === 'rag'
+                          ? '법령·판례 검색 계층과 실행 상태'
+                          : id === 'wiki'
+                            ? '법률 지식 항목과 출처 구조'
+                            : id === 'ontology'
+                              ? '관계 그래프와 온톨로지 상태'
+                              : id === 'okf'
+                                ? '출처·날짜·정규화 메타데이터 상태'
+                                : 'MCP 서버와 연결 도구 현황'}
                   </small>
                 </span>
               </button>
@@ -1535,6 +2026,106 @@ export default function SystemExplorer({
               이곳에 기록됩니다.
             </p>
           )}
+        </div>
+      ) : null}
+
+      {topic === 'site-flow' ? (
+        <div className="system-explorer__content site-flow">
+          <h2>사이트 동작 흐름</h2>
+          <p className="system-explorer__lead">
+            요청에 필요한 자료 경로를 실행한 뒤, 결과를 만드는 흐름입니다.
+          </p>
+
+          <div className="site-flow__connection" aria-label="현재 연결 상태">
+            <span>백엔드 주소</span>
+            <code>{connection.baseUrl}</code>
+            <Status
+              ready={
+                backendStatus === 'online'
+                  ? true
+                  : backendStatus === 'offline'
+                    ? false
+                    : null
+              }
+              label="연결"
+            />
+            <Status
+              ready={capabilities?.model.configured ?? null}
+              label="모델"
+            />
+            <Status
+              ready={capabilities?.legalRetrieval.ready ?? null}
+              label="법률 검색"
+            />
+          </div>
+
+          <p className="site-flow__scroll-hint">
+            각 열을 위에서 아래로 읽고, 연결선을 따라 다음 열로 이동하세요.
+          </p>
+
+          <div className="site-flow__diagram-viewport">
+            <div className="site-flow__map" aria-label="사이트 요청 처리 흐름">
+              <div className="site-flow__fork-heading">
+                <div>
+                  <strong>요청 종류별 자료 경로</strong>
+                  <span>공통 단계 사이에 선택한 경로가 이어집니다.</span>
+                </div>
+                <label className="site-flow__path-picker">
+                  <span>요청 종류</span>
+                  <select
+                    aria-label="요청 종류별 흐름 보기"
+                    value={siteFlowPath}
+                    onChange={(event) =>
+                      setSiteFlowPath(event.target.value as typeof siteFlowPath)
+                    }
+                  >
+                    <option value="law">법률 요청</option>
+                    <option value="file">첨부 자료</option>
+                    <option value="web">웹 검색</option>
+                    <option value="url">참고 URL</option>
+                  </select>
+                </label>
+              </div>
+
+              <SiteFlowDiagram groups={flowGroups} />
+            </div>
+          </div>
+
+          <aside
+            className="site-flow__manual"
+            aria-label="LLM Wiki 원문 열람 경로"
+          >
+            <div className="site-flow__manual-heading">
+              <div>
+                <span>원문 열람</span>
+                <strong>LLM Wiki 자료 확인</strong>
+              </div>
+              <p>
+                법률 작업에서는 질문에 맞는 핵심 조문을 자동으로 찾을 수
+                있습니다. 여기서는 Wiki 원문을 직접 열람합니다.
+              </p>
+            </div>
+            <div className="site-flow__manual-track-viewport">
+              <div className="site-flow__manual-track">
+                <span>사용자가 Wiki 탭 열기</span>
+                <SiteFlowArrow />
+                <span>Wiki 문서 목록 API</span>
+                <SiteFlowArrow />
+                <span>페이지 API로 원문 표시</span>
+              </div>
+            </div>
+            <button
+              className="site-flow__wiki-action"
+              type="button"
+              onClick={() => onTopicChange('wiki')}
+            >
+              Wiki 문서 열기
+              <ArrowRight aria-hidden="true" size={14} />
+            </button>
+            <small>
+              읽기 전용 경로 · /api/legal/wiki → /api/legal/wiki/page
+            </small>
+          </aside>
         </div>
       ) : null}
 

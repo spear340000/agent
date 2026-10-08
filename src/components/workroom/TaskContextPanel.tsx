@@ -47,6 +47,8 @@ function statusMessage(task: Task): string {
     case 'queued':
       return '백엔드 작업 대기열에 등록되어 있습니다.'
     case 'running': {
+      const latest = task.progressEvents?.at(-1)
+      if (latest) return latest.detail || latest.title
       const active = task.steps.find((step) => step.status === 'running')
       return active
         ? `${active.title} 단계에서 진행 중입니다.`
@@ -141,6 +143,40 @@ function Ledger({ task }: { task: Task }) {
   )
 }
 
+function KnowledgeChain({ task }: { task: Task }) {
+  const chain = task.legal?.sourceStatus.chain
+  if (!chain?.length) return null
+  return (
+    <section
+      className="task-context__section task-context__chain"
+      aria-labelledby="task-chain-title"
+    >
+      <div className="task-context__section-heading">
+        <h3 id="task-chain-title">근거 처리 과정</h3>
+        <span>{chain.length}단계</span>
+      </div>
+      <ol>
+        {chain.map((stage, index) => (
+          <li key={`${stage.id}-${index}`}>
+            <strong>{stage.label}</strong>
+            <p>{stage.summary}</p>
+            {stage.items.length > 0 ? (
+              <details>
+                <summary>확인 항목 {stage.items.length}건</summary>
+                <ul>
+                  {stage.items.map((item, itemIndex) => (
+                    <li key={`${item}-${itemIndex}`}>{item}</li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
 function LegalAnswer({
   task,
   onDraftFromAnswer
@@ -203,6 +239,9 @@ function LegalAnswer({
                         } ${citation.date.value}`
                       : ''}
                   </small>
+                  {citation.provenance?.length ? (
+                    <small>근거 경로: {citation.provenance.join(' · ')}</small>
+                  ) : null}
                 </span>
               </li>
             ))}
@@ -400,6 +439,26 @@ export default function TaskContextPanel({
                     </li>
                   ))}
                 </ol>
+                {task.progressEvents?.length ? (
+                  <div className="task-context__activity">
+                    <h4>백엔드 작업 기록</h4>
+                    <ol>
+                      {task.progressEvents.slice(-12).map((event) => (
+                        <li key={event.id}>
+                          <strong>{event.title}</strong>
+                          {event.detail ? <p>{event.detail}</p> : null}
+                          {event.items.length ? (
+                            <ul>
+                              {event.items.map((item, index) => (
+                                <li key={`${event.id}-${index}`}>{item}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ) : null}
                 <p
                   className={`task-context__status ${task.state === 'failed' ? 'task-context__status--error' : ''}`}
                   role={task.state === 'failed' ? 'alert' : 'status'}
@@ -457,6 +516,7 @@ export default function TaskContextPanel({
           ))}
 
         <LegalAnswer task={task} onDraftFromAnswer={onDraftFromAnswer} />
+        <KnowledgeChain task={task} />
         <Ledger task={task} />
       </div>
 

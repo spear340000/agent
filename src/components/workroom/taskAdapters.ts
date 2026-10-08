@@ -128,7 +128,17 @@ const LEDGER_LAYER_IDS = [
   'vector',
   'graph',
   'ontology',
-  'okf'
+  'okf',
+  'wiki'
+] as const
+const CHAIN_STAGE_IDS = [
+  'wiki',
+  'rag',
+  'graph',
+  'ontology',
+  'okf',
+  'mcp',
+  'agent'
 ] as const
 const LEDGER_STATES = [
   'used',
@@ -214,6 +224,13 @@ export function legalAnswerFromEvents(
                 value: citation.date.value
               }
             }
+          : {}),
+        ...(Array.isArray(citation.provenance)
+          ? {
+              provenance: citation.provenance.filter(
+                (item): item is string => typeof item === 'string'
+              )
+            }
           : {})
       }))
     : []
@@ -251,7 +268,32 @@ export function legalAnswerFromEvents(
       ...(() => {
         const ledger = ledgerFrom(sourceStatus.ledger)
         return ledger ? { ledger } : {}
-      })()
+      })(),
+      ...(Array.isArray(sourceStatus.chain)
+        ? {
+            chain: sourceStatus.chain.filter(isRecord).flatMap((stage) => {
+              const id = String(stage.id ?? '')
+              if (
+                !CHAIN_STAGE_IDS.includes(
+                  id as (typeof CHAIN_STAGE_IDS)[number]
+                )
+              )
+                return []
+              return [
+                {
+                  id: id as (typeof CHAIN_STAGE_IDS)[number],
+                  label: String(stage.label ?? id),
+                  summary: String(stage.summary ?? ''),
+                  items: Array.isArray(stage.items)
+                    ? stage.items.filter(
+                        (item): item is string => typeof item === 'string'
+                      )
+                    : []
+                }
+              ]
+            })
+          }
+        : {})
     },
     plannerCalls: metadata.plannerCalls === 1 ? 1 : 0,
     toolCalls: typeof metadata.toolCalls === 'number' ? metadata.toolCalls : 0,
@@ -311,6 +353,19 @@ export function toWorkroomTask(
       ? {}
       : { revisionBaseline: previous.revisionBaseline }),
     steps,
+    progressEvents: details.events
+      .filter((event) => event.type === 'task.progress')
+      .map((event) => ({
+        id: event.id,
+        title: event.title,
+        detail: event.message,
+        items: Array.isArray(event.metadata?.items)
+          ? event.metadata.items.filter(
+              (item): item is string => typeof item === 'string'
+            )
+          : [],
+        createdAt: Date.parse(event.createdAt) || 0
+      })),
     stage: stageForTask(task),
     state: task.status,
     document: documentDirty

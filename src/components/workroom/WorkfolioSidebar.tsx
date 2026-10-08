@@ -16,6 +16,7 @@ import {
   PanelLeftOpen,
   Moon,
   Plus,
+  Route,
   RefreshCw,
   Settings,
   Sun,
@@ -39,7 +40,15 @@ export type WorkfolioSidebarProps = {
   backendStatus: 'checking' | 'online' | 'offline'
   onOpenConnection: () => void
   onReconnect: () => void
-  systemTopic: 'overview' | 'flow' | 'rag' | 'wiki' | 'ontology' | 'okf' | 'mcp'
+  systemTopic:
+    | 'overview'
+    | 'flow'
+    | 'site-flow'
+    | 'rag'
+    | 'wiki'
+    | 'ontology'
+    | 'okf'
+    | 'mcp'
   onSystemTopicChange: (topic: WorkfolioSidebarProps['systemTopic']) => void
   mobileOpen: boolean
   onMobileOpenChange: (open: boolean) => void
@@ -331,6 +340,7 @@ export default function WorkfolioSidebar({
             {(
               [
                 ['flow', '에이전틱 플로우', GitBranch],
+                ['site-flow', '사이트 동작 흐름', Route],
                 ['rag', 'RAG 검색', List],
                 ['wiki', 'LLM Wiki', BookOpen],
                 ['ontology', '온톨로지·그래프', Boxes],

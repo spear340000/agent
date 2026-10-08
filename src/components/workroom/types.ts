@@ -41,6 +41,13 @@ export type TaskStep = {
   progress: number
   error?: string
 }
+export type TaskProgressEvent = {
+  id: number
+  title: string
+  detail: string
+  items: string[]
+  createdAt: number
+}
 export type LegalAnswerView = {
   intent: string
   path: 'direct' | 'orchestrated'
@@ -66,6 +73,7 @@ export type Task = {
   messages: TaskMessage[]
   revisionBaseline?: { document: string; request: string }
   steps: TaskStep[]
+  progressEvents?: TaskProgressEvent[]
   stage: WorkflowStage
   state: TaskState
   document: string
