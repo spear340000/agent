@@ -165,7 +165,8 @@ export class LegalRequestRouter {
     const query = prompt;
     const steps: LegalRetrievalStep[] = [];
     if (intent === 'case-lookup' && caseNumber) {
-      steps.push({ kind: 'case-number', caseNumber });
+      // The case-number index returns only a summary; the judgment text is what an answer can be checked against.
+      steps.push({ kind: 'case-number', caseNumber }, { kind: 'precedent', id: caseNumber, maxChars: 6_000 });
       return steps;
     }
     if (article?.lawName) steps.push({ kind: 'law-article', lawName: article.lawName, articleNumber: article.articleNumber });

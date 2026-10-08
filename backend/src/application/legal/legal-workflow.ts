@@ -19,10 +19,10 @@ import { assignCitationIds, describeStep, preserveLegalSearchQuery, sanitizeLega
 import type { LegalRetrievalService } from '../../infrastructure/legal/legal-retrieval-service.js';
 import type { LegalWikiHints } from './legal-wiki-hints.js';
 import { precedentsCitingArticle, type LegalKnowledgeChain, type OkfEntry } from './legal-knowledge-chain.js';
-import { fitEvidenceToBudget, relevantExcerpt } from './legal-evidence-budget.js';
+import { containment, fitEvidenceToBudget, relevantExcerpt } from './legal-evidence-budget.js';
 import { describeLawDate } from '../../infrastructure/legal/legal-normalization.js';
 import type { NormalizedRecord } from '../../infrastructure/legal/legal-normalization.js';
-import { validateLegalAnswer, normalizeLegalCitations, attachCaseCitations, legalCitationIds, dropUnsupportedSentences, splitAnswerParts, joinAnswerParts, citedSourcesOf } from './legal-citations.js';
+import { validateLegalAnswer, normalizeLegalCitations, attachCaseCitations, dropUnbackedTimeLimits, legalCitationIds, dropUnsupportedSentences, splitAnswerParts, joinAnswerParts, citedSourcesOf } from './legal-citations.js';
 import type { LegalIntent, LegalRouteDecision } from './legal-request-router.js';
 
 export type LegalWorkflowLimits = {
@@ -115,7 +115,7 @@ const REWRITE_SYSTEM = [
   'You rewrite search queries. Output only JSON: {"queries":[string],"precedentQueries":[string],"articles":[{"lawName":string,"articleNumber":string}]}.',
   'Rewrite a colloquial Korean legal question into 1 or 2 short search queries (at most 6 words each) made of statutory terms, for a Korean statute full-text index. The index does not weight law names, so keep queries topical.',
   'In "precedentQueries", give at most 1 short query (at most 6 words) of the doctrinal terms a court decision would use. When the question asks how two legal concepts differ (for example 위약벌 and 손해배상 예정액), name both concepts so the decisions that distinguish them are found.',
-  'In "articles", list at most 3 statute articles that most directly govern the question, only when you are confident of both the exact law name and the article number (for example {"lawName":"근로기준법","articleNumber":"제23조"}). The system looks each one up and discards any that do not exist, so leave the list empty rather than guess.',
+  'In "articles", list at most 3 statute articles that most directly govern the question, only when you are confident of both the exact law name and the article number (for example {"lawName":"근로기준법","articleNumber":"제23조"}). The system looks each one up and discards any that do not exist, so leave the list empty rather than guess. When the question asks how to apply for or claim something, include the article that sets the filing authority and period (for example the article on a remedy application), not only the substantive rule.',
   'Never answer the question.'
 ].join('\n');
 
@@ -130,7 +130,11 @@ const RELEVANCE_SYSTEM = [
   'When unsure, keep the record.'
 ].join('\n');
 const RELEVANCE_TIMEOUT_MS = 20_000;
-const CLAIM_EXCERPT_CHARACTERS = 800;
+/** The verifier sees each cited record through a window sized from this total, so a long judgment is not judged on one paragraph. */
+const CLAIM_EXCERPT_TOTAL_CHARACTERS = 7_000;
+const CLAIM_EXCERPT_MIN_CHARACTERS = 800;
+const QUOTATION_CONTAINMENT = 0.9;
+const CLAIM_EXCERPT_MAX_CHARACTERS = 3_500;
 const DEFAULT_EVIDENCE_BUDGET_CHARS = 6_000;
 const CLAIM_VERIFY_TIMEOUT_MS = 45_000;
 
@@ -402,13 +406,21 @@ ${listing}`,
    * check cannot run, the answer is returned unchanged and `checked` is false so the caller can say so.
    */
   async verifyClaims(answer: string, sources: LegalSource[], signal: AbortSignal): Promise<{ answer: string; removed: number; checked: boolean }> {
+    const limits = dropUnbackedTimeLimits(answer, sources);
+    const result = await this.verifyCitedClaims(limits.text, sources, signal);
+    return { ...result, removed: result.removed + limits.removed };
+  }
+
+  private async verifyCitedClaims(answer: string, sources: LegalSource[], signal: AbortSignal): Promise<{ answer: string; removed: number; checked: boolean }> {
     if (!this.deps.claimVerification) return { answer, removed: 0, checked: false };
     const parts = splitAnswerParts(answer);
     const cited = parts.map((part, index) => ({ index, sentence: part.sentence.trim(), records: citedSourcesOf(part.sentence, sources) })).filter(item => item.sentence && item.records.length > 0);
     if (cited.length === 0) return { answer, removed: 0, checked: false };
     const recordIds = [...new Set(cited.flatMap(item => item.records.map(record => record.citationId)))];
-    const recordText = sources.filter(source => recordIds.includes(source.citationId))
-      .map(source => `[${source.citationId}] ${source.title}\n${relevantExcerpt(source.excerpt, cited.filter(item => item.records.includes(source)).map(item => item.sentence), CLAIM_EXCERPT_CHARACTERS)}`).join('\n\n');
+    const checkedSources = sources.filter(source => recordIds.includes(source.citationId));
+    const window = Math.min(CLAIM_EXCERPT_MAX_CHARACTERS, Math.max(CLAIM_EXCERPT_MIN_CHARACTERS, Math.floor(CLAIM_EXCERPT_TOTAL_CHARACTERS / Math.max(1, checkedSources.length))));
+    const recordText = checkedSources
+      .map(source => `[${source.citationId}] ${source.title}\n${relevantExcerpt(source.excerpt, cited.filter(item => item.records.includes(source)).map(item => item.sentence), window)}`).join('\n\n');
     const sentenceText = cited.map((item, position) => `${position + 1}. ${item.sentence}`).join('\n');
     try {
       const raw = await this.deps.model.complete({
@@ -421,7 +433,12 @@ ${listing}`,
       if (!parsed || !Array.isArray(parsed.unsupported) || parsed.unsupported.some(item => !Number.isInteger(item) || item < 1 || item > cited.length)) {
         return { answer, removed: 0, checked: false };
       }
-      const flagged = new Set<number>(parsed.unsupported);
+      // A sentence that nearly quotes its cited record is supported; the model's occasional false alarm on one must not
+      // erase a verbatim article.
+      const flagged = new Set<number>(parsed.unsupported.filter(position => {
+        const item = cited[position - 1]!;
+        return !item.records.some(record => containment(item.sentence, record.excerpt) >= QUOTATION_CONTAINMENT);
+      }));
       const drop = new Set([...flagged].map(position => cited[position - 1]!.index));
       if (drop.size === 0) return { answer, removed: 0, checked: true };
       const kept = parts.filter((_part, index) => !drop.has(index));

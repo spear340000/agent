@@ -63,3 +63,13 @@ export function relevantExcerpt(text: string, terms: readonly string[], limit: n
   const body = text.slice(bestStart, bestStart + limit);
   return `${bestStart > 0 ? '…' : ''}${body}${bestStart + limit < text.length ? '…' : ''}`;
 }
+
+/** Share of the character pairs in `sentence` that also occur in `text` (1 for a verbatim quotation). */
+export function containment(sentence: string, text: string): number {
+  const own = bigramSet([sentence.replace(/\[[A-Z]\d+\]/g, ' ')]);
+  if (own.size === 0) return 0;
+  const reference = bigramSet([text]);
+  let shared = 0;
+  for (const gram of own) if (reference.has(gram)) shared += 1;
+  return shared / own.size;
+}

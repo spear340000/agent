@@ -8,6 +8,8 @@ import {
   dropUnsupportedSentences,
   normalizeLegalCitations,
   attachCaseCitations,
+  dropUnbackedTimeLimits,
+  splitAnswerParts,
   validateLegalAnswer
 } from '../src/application/legal/legal-citations.ts';
 import type { LegalSource } from '../src/domain/legal-source.ts';
@@ -208,4 +210,21 @@ test('a retrieved decision named by case number is tied to its record id exactly
   assert.equal(tied, '대법원 2018다248855 [P1] 판결은 위약벌을 다룹니다. 또 2018다248855 [P1] 은 이미 인용됐습니다. 2018다2488551은 다른 사건입니다.');
   assert.equal(attachCaseCitations(tied, sources), tied, 'applying it again changes nothing');
   assert.equal(attachCaseCitations('2018다248855', [source({ citationId: 'L1' })]), '2018다248855', 'only precedent records are matched');
+});
+
+test('an uncited filing period is dropped unless a retrieved record states it', () => {
+  const sources = [source({ citationId: 'L1', excerpt: '구제신청은 부당해고등이 있었던 날부터 3개월 이내에 하여야 한다.' } as never)];
+  const text = '제출 기한은 해고일로부터 2년 이내입니다. 구제신청은 3개월 이내에 합니다. 2024년 5월 31일까지 변제하세요. 근거는 다음과 같습니다 [L1] 30일 이내.';
+  const result = dropUnbackedTimeLimits(text, sources);
+  assert.equal(result.removed, 1);
+  assert.doesNotMatch(result.text, /2년 이내/);
+  assert.match(result.text, /3개월 이내에 합니다/);
+  assert.match(result.text, /5월 31일까지/);
+  assert.equal(dropUnbackedTimeLimits('그냥 설명입니다.', sources).removed, 0);
+});
+
+test('a date or list number does not end a sentence', () => {
+  const parts = splitAnswerParts('대법원 2022. 7. 21. 선고 판결입니다. 위약벌은 감액할 수 없습니다 [P1].');
+  assert.equal(parts.length, 2);
+  assert.equal(parts[0]!.sentence, '대법원 2022. 7. 21. 선고 판결입니다.');
 });

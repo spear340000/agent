@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fitEvidenceToBudget } from '../src/application/legal/legal-evidence-budget.ts';
+import { containment, fitEvidenceToBudget } from '../src/application/legal/legal-evidence-budget.ts';
 import type { LegalSource } from '../src/domain/legal-source.ts';
 
 const source = (id: number, relevance?: number): LegalSource => ({
@@ -43,4 +43,11 @@ test('Korean particles do not stop a word from matching', () => {
   assert.deepEqual(searchWords('책임을, 지나요?'), ['책임을', '지나요']);
   const text = `${'가나다라마바사 '.repeat(60)}회사의 책임은 다음과 같다. ${'가나다라마바사 '.repeat(60)}`;
   assert.ok(relevantExcerpt(text, ['회사가 책임을'], 80).includes('책임은'));
+});
+
+test('containment is 1 for a quotation and low for an unrelated claim', () => {
+  const article = '고의 또는 과실로 인한 위법행위로 타인에게 손해를 가한 자는 그 손해를 배상할 책임이 있다.';
+  assert.equal(containment('고의 또는 과실로 인한 위법행위로 타인에게 손해를 가한 자는 그 손해를 배상할 책임이 있다. [L1]', article), 1);
+  assert.ok(containment('위약벌은 법원이 마음대로 감액할 수 있습니다.', article) < 0.5);
+  assert.equal(containment('', article), 0);
 });

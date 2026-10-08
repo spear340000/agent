@@ -57,6 +57,28 @@ export function attachCaseCitations(text: string, sources: readonly LegalSource[
   return result;
 }
 
+// A period such as "2년 이내" or "30일 전"; calendar dates ("5월 31일까지") are not periods.
+const TIME_LIMIT = /(?<![년월]\s*)(?<!\d)\d{1,3}\s*(?:일|주|개월|년)\s*(?:이내|전|후|간)/gu;
+
+/**
+ * A deadline stated without any citation is the claim most likely to be invented and the most costly to get wrong
+ * (a filing period). Drop such a sentence unless a retrieved record contains the same period.
+ */
+export function dropUnbackedTimeLimits(text: string, sources: readonly LegalSource[]): { text: string; removed: number } {
+  const squash = (value: string): string => value.replace(/\s+/g, '');
+  const corpus = squash(sources.map(source => `${source.title} ${source.excerpt}`).join(' '));
+  const parts = splitAnswerParts(text);
+  let removed = 0;
+  const kept = parts.filter(part => {
+    if (legalCitationIds(part.sentence).length > 0) return true;
+    const periods = part.sentence.match(TIME_LIMIT) ?? [];
+    const unbacked = periods.some(period => !corpus.includes(squash(period)));
+    if (unbacked) removed += 1;
+    return !unbacked;
+  });
+  return { text: removed > 0 ? joinAnswerParts(kept) : text, removed };
+}
+
 export function normalizeLegalCitations(rawText: string, validCitationIds: readonly string[]): string {
   const text = rawText.replace(INVISIBLE_CHARACTERS, '').replace(STRAY_FOREIGN_CHARACTERS, '');
   const valid = new Set(validCitationIds);
@@ -173,7 +195,8 @@ export type AnswerPart = { sentence: string; separator: string };
 
 /** Splits an answer into sentences, keeping each one's trailing separator so the text can be rebuilt exactly. */
 export function splitAnswerParts(text: string): AnswerPart[] {
-  const pieces = text.split(/(\n+|(?<=[.!?。])\s+)/);
+  // A period after a digit belongs to a date or list number ("2022. 7. 21. 선고", "1. 항목"), not a sentence end.
+  const pieces = text.split(/(\n+|(?<=[!?。]|(?<!\d)\.)\s+)/);
   const parts: AnswerPart[] = [];
   for (let index = 0; index < pieces.length; index += 2) parts.push({ sentence: pieces[index] ?? '', separator: pieces[index + 1] ?? '' });
   return parts;
