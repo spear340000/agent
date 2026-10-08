@@ -8,6 +8,7 @@ import {
   X
 } from 'lucide-react'
 import Composer from './Composer'
+import ActivityLog from './ActivityLog'
 import { safeHttpUrl } from './safe-http-url'
 import EvidenceChain, { RouteChips } from './EvidenceChain'
 import { Sources } from './Documents'
@@ -418,6 +419,12 @@ export default function TaskContextPanel({
                   ) : null}
                   {statusMessage(task)}
                 </p>
+                {task.activity && task.activity.length > 0 ? (
+                  <details className="task-context__log">
+                    <summary>처리 과정 기록 {task.activity.length}건</summary>
+                    <ActivityLog activity={task.activity} />
+                  </details>
+                ) : null}
               </div>
             </details>
             {['queued', 'running'].includes(task.state) ? (
