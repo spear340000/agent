@@ -1,4 +1,5 @@
 import type { ModelProvider } from '../domain/model-provider.js';
+import { runWithProgress } from '../shared/task-progress.js';
 import { runWithModelAttempts, summarizeModelAttempts, type ModelAttempt } from '../infrastructure/llm/model-attempts.js';
 import type { Task, TaskStep } from '../domain/task.js';
 import type { TaskRepository } from '../domain/task-repository.js';
@@ -112,7 +113,7 @@ export class AgentService {
   async run(taskId: string): Promise<void> {
     const attempts: ModelAttempt[] = [];
     try {
-      await runWithModelAttempts(attempts, () => this.runTask(taskId));
+      await runWithModelAttempts(attempts, () => runWithProgress(progress => this.event(taskId, 'task.progress', progress.title, progress.detail, 'running', progress.items ? { items: progress.items } : undefined), () => this.runTask(taskId)));
     } finally {
       this.recordModelAttempts(taskId, attempts);
     }

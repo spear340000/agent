@@ -10,6 +10,7 @@ import "./agent-workflow.integration.ts";
 import "./legal-routing.test.ts";
 import "./legal-citations.test.ts";
 import "./legal-evidence-budget.test.ts";
+import "./task-progress.test.ts";
 import "./legal-knowledge-chain.test.ts";
 import "./legal-normalization.test.ts";
 import "./official-law-article-reader.test.ts";
