@@ -225,8 +225,8 @@ function LegalAnswer({
       ) : null}
       {legal.sourceStatus.notes.length > 0 ? (
         <ul className="task-context__legal-notes">
-          {legal.sourceStatus.notes.map((note) => (
-            <li key={note}>{note}</li>
+          {legal.sourceStatus.notes.map((note, index) => (
+            <li key={`${index}-${note}`}>{note}</li>
           ))}
         </ul>
       ) : null}
