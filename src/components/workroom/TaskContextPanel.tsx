@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import Composer from './Composer'
 import ActivityLog from './ActivityLog'
+import ModelUsage from './ModelUsage'
 import { safeHttpUrl } from './safe-http-url'
 import EvidenceChain, { RouteChips } from './EvidenceChain'
 import { Sources } from './Documents'
@@ -169,6 +170,7 @@ function LegalAnswer({
           ? '기록에 포함된 날짜 표기로만 확인'
           : '색인이 현행 여부를 확인하지 않음'}
       </p>
+      <ModelUsage totals={task.modelUse?.totals} />
       <p className="task-context__legal-note">
         일반인을 위한 법률 정보이며 법률 자문이나 대리인이 아닙니다. 중요한 결정
         전에는 전문가 상담으로 확인하세요.

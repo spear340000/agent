@@ -34,6 +34,7 @@ import EvidenceChain from './EvidenceChain'
 import MarkdownView from './MarkdownView'
 import { safeHttpUrl } from './safe-http-url'
 import { legalIntentLabels, stageMeta, type Task } from './types'
+import { modelUsageText } from './ModelUsage'
 
 type Props = {
   capabilities: RuntimeCapabilities | null
@@ -1567,7 +1568,7 @@ function SystemExplorerSession({
                     ? ` · 검색 근거 ${selectedTask.legal.sourceStatus.retrieved}건 · 본문 인용 ${selectedTask.legal.sourceStatus.cited ?? 0}건`
                     : ''}
                   {selectedTask.modelUse
-                    ? ` · 응답 모델 ${selectedTask.modelUse.finalModel ?? '없음'}${selectedTask.modelUse.fellBack ? ` (대체 사용, 실패: ${selectedTask.modelUse.failedModels.join(', ')})` : ''}`
+                    ? ` · 응답 모델 ${selectedTask.modelUse.finalModel ?? '없음'}${selectedTask.modelUse.fellBack ? ` (대체 사용, 실패: ${selectedTask.modelUse.failedModels.join(', ')})` : ''}${selectedTask.modelUse.totals ? ` · ${modelUsageText(selectedTask.modelUse.totals)}` : ''}`
                     : ''}
                 </small>
               </div>

@@ -5889,3 +5889,10 @@
   color: inherit;
   font-size: 12px;
 }
+
+.task-context__model-usage {
+  margin: 4px 0 8px;
+  color: var(--muted, #7b746c);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}

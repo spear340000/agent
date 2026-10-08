@@ -5,6 +5,7 @@ import {
   modelUseFromEvents,
   toWorkroomTask
 } from './taskAdapters.js'
+import { modelUsageText } from './ModelUsage.js'
 import type { TaskDetails } from '@/api/workroom'
 
 test('a planning failure does not leave pending sources pretending to be actively collected', () => {
@@ -469,4 +470,37 @@ test('backend progress reports keep their detail lines for display', () => {
     }
   ])
   assert.deepEqual(activity[0]!.items, ['제외: 위약벌은 …'])
+})
+
+test('model totals from the backend become one readable usage line', () => {
+  const use = modelUseFromEvents([
+    {
+      id: 1,
+      taskId: 't',
+      type: 'model.attempts',
+      title: '모델 사용 기록',
+      message: '',
+      status: 'completed',
+      createdAt: '2026-01-01T00:00:00Z',
+      metadata: {
+        finalModel: 'Groq · m',
+        fellBack: true,
+        attempts: [{ model: 'Groq · x', ok: false }],
+        totals: {
+          calls: 5,
+          failedCalls: 1,
+          promptTokens: 12345,
+          completionTokens: 678,
+          totalMs: 21500,
+          tokensPerSecond: 187.6
+        }
+      }
+    }
+  ])
+  assert.equal(use?.totals?.completionTokens, 678)
+  assert.equal(
+    modelUsageText(use!.totals!),
+    '모델 호출 5회(실패 1회) · 입력 12,345 / 출력 678 토큰 · 모델 시간 21.5초 · 평균 188 tok/s'
+  )
+  assert.equal(modelUseFromEvents([])?.totals, undefined)
 })
