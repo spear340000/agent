@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { reportProgress } from '../../shared/task-progress.js';
 
 export type ModelAttempt = { model: string; ok: boolean; ms: number; error?: string };
 
@@ -11,6 +12,10 @@ export function runWithModelAttempts<T>(attempts: ModelAttempt[], work: () => Pr
 
 export function recordModelAttempt(attempt: ModelAttempt): void {
   store.getStore()?.push(attempt);
+  reportProgress(
+    attempt.ok ? '모델 응답' : '모델 호출 실패 · 다음 모델로 전환',
+    `${attempt.model} · ${(attempt.ms / 1000).toFixed(1)}초${attempt.error ? ` · ${attempt.error.slice(0, 120)}` : ''}`
+  );
 }
 
 export function summarizeModelAttempts(attempts: readonly ModelAttempt[]): { finalModel: string | null; fellBack: boolean; failedModels: string[] } {

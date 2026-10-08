@@ -21,6 +21,7 @@ import type { LegalWikiHints } from './legal-wiki-hints.js';
 import { precedentsCitingArticle, type LegalKnowledgeChain, type OkfEntry } from './legal-knowledge-chain.js';
 import { containment, fitEvidenceToBudget, relevantExcerpt } from './legal-evidence-budget.js';
 import { describeLawDate } from '../../infrastructure/legal/legal-normalization.js';
+import { reportProgress } from '../../shared/task-progress.js';
 import type { NormalizedRecord } from '../../infrastructure/legal/legal-normalization.js';
 import { validateLegalAnswer, normalizeLegalCitations, attachCaseCitations, dropUnbackedTimeLimits, legalCitationIds, dropUnsupportedSentences, splitAnswerParts, joinAnswerParts, citedSourcesOf } from './legal-citations.js';
 import type { LegalIntent, LegalRouteDecision } from './legal-request-router.js';
@@ -133,6 +134,9 @@ const RELEVANCE_TIMEOUT_MS = 20_000;
 /** The verifier sees each cited record through a window sized from this total, so a long judgment is not judged on one paragraph. */
 const CLAIM_EXCERPT_TOTAL_CHARACTERS = 7_000;
 const CLAIM_EXCERPT_MIN_CHARACTERS = 800;
+/** A simple question stops searching once it has what it needs: at most this many rewrite searches and linked decisions. */
+const REWRITE_STEP_LIMIT = 3;
+const LINKED_PRECEDENT_TARGET = 2;
 const QUOTATION_CONTAINMENT = 0.9;
 const CLAIM_EXCERPT_MAX_CHARACTERS = 3_500;
 const DEFAULT_EVIDENCE_BUDGET_CHARS = 6_000;
@@ -183,7 +187,7 @@ export class LegalWorkflow {
       id: 'rag',
       label: 'RAG 검색 (키워드 + 벡터)',
       summary: `법령 ${countCorpus(evidence, 'law')}건 · 판례 ${countCorpus(evidence, 'precedent')}건을 찾음`,
-      items: steps.map(describeStep).slice(0, 4)
+      items: evidence.trace.map(entry => `${describeStep(entry.step)} → ${entry.results}건`).slice(0, 8)
     });
     if (this.deps.knowledgeChain) this.okfEntries = await this.deps.knowledgeChain.loadOkf();
     if ('retrievalSteps' in plan) {
@@ -275,6 +279,8 @@ export class LegalWorkflow {
       const properties = new Set<string>();
       const totalCiting: string[] = [];
       for (const anchor of anchors) {
+        // Enough confirmed decisions answer the question; searching the second article would only add cost.
+        if (linked.length >= LINKED_PRECEDENT_TARGET) break;
         if (current.maxToolCalls - current.toolCalls < 2) break;
         const article = `${anchor.lawName} ${anchor.articleNumber}`;
         // Read the article's incoming citations straight from the graph database when possible; a label search
@@ -333,7 +339,7 @@ export class LegalWorkflow {
     try {
       const squash = (value: string): string => value.replace(/\s+/g, '');
       const have = new Set(evidence.sources.map(source => `${squash(source.lawName ?? '')}|${squash(source.articleNumber ?? '')}`));
-      const budget = Math.min(3, evidence.maxToolCalls - evidence.toolCalls);
+      const budget = Math.min(2, evidence.maxToolCalls - evidence.toolCalls);
       const matches = (await wiki.find(question, 3)).filter(match => !have.has(`${squash(match.lawName)}|${squash(match.article)}`)).slice(0, Math.max(0, budget));
       let merged: LegalEvidence = { ...evidence, wikiHints: 0 };
       let found = 0;
@@ -393,7 +399,9 @@ ${listing}`,
       const relevant = new Set(asArray(parsed.relevant).filter((item): item is string => typeof item === 'string' && candidateIds.has(item)));
       if (parsed.relevant.length > 0 && relevant.size === 0) return keep;
       const kept = sources.filter(source => !candidateIds.has(source.citationId) || relevant.has(source.citationId));
-      return { sources: kept, dropped: sources.length - kept.length };
+      const dropped = sources.filter(source => !kept.includes(source));
+      reportProgress('관련성 필터', dropped.length > 0 ? `질문과 무관한 검색 결과 ${dropped.length}건을 근거에서 제외` : `검색 결과 ${sources.length}건 모두 관련 있음`, dropped.map(source => `제외: ${citationLabel(source)}`));
+      return { sources: kept, dropped: dropped.length };
     } catch (error) {
       if (signal.aborted) throw error;
       return keep;
@@ -407,6 +415,7 @@ ${listing}`,
    */
   async verifyClaims(answer: string, sources: LegalSource[], signal: AbortSignal): Promise<{ answer: string; removed: number; checked: boolean }> {
     const limits = dropUnbackedTimeLimits(answer, sources);
+    if (limits.removed > 0) reportProgress('근거 없는 기간 표현 제거', `인용 없이 쓴 신청 기한 등 ${limits.removed}문장이 어떤 근거에도 없어 제외`);
     const result = await this.verifyCitedClaims(limits.text, sources, signal);
     return { ...result, removed: result.removed + limits.removed };
   }
@@ -422,6 +431,7 @@ ${listing}`,
     const recordText = checkedSources
       .map(source => `[${source.citationId}] ${source.title}\n${relevantExcerpt(source.excerpt, cited.filter(item => item.records.includes(source)).map(item => item.sentence), window)}`).join('\n\n');
     const sentenceText = cited.map((item, position) => `${position + 1}. ${item.sentence}`).join('\n');
+    reportProgress('문장 검증 시작', `인용한 문장 ${cited.length}개를 인용 근거 원문과 대조`);
     try {
       const raw = await this.deps.model.complete({
         system: CLAIM_VERIFY_SYSTEM,
@@ -440,6 +450,7 @@ ${listing}`,
         return !item.records.some(record => containment(item.sentence, record.excerpt) >= QUOTATION_CONTAINMENT);
       }));
       const drop = new Set([...flagged].map(position => cited[position - 1]!.index));
+      reportProgress('문장 검증', drop.size > 0 ? `근거가 뒷받침하지 않는 문장 ${drop.size}개를 제외` : `인용 문장 ${cited.length}개가 모두 근거와 일치`, [...drop].map(index => `제외: ${parts[index]!.sentence.trim().slice(0, 90)}`));
       if (drop.size === 0) return { answer, removed: 0, checked: true };
       const kept = parts.filter((_part, index) => !drop.has(index));
       const next = joinAnswerParts(kept);
@@ -464,7 +475,7 @@ ${listing}`,
   async rewriteWeakDirectSearch(steps: LegalRetrievalStep[], evidence: LegalEvidence, signal: AbortSignal): Promise<LegalEvidence> {
     const searchStep = steps.find(step => step.kind === 'search-laws' || step.kind === 'search-all');
     if (!searchStep || !('query' in searchStep)) return evidence;
-    const budget = Math.min(5, evidence.maxToolCalls - evidence.toolCalls);
+    const budget = Math.min(REWRITE_STEP_LIMIT, evidence.maxToolCalls - evidence.toolCalls);
     if (budget <= 0) return evidence;
     try {
       const raw = await this.deps.model.complete({ system: REWRITE_SYSTEM, expectedOutputTokens: 600, user: `QUESTION\n${searchStep.query}`, signal: AbortSignal.any([signal, AbortSignal.timeout(REWRITE_TIMEOUT_MS)]) });
@@ -547,6 +558,7 @@ ${listing}`,
     if (sources.length === 0) return noEvidenceAnswer(input.evidence);
     const system = `${SYSTEM_PROMPT}${mode === 'orchestrated' ? '\n이 요청은 여러 쟁점을 포함하므로 쟁점별로 나누어 정리하고 쟁점마다 근거 ID를 붙이세요.' : ''}`;
     const user = this.buildSynthesisUser(input);
+    reportProgress('답변 작성', `근거 ${sources.length}건을 모델에 전달해 답변을 작성`, sources.slice(0, 12).map(source => `[${source.citationId}] ${citationLabel(source)}`));
     const validIds = sources.map(source => source.citationId);
     let answer = attachCaseCitations(normalizeLegalCitations((await this.deps.model.complete({ system, user, signal: input.signal })).trim(), validIds), sources);
     if (input.signal.aborted) throw new Error('task cancelled');
@@ -555,6 +567,13 @@ ${listing}`,
     const placeholderAnswer = isUninformativeAnswer(answer);
     const uninformative = placeholderAnswer || retrievalPlanOutput;
     if (rejected.valid && !uninformative) return answer;
+    reportProgress('인용 점검 · 답변 수정 요청', '초안이 인용 규칙을 어겨 모델에 한 번 수정을 요청', [
+      ...rejected.invalidCitations.map(id => `허용되지 않은 인용: ${id}`),
+      ...rejected.unretrievedArticles.map(article => `확보하지 않은 조문 언급: ${article}`),
+      ...rejected.mismatchedClaims.map(claim => `근거에 없는 주장: ${claim.slice(0, 60)}`),
+      ...(retrievalPlanOutput ? ['내부 검색 계획이 답변으로 출력됨'] : []),
+      ...(placeholderAnswer ? ['질문에 답하지 않는 한 문장 답변'] : [])
+    ]);
     answer = attachCaseCitations(normalizeLegalCitations(
       (
         await this.deps.model.complete({
@@ -852,6 +871,7 @@ function tagSources(evidence: LegalEvidence, route: (source: LegalSource) => str
 }
 
 function withStage(evidence: LegalEvidence, stage: LegalChainStage): LegalEvidence {
+  reportProgress(stage.label, stage.summary, stage.items);
   return { ...evidence, chain: [...(evidence.chain ?? []), stage] };
 }
 

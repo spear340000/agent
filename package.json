@@ -19,7 +19,8 @@
     "auth:token": "tsx backend/src/cli/generate-api-token.ts",
     "check": "tsc -p backend/tsconfig.json --noEmit",
     "test:backend": "tsx backend/tests/bootstrap.ts",
-    "eval:legal": "tsx scripts/legal-eval.ts"
+    "eval:legal": "tsx scripts/legal-eval.ts",
+    "eval:answers": "tsx scripts/legal-answer-eval.ts"
   },
   "dependencies": {
     "diff": "^9.0.0",
