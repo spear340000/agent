@@ -363,7 +363,7 @@ export class LegalWorkflow {
    * Keyword search returns any record sharing a word with the question (a semiconductor-design statute for a traffic
    * accident), and the answer then cites it. Asks the model once to drop clearly unrelated law and precedent records
    * before the answer is written. Skipped when the user named the article, and fails open: the original list is kept
-   * when the check cannot run or would remove everything.
+   * when the check cannot run. An explicit empty selection is not a failed check.
    */
   async selectRelevantSources(question: string, sources: LegalSource[], signal: AbortSignal, userNamedArticle: boolean): Promise<{ sources: LegalSource[]; dropped: number }> {
     const keep = { sources, dropped: 0 };
@@ -383,9 +383,10 @@ ${listing}`,
         signal: AbortSignal.any([signal, AbortSignal.timeout(RELEVANCE_TIMEOUT_MS)])
       });
       const parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')) as { relevant?: unknown };
+      if (!parsed || !Array.isArray(parsed.relevant) || parsed.relevant.some(item => typeof item !== 'string')) return keep;
       const candidateIds = new Set(candidates.map(source => source.citationId));
       const relevant = new Set(asArray(parsed.relevant).filter((item): item is string => typeof item === 'string' && candidateIds.has(item)));
-      if (relevant.size === 0) return keep;
+      if (parsed.relevant.length > 0 && relevant.size === 0) return keep;
       const kept = sources.filter(source => !candidateIds.has(source.citationId) || relevant.has(source.citationId));
       return { sources: kept, dropped: sources.length - kept.length };
     } catch (error) {
@@ -400,10 +401,10 @@ ${listing}`,
    * check cannot run, the answer is returned unchanged and `checked` is false so the caller can say so.
    */
   async verifyClaims(answer: string, sources: LegalSource[], signal: AbortSignal): Promise<{ answer: string; removed: number; checked: boolean }> {
-    if (!this.deps.claimVerification) return { answer, removed: 0, checked: true };
+    if (!this.deps.claimVerification) return { answer, removed: 0, checked: false };
     const parts = splitAnswerParts(answer);
     const cited = parts.map((part, index) => ({ index, sentence: part.sentence.trim(), records: citedSourcesOf(part.sentence, sources) })).filter(item => item.sentence && item.records.length > 0);
-    if (cited.length === 0) return { answer, removed: 0, checked: true };
+    if (cited.length === 0) return { answer, removed: 0, checked: false };
     const recordIds = [...new Set(cited.flatMap(item => item.records.map(record => record.citationId)))];
     const recordText = sources.filter(source => recordIds.includes(source.citationId))
       .map(source => `[${source.citationId}] ${source.title}\n${relevantExcerpt(source.excerpt, cited.filter(item => item.records.includes(source)).map(item => item.sentence), CLAIM_EXCERPT_CHARACTERS)}`).join('\n\n');
@@ -416,13 +417,21 @@ ${listing}`,
         signal: AbortSignal.any([signal, AbortSignal.timeout(CLAIM_VERIFY_TIMEOUT_MS)])
       });
       const parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')) as { unsupported?: unknown };
-      const flagged = new Set(asArray(parsed.unsupported).filter((item): item is number => Number.isInteger(item) && (item as number) >= 1 && (item as number) <= cited.length));
+      if (!parsed || !Array.isArray(parsed.unsupported) || parsed.unsupported.some(item => !Number.isInteger(item) || item < 1 || item > cited.length)) {
+        return { answer, removed: 0, checked: false };
+      }
+      const flagged = new Set<number>(parsed.unsupported);
       const drop = new Set([...flagged].map(position => cited[position - 1]!.index));
       if (drop.size === 0) return { answer, removed: 0, checked: true };
       const kept = parts.filter((_part, index) => !drop.has(index));
       const next = joinAnswerParts(kept);
-      if (!next || legalCitationIds(next).length === 0) return { answer, removed: 0, checked: true };
-      return { answer: next, removed: drop.size, checked: true };
+      return {
+        answer: next && legalCitationIds(next).length > 0
+          ? next
+          : '확보한 근거가 답변의 주장을 뒷받침하지 않아 법적 결론을 제시할 수 없습니다. 질문과 직접 관련된 조문·판례 또는 추가 사실관계를 확인해 주세요.',
+        removed: drop.size,
+        checked: true
+      };
     } catch (error) {
       if (signal.aborted) throw error;
       return { answer, removed: 0, checked: false };
@@ -472,20 +481,32 @@ ${listing}`,
     }
   }
 
-  /** Re-search planned issues that returned nothing, using a narrower query than the planner's long one. */
+  /**
+   * Retry uncovered issues. A step that failed with an error is repeated exactly as planned (the same query can succeed
+   * once the transient fault is gone); a step that simply found nothing is retried with its leading terms, because an
+   * identical search of an unchanged index would return nothing again.
+   */
   async fillEvidenceGaps(evidence: LegalEvidence, signal: AbortSignal): Promise<LegalEvidence> {
+    const failed = new Set(evidence.failures.map(failure => failure.step));
     const retries: LegalRetrievalStep[] = [];
+    const tags = new Set<string>();
     for (const entry of evidence.trace) {
       const step = entry.step;
       if (entry.results > 0 || !('query' in step) || step.kind === 'graph') continue;
-      const tokens = step.query.split(/\s+/).filter(Boolean);
-      if (tokens.length <= 4) continue;
-      retries.push({ ...step, query: tokens.slice(0, 4).join(' ') });
+      let retry: LegalRetrievalStep = step;
+      if (!failed.has(describeStep(step))) {
+        const tokens = step.query.split(/\s+/).filter(Boolean);
+        if (tokens.length <= 4) continue;
+        retry = { ...step, query: tokens.slice(0, 4).join(' ') };
+        tags.add('좁힌 질의');
+      } else tags.add('원문 질의');
+      if (!retries.some(item => describeStep(item) === describeStep(retry))) retries.push(retry);
     }
     const budget = Math.min(2, evidence.maxToolCalls - evidence.toolCalls);
     if (retries.length === 0 || budget <= 0) return evidence;
     try {
-      return mergeLegalEvidence(evidence, tagSources(await this.deps.retrieval.retrieve(retries.slice(0, budget), signal), () => '근거가 없던 쟁점을 좁힌 질의로 재검색 · MCP search_laws'));
+      const label = `근거가 없던 쟁점을 ${[...tags].join('·')}로 재검색 · MCP`;
+      return mergeLegalEvidence(evidence, tagSources(await this.deps.retrieval.retrieve(retries.slice(0, budget), signal), () => label));
     } catch (error) {
       if (signal.aborted) throw error;
       return evidence;
@@ -590,6 +611,7 @@ ${listing}`,
       return route ? { ...source, provenance: [...(source.provenance ?? []), route] } : source;
     });
     sourceStatus.chain = buildKnowledgeChain(evidence, citedSources, decision, input.agentStats, this.okfEntries);
+    if (sourceStatus.ledger) sourceStatus.ledger = reconcileLedger(sourceStatus.ledger, sourceStatus.chain);
     const draft = Boolean(decision.draftKind);
     const body = sources.length === 0 ? `${answer}\n\n${noEvidenceGuidance(evidence)}` : answer;
     const markdown = [
@@ -1066,6 +1088,17 @@ export function buildLedger(evidence: LegalEvidence, plannerCalls: number, vecto
     maxToolCalls: evidence.maxToolCalls,
     planner: { calls: plannerCalls, mode: plannerCalls > 0 ? 'used' : 'not-used' }
   };
+}
+
+/** A layer that the chain shows ran for this question must not be listed as unused in the layer table. */
+export function reconcileLedger(ledger: LegalLedger, chain: LegalChainStage[]): LegalLedger {
+  const stage = (id: LegalChainStage['id']) => chain.find(item => item.id === id);
+  const layers = ledger.layers.map((layer): LegalLayerUse => {
+    const link = layer.id === 'graph' ? stage('graph') : layer.id === 'ontology' ? stage('ontology') : layer.id === 'okf' ? stage('okf') : undefined;
+    if (!link || layer.state === 'unavailable') return layer;
+    return { ...layer, state: 'used', detail: link.summary };
+  });
+  return { ...ledger, layers };
 }
 
 function toolNameFor(step: LegalRetrievalStep): string {

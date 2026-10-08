@@ -21,12 +21,11 @@ import { findInvalidCitations } from './source-citations.js';
 import { conflict, notFound } from '../shared/app-error.js';
 
 type Plan = { title: string; searchQueries: string[]; outline: string[] };
-/** Planned steps with no records, counting a narrowed gap retry of the same search as coverage. */
+/** Planned steps with no records, counting only a retry of the same step as coverage. */
 function uncoveredSteps(evidence: LegalEvidence, expected: LegalRetrievalStep[]): LegalRetrievalStep[] {
   const hits = evidence.trace.filter(entry => entry.results > 0).map(entry => entry.step);
   return expected.filter(step => !hits.some(hit =>
-    describeStep(hit) === describeStep(step) ||
-    (hit.kind === step.kind && 'query' in hit && 'query' in step && step.query.startsWith(hit.query))
+    describeStep(hit) === describeStep(step)
   ));
 }
 
@@ -212,7 +211,7 @@ export class AgentService {
       ? await stageStep<LegalPlan>({ prompt: task.prompt, title: task.title, decision }, async () => workflow.plan({ task, decision, documents: docs, signal }))
       : decision;
     const plannedSteps = 'retrievalSteps' in plan ? plan.retrievalSteps : plan.steps;
-    const evidence = await stageStep<LegalEvidence>({ steps: plannedSteps, retrievalVersion: 2 }, async () => workflow.retrieve(plan, signal));
+    const evidence = await stageStep<LegalEvidence>({ steps: plannedSteps, retrievalVersion: 3 }, async () => workflow.retrieve(plan, signal));
     const sourceStatus = workflow.executionStatus(evidence, decision);
     this.event(taskId, 'legal.retrieval', '법령·판례 검색 완료', `${evidence.sources.length}건의 실제 검색 근거를 확보했습니다.`, 'completed', {
       intent: decision.intent,
@@ -238,7 +237,7 @@ export class AgentService {
     }
     const baseDocument = this.revisionDocument(taskId);
     const output = await stageStep<LegalRunOutput>(
-      { generationVersion: 3, prompt: task.prompt, decision, evidence, docs: docs.map(document => ({ fileName: document.fileName, format: document.format, length: document.text.length })), web: webSources.map(source => source.url), baseDocument },
+      { generationVersion: 4, prompt: task.prompt, decision, evidence: writeEvidence, docs: docs.map(document => ({ fileName: document.fileName, format: document.format, length: document.text.length })), web: webSources.map(source => source.url), baseDocument },
       async () => this.writeLegalOutput(task, decision, plan, writeEvidence, docs, webSources, baseDocument, signal)
     );
     this.publishLegalAnswer(taskId, output);
