@@ -81,7 +81,10 @@ export class OpenAiProvider implements ModelProvider {
         }
         const hint = response.status === 401 || response.status === 403 ? '모델 제공자의 API 키와 접근 권한을 확인하세요.' : response.status === 404 ? 'OPENAI_MODEL과 모델 접근 권한을 확인하세요.' : response.status === 429 ? '모델 제공자의 요청 한도에 도달했습니다. 잠시 후 다시 시도하세요.' : '모델 제공자의 응답 상태를 확인하세요.';
         const fallbackEligible = ![400, 401, 403, 413, 422].includes(response.status);
-        throw new ModelProviderError(`model provider returned HTTP ${response.status}. ${hint}`, fallbackEligible, [401, 403].includes(response.status));
+        // With another provider available, a model that keeps failing on the server side is skipped for a while rather
+        // than tried first (and lost to a slow failure) on every later call of the same task.
+        const serverSide = response.status >= 500 || response.status === 408;
+        throw new ModelProviderError(`model provider returned HTTP ${response.status}. ${hint}`, fallbackEligible, [401, 403].includes(response.status), serverSide && this.options.failFastOnRateLimit ? 60_000 : undefined);
       }
       let payload: { choices?: Array<{ message?: { content?: string | null } }>; usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } };
       try {

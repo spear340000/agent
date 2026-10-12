@@ -35,3 +35,24 @@ test('a 429 from a provider with a fallback is not retried and asks the failover
     server.close();
   }
 });
+
+test('a server-side failure from a provider with a fallback makes the failover skip that model for a minute', async () => {
+  const http = await import('node:http');
+  const server = http.createServer((_req, res) => { res.writeHead(503, { 'content-type': 'application/json' }); res.end('{}'); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = (server.address() as { port: number }).port;
+  try {
+    const provider = new OpenAiProvider({ apiKey: 'test', model: 'm', baseUrl: `http://127.0.0.1:${port}`, maxAttempts: 1, failFastOnRateLimit: true });
+    await assert.rejects(
+      () => provider.complete({ system: 's', user: 'u' }),
+      (error: Error & { retryAfterMs?: number }) => error.retryAfterMs === 60_000
+    );
+    const lone = new OpenAiProvider({ apiKey: 'test', model: 'm', baseUrl: `http://127.0.0.1:${port}`, maxAttempts: 1 });
+    await assert.rejects(
+      () => lone.complete({ system: 's', user: 'u' }),
+      (error: Error & { retryAfterMs?: number }) => error.retryAfterMs === undefined
+    );
+  } finally {
+    server.close();
+  }
+});
