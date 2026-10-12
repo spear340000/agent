@@ -186,6 +186,120 @@ function KnowledgeChain({ task }: { task: Task }) {
   )
 }
 
+function formatTokenCount(value?: number): string {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? new Intl.NumberFormat('ko-KR').format(value)
+    : '—'
+}
+
+function formatDuration(value?: number): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+  if (value < 60_000) return `${(value / 1000).toFixed(1)}초`
+  const minutes = Math.floor(value / 60_000)
+  const seconds = Math.floor((value % 60_000) / 1000)
+  return seconds > 0 ? `${minutes}분 ${seconds}초` : `${minutes}분`
+}
+
+function UsageMetrics({
+  task,
+  timeline
+}: {
+  task: Task
+  timeline: Array<{ key: string; title: string }>
+}) {
+  const usageByStep = new Map(
+    (task.usageMetrics?.stages ?? []).map((stage) => [stage.stepId, stage])
+  )
+  const stageMetrics = timeline.map((step) => usageByStep.get(step.key))
+  const hasCompleteStageTotals =
+    stageMetrics.length > 0 &&
+    stageMetrics.every((stage) => typeof stage?.tokenCount === 'number')
+  const hasCompleteStageDurations =
+    stageMetrics.length > 0 &&
+    stageMetrics.every((stage) => typeof stage?.durationMs === 'number')
+  const totalTokenCount =
+    task.usageMetrics?.totalTokenCount ??
+    (hasCompleteStageTotals
+      ? stageMetrics.reduce(
+          (total, stage) => total + (stage?.tokenCount ?? 0),
+          0
+        )
+      : undefined)
+  const totalDurationMs =
+    task.usageMetrics?.totalDurationMs ??
+    (hasCompleteStageDurations
+      ? stageMetrics.reduce(
+          (total, stage) => total + (stage?.durationMs ?? 0),
+          0
+        )
+      : undefined)
+  const hasUsageData =
+    totalTokenCount !== undefined ||
+    totalDurationMs !== undefined ||
+    stageMetrics.some(
+      (stage) =>
+        stage?.tokenCount !== undefined || stage?.durationMs !== undefined
+    )
+
+  return (
+    <section
+      className="task-context__section task-context__usage"
+      aria-labelledby="task-usage-title"
+    >
+      <details className="task-context__usage-details">
+        <summary>
+          <span id="task-usage-title">단계별 토큰·시간</span>
+          <span className="task-context__usage-summary">
+            {hasUsageData
+              ? `${formatTokenCount(totalTokenCount)} 토큰 · ${formatDuration(totalDurationMs)}`
+              : '계측 연동 대기'}
+          </span>
+          <ChevronDown
+            className="task-context__usage-chevron"
+            aria-hidden="true"
+            size={15}
+          />
+        </summary>
+        <div className="task-context__usage-content">
+          {!hasUsageData ? (
+            <p className="task-context__usage-note">
+              백엔드 계측값이 연결되면 단계별 토큰과 소요 시간을 표시합니다.
+            </p>
+          ) : null}
+          <table className="task-context__usage-table">
+            <thead>
+              <tr>
+                <th scope="col">단계</th>
+                <th scope="col">토큰</th>
+                <th scope="col">소요 시간</th>
+              </tr>
+            </thead>
+            <tbody>
+              {timeline.map((step) => {
+                const usage = usageByStep.get(step.key)
+                return (
+                  <tr key={step.key}>
+                    <th scope="row">{step.title}</th>
+                    <td>{formatTokenCount(usage?.tokenCount)}</td>
+                    <td>{formatDuration(usage?.durationMs)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th scope="row">합계</th>
+                <td>{formatTokenCount(totalTokenCount)}</td>
+                <td>{formatDuration(totalDurationMs)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </details>
+    </section>
+  )
+}
+
 function LegalAnswer({
   task,
   onDraftFromAnswer
@@ -495,6 +609,8 @@ export default function TaskContextPanel({
             ) : null}
           </div>
         </section>
+
+        <UsageMetrics task={task} timeline={timeline} />
 
         {task.messages
           .filter((message) => message.kind !== 'system')

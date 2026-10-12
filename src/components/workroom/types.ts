@@ -53,6 +53,16 @@ export type TaskProgressEvent = {
   items: string[]
   createdAt: number
 }
+export type TaskStageUsage = {
+  stepId: string
+  tokenCount?: number
+  durationMs?: number
+}
+export type TaskUsageMetrics = {
+  stages?: TaskStageUsage[]
+  totalTokenCount?: number
+  totalDurationMs?: number
+}
 export type LegalAnswerView = {
   intent: string
   path: 'direct' | 'orchestrated'
@@ -94,6 +104,7 @@ export type Task = {
   documentDirty?: boolean
   documentDraftBase?: string
   documentDraftConflict?: string
+  usageMetrics?: TaskUsageMetrics
   legal?: LegalAnswerView
 }
 export const stageMeta: Record<

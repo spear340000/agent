@@ -2712,6 +2712,113 @@
   padding-top: 2px;
 }
 
+.task-context__usage-details {
+  min-width: 0;
+}
+
+.task-context__usage-details summary {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 7px;
+  color: #536057;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+  list-style: none;
+}
+
+.task-context__usage-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-context__usage-details summary:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid #8b7658;
+  outline-offset: 3px;
+}
+
+.task-context__usage-summary {
+  overflow: hidden;
+  margin-left: auto;
+  color: #78837b;
+  font-size: 10px;
+  font-weight: 450;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-context__usage-chevron {
+  flex: 0 0 auto;
+  color: #66736a;
+  transition: transform 140ms ease;
+}
+
+.task-context__usage-details[open] .task-context__usage-chevron {
+  transform: rotate(180deg);
+}
+
+.task-context__usage-content {
+  padding-top: 8px;
+}
+
+.task-context__usage-note {
+  margin: 0 0 8px;
+  color: #78837b;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.task-context__usage-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.task-context__usage-table th,
+.task-context__usage-table td {
+  overflow: hidden;
+  border-bottom: 1px solid #ebe7e0;
+  padding: 7px 3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-context__usage-table thead th {
+  color: #879189;
+  font-size: 9px;
+  font-weight: 550;
+  text-align: right;
+}
+
+.task-context__usage-table thead th:first-child,
+.task-context__usage-table tbody th,
+.task-context__usage-table tfoot th {
+  width: 46%;
+  text-align: left;
+}
+
+.task-context__usage-table tbody th,
+.task-context__usage-table tfoot th {
+  color: #536057;
+  font-weight: 550;
+}
+
+.task-context__usage-table td {
+  color: #66736a;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.task-context__usage-table tfoot th,
+.task-context__usage-table tfoot td {
+  border-top: 1px solid #dcd6cc;
+  border-bottom: 0;
+  color: #36443b;
+  font-weight: 700;
+}
+
 .task-context__section-heading > span {
   color: #879189;
   font-size: 10px;
@@ -4746,6 +4853,7 @@
 
 .workfolio[data-theme='dark'] .task-context__section h3,
 .workfolio[data-theme='dark'] .task-context__progress-details summary,
+.workfolio[data-theme='dark'] .task-context__usage-details summary,
 .workfolio[data-theme='dark'] .task-context__step.is-current,
 .workfolio[data-theme='dark'] .task-context__change-summary b {
   color: #ddd5ca;
@@ -4759,7 +4867,24 @@
 .workfolio[data-theme='dark'] .task-context__request,
 .workfolio[data-theme='dark'] .task-context__status,
 .workfolio[data-theme='dark'] .task-context__step p,
-.workfolio[data-theme='dark'] .task-context__progress-summary {
+.workfolio[data-theme='dark'] .task-context__progress-summary,
+.workfolio[data-theme='dark'] .task-context__usage-summary,
+.workfolio[data-theme='dark'] .task-context__usage-note {
+  color: #aaa49a;
+}
+
+.workfolio[data-theme='dark'] .task-context__usage-table th,
+.workfolio[data-theme='dark'] .task-context__usage-table td {
+  border-color: #39342f;
+}
+
+.workfolio[data-theme='dark'] .task-context__usage-table tbody th,
+.workfolio[data-theme='dark'] .task-context__usage-table tfoot th,
+.workfolio[data-theme='dark'] .task-context__usage-table tfoot td {
+  color: #ddd5ca;
+}
+
+.workfolio[data-theme='dark'] .task-context__usage-table td {
   color: #aaa49a;
 }
 
