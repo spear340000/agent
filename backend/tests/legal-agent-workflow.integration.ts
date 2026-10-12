@@ -1109,6 +1109,26 @@ test('a verifier false alarm on a sentence that quotes its record is ignored', a
   assert.deepEqual(result, { answer, removed: 0, checked: true });
 });
 
+test('verification calls the model only for sentences that do not quote their record', async () => {
+  const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
+  const quote = { ...lawSource, citationId: 'L1', excerpt: '고의 또는 과실로 인한 위법행위로 타인에게 손해를 가한 자는 그 손해를 배상할 책임이 있다.' };
+  const quoted = '고의 또는 과실로 인한 위법행위로 타인에게 손해를 가한 자는 그 손해를 배상할 책임이 있다 [L1].';
+  const never = new LegalWorkflow({ claimVerification: true, retrieval: {} as LegalRetrievalService, limits, model: { complete: async () => { throw new Error('a fully quoted answer must not call the model'); } } });
+  assert.deepEqual(await never.verifyClaims(quoted, [quote], new AbortController().signal), { answer: quoted, removed: 0, checked: true });
+
+  const seen: string[] = [];
+  const mixed = new LegalWorkflow({ claimVerification: true, retrieval: {} as LegalRetrievalService, limits, model: { complete: async ({ user }) => { seen.push(user); return '{"unsupported":[1]}'; } } });
+  const paraphrase = '그러므로 모든 계약 분쟁에서 항상 배상이 면제됩니다 [L1].';
+  const result = await mixed.verifyClaims(`${quoted}
+${paraphrase}`, [quote], new AbortController().signal);
+  assert.equal(seen.length, 1);
+  assert.doesNotMatch(seen[0]!.split('SENTENCES')[1]!, /고의 또는 과실/, 'the quoted sentence is not sent to the model');
+  assert.match(seen[0]!, /항상 배상이 면제/);
+  assert.equal(result.removed, 1);
+  assert.match(result.answer, /고의 또는 과실/);
+  assert.doesNotMatch(result.answer, /항상 배상이 면제/);
+});
+
 test('malformed claim-verification responses never claim successful verification', async () => {
   const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
   const answer = '근거를 검토했습니다 [L1].';
