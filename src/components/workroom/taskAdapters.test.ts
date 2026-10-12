@@ -8,6 +8,41 @@ import {
 import { modelUsageText } from './ModelUsage.js'
 import type { TaskDetails } from '@/api/workroom'
 
+test('variable-length legal workflows report the current stage by its operation', () => {
+  for (const [title, stage] of [
+    ['법령·판례 근거 확인', 'collecting'],
+    ['검색 계획 수립', 'planning'],
+    ['근거 검증', 'analyzing'],
+    ['근거 기반 답변 작성', 'writing'],
+    ['근거 기반 답변·초안 작성', 'writing']
+  ]) {
+    const details: TaskDetails = {
+      task: {
+        id: 'legal',
+        title: '검토',
+        prompt: '검토',
+        status: 'running',
+        sourceFileIds: [],
+        sourceUrls: [],
+        createdAt: '',
+        updatedAt: '',
+        steps: [
+          {
+            id: 'files',
+            title: '첨부 자료 확인',
+            status: 'completed',
+            progress: 100
+          },
+          { id: 'active', title, status: 'running', progress: 50 }
+        ]
+      },
+      events: [],
+      artifacts: []
+    }
+    assert.equal(toWorkroomTask(details).stage, stage, title)
+  }
+})
+
 test('a planning failure does not leave pending sources pretending to be actively collected', () => {
   const details: TaskDetails = {
     task: {

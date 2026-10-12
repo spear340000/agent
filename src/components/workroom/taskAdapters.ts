@@ -38,7 +38,13 @@ function stageForTask(task: BackendTask): WorkflowStage {
   )
   const pendingIndex = task.steps.findIndex((step) => step.status === 'pending')
   const index = activeIndex >= 0 ? activeIndex : pendingIndex
-  return stageByStep[index ?? 0] ?? 'planning'
+  const title = task.steps[index]?.title ?? ''
+  if (/plan|계획|요청 정리/iu.test(title)) return 'planning'
+  if (/analy|분석|근거 검증/iu.test(title)) return 'analyzing'
+  if (/generat|write|작성|생성/iu.test(title)) return 'writing'
+  if (/read|research|collect|첨부|수집|검색|근거 확인|자료 확인/iu.test(title))
+    return 'collecting'
+  return stageByStep[index] ?? 'planning'
 }
 
 function messagesFromEvents(events: BackendEvent[]): TaskMessage[] {
