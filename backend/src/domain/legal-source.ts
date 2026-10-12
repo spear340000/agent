@@ -62,7 +62,8 @@ export type LegalRetrievalStep =
   | { kind: 'search-laws'; query: string; limit?: number }
   | { kind: 'search-precedents'; query: string; limit?: number }
   | { kind: 'search-all'; query: string; limit?: number }
-  | { kind: 'law-article'; lawName: string; articleNumber: string }
+  /** `title` (for example "임차권등기명령") only helps find the exact article when the local article tool answers with a neighbour. */
+  | { kind: 'law-article'; lawName: string; articleNumber: string; title?: string }
   | { kind: 'precedent'; id: string; maxChars?: number }
   | { kind: 'case-number'; caseNumber: string }
   | { kind: 'graph'; query: string; limit?: number };

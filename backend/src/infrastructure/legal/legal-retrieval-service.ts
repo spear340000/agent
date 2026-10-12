@@ -222,6 +222,7 @@ export class LegalRetrievalService {
     lawName: string,
     articleNumber: string,
     signal?: AbortSignal,
+    titleHint?: string,
   ): Promise<NormalizedRecord[]> {
     try {
       const { text } = await this.read(
@@ -237,9 +238,34 @@ export class LegalRetrievalService {
       }
       return [record];
     } catch (error) {
-      if (!isLegalRetrievalError(error) || error.kind !== "not-found" || !this.officialArticles || signal?.aborted) throw error;
+      if (!isLegalRetrievalError(error) || error.kind !== "not-found" || signal?.aborted) throw error;
+      // The local article tool can answer with a neighbouring article (제3조의3 and 제4조 of 주택임대차보호법 both came
+      // back as 제3조의2) although the keyword index holds the exact one; take it from there before going online.
+      const indexed = await this.lawArticleFromIndex(lawName, articleNumber, signal, titleHint).catch(() => []);
+      if (indexed.length > 0) return indexed;
+      if (!this.officialArticles) throw error;
       return this.officialArticles.read(lawName, articleNumber, signal);
     }
+  }
+
+  private async lawArticleFromIndex(
+    lawName: string,
+    articleNumber: string,
+    signal?: AbortSignal,
+    titleHint?: string,
+  ): Promise<NormalizedRecord[]> {
+    const compact = (value: string): string => value.replace(/\s+/g, "");
+    const base = `${sanitizeLegalQuery(lawName, 80)} ${sanitizeLegalQuery(articleNumber, 40)}`;
+    // The number alone often ranks other articles first ("제3조" finds 제3조의7); the article's own title pins it down.
+    const queries = [base, ...(titleHint?.trim() ? [`${base} ${sanitizeLegalQuery(titleHint, 40)}`] : [])];
+    for (const query of queries) {
+      const { text } = await this.read("search_laws", { query, limit: 10 }, signal);
+      if (!isSearchEnvelope(text)) continue;
+      const exact = parseSearchResults(text, "law")
+        .find(record => compact(record.lawName ?? "") === compact(lawName) && compact(record.articleNumber ?? "") === compact(articleNumber));
+      if (exact) return [exact];
+    }
+    return [];
   }
 
   async getPrecedent(
@@ -463,7 +489,7 @@ export class LegalRetrievalService {
           searchEvidence,
         );
       case "law-article":
-        return this.getLawArticle(step.lawName, step.articleNumber, signal);
+        return this.getLawArticle(step.lawName, step.articleNumber, signal, step.title);
       case "precedent":
         return this.getPrecedent(step.id, signal);
       case "case-number":

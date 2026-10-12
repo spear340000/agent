@@ -265,3 +265,43 @@ test('a missing local article falls back to verified official source data', asyn
   assert.equal(article?.articleNumber, '제3조');
   assert.match(article!.excerpt, /공식 원문/);
 });
+
+test('when the local article tool returns a neighbouring article, the exact one is taken from the keyword index', async () => {
+  const calls: string[] = [];
+  const retrieval = new LegalRetrievalService({
+    callTool: async (name: string) => {
+      calls.push(name);
+      if (name === 'get_law_article') {
+        return { text: '푸른하늘법\n\n법률명: 푸른하늘법\n##### 제3조의2 (이웃 조문) 다른 조문의 내용', isError: false };
+      }
+      return {
+        text: ['Search: 푸른하늘법 제3조의3', 'Results: 2', '', '[1] 푸른하늘법', 'data/푸른하늘법/법률.md', '법률명: 푸른하늘법 ##### 제3조의4 (다른 조문) 내용', '', '[2] 푸른하늘법', 'data/푸른하늘법/법률.md', '법률명: 푸른하늘법 ##### 제3조의3 (등기명령) 임차권등기를 명할 수 있다.'].join('\n'),
+        isError: false
+      };
+    }
+  } as never, { maxToolCalls: 4, maxRetrievalSteps: 4, maxQueryCharacters: 100, maxPrecedentCharacters: 1000 });
+  const found = await retrieval.getLawArticle('푸른하늘법', '제3조의3');
+  assert.equal(found.length, 1);
+  assert.equal(found[0]!.articleNumber, '제3조의3');
+  assert.match(found[0]!.excerpt, /임차권등기를 명할 수/);
+  assert.deepEqual(calls, ['get_law_article', 'search_laws']);
+});
+
+test('the article title helps the index fallback find an article the number alone ranks too low', async () => {
+  const queries: string[] = [];
+  const retrieval = new LegalRetrievalService({
+    callTool: async (name: string, args: Record<string, unknown>) => {
+      if (name === 'get_law_article') return { text: '푸른하늘법\n\n법률명: 푸른하늘법\n##### 제8조 (이웃 조문) 다른 조문', isError: false };
+      if (name === 'search_laws') queries.push(String(args.query));
+      const withTitle = String(args.query).includes('대항력');
+      return {
+        text: ['Search: x', 'Results: 1', '', '[1] 푸른하늘법', 'data/푸른하늘법/법률.md', withTitle ? '법률명: 푸른하늘법 ##### 제3조 (대항력 등) 임차인의 대항력' : '법률명: 푸른하늘법 ##### 제3조의7 (정보 제시) 다른 내용'].join('\n'),
+        isError: false
+      };
+    }
+  } as never, { maxToolCalls: 4, maxRetrievalSteps: 4, maxQueryCharacters: 100, maxPrecedentCharacters: 1000 });
+  const found = await retrieval.retrieve([{ kind: 'law-article', lawName: '푸른하늘법', articleNumber: '제3조', title: '대항력 등' }]);
+  assert.equal(found.sources[0]?.articleNumber, '제3조');
+  assert.deepEqual(queries, ['푸른하늘법 제3조', '푸른하늘법 제3조 대항력 등'], 'the number alone is tried first, then the number with the title');
+  assert.equal((await retrieval.retrieve([{ kind: 'law-article', lawName: '푸른하늘법', articleNumber: '제3조' }])).sources.length, 0, 'without a title the neighbour is still not accepted');
+});

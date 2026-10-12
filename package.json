@@ -20,7 +20,8 @@
     "check": "tsc -p backend/tsconfig.json --noEmit",
     "test:backend": "tsx backend/tests/bootstrap.ts",
     "eval:legal": "tsx scripts/legal-eval.ts",
-    "eval:answers": "tsx scripts/legal-answer-eval.ts"
+    "eval:answers": "tsx scripts/legal-answer-eval.ts",
+    "verify:wiki": "tsx scripts/verify-wiki-supplement.ts"
   },
   "dependencies": {
     "diff": "^9.0.0",
