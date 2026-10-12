@@ -60,7 +60,9 @@ export function matchWikiHints(question: string, hints: readonly WikiHint[], max
     const titleOverlap = overlap(bigrams(hint.title), asked);
     const textOverlap = overlap(bigrams(hint.text), asked);
     const eligible = tagMatches > 0 || titleOverlap >= 2;
-    return { hint, eligible, score: 4 * tagMatches + 3 * titleOverlap + textOverlap };
+    // The tags belong to the whole page, so every article on it shares them; counting each matching tag would let a page
+    // with many tags push its unrelated articles above an article whose own title and text match the question.
+    return { hint, eligible, score: (tagMatches > 0 ? 4 : 0) + 3 * titleOverlap + textOverlap };
   });
   const best = new Map<string, (typeof scored)[number]>();
   for (const item of scored) {
