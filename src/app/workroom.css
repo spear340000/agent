@@ -3129,6 +3129,46 @@
   padding-top: 10px;
 }
 
+.composer-upload-progress {
+  margin: 8px 0 0;
+  color: var(--wf-muted);
+  font-size: 11px;
+}
+
+.document-draft-conflict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+  border: 1px solid #d7a45c;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff8e9;
+  color: #4f3c23;
+  font-size: 12px;
+}
+
+.document-draft-conflict p {
+  margin: 0;
+}
+
+.document-draft-conflict__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.document-draft-conflict__actions button {
+  min-height: 32px;
+  border: 1px solid #c89a58;
+  border-radius: 5px;
+  padding: 0 9px;
+  background: #fffdf8;
+  color: inherit;
+  font-size: 11px;
+}
+
 .attachment {
   display: inline-flex;
   max-width: 100%;

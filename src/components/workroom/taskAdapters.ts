@@ -315,7 +315,14 @@ export function toWorkroomTask(
   previous?: Partial<
     Pick<
       Task,
-      'sources' | 'messages' | 'document' | 'documentDirty' | 'revisionBaseline'
+      | 'sources'
+      | 'messages'
+      | 'document'
+      | 'documentDirty'
+      | 'documentDraftBase'
+      | 'documentDraftConflict'
+      | 'savedDocument'
+      | 'revisionBaseline'
     >
   >
 ): Task {
@@ -379,6 +386,12 @@ export function toWorkroomTask(
       : savedDocument,
     savedDocument,
     documentDirty,
+    documentDraftBase: documentDirty
+      ? (previous?.documentDraftBase ??
+        previous?.savedDocument ??
+        savedDocument)
+      : undefined,
+    documentDraftConflict: previous?.documentDraftConflict,
     artifactFileId: artifact?.fileId,
     artifactName: artifact?.name,
     artifactMimeType: artifact?.mimeType,

@@ -1056,6 +1056,7 @@ export default function SystemExplorer({
     >
   >({})
   const autoLoadedTopics = useRef(new Set<string>())
+  const librarySearchRequest = useRef(0)
   const [catalogItems, setCatalogItems] = useState<LegalCatalogEntry[]>([])
   const [catalogError, setCatalogError] = useState('')
   const [catalogLoading, setCatalogLoading] = useState(false)
@@ -1102,33 +1103,40 @@ export default function SystemExplorer({
           : libraryCorpus
     const initialQuery = '민법'
     const searchKey = `${topic}:${corpus}:${initialQuery}`
+    const requestId = ++librarySearchRequest.current
     let cancelled = false
     setLibraryLoading(true)
     void searchLegalLibrary(initialQuery, corpus, connection)
       .then(({ items }) => {
-        if (cancelled) return
+        if (cancelled || requestId !== librarySearchRequest.current) return
         setLibraryItems(items)
         setLibraryError('')
         setLibrarySearchKey(searchKey)
         autoLoadedTopics.current.add(topic)
       })
       .catch(() => {
-        if (cancelled) return
+        if (cancelled || requestId !== librarySearchRequest.current) return
         setLibraryError(
           '자료 검색을 완료하지 못했습니다. 백엔드 상태를 확인한 뒤 다시 시도해 주세요.'
         )
       })
       .finally(() => {
-        if (!cancelled) setLibraryLoading(false)
+        if (!cancelled && requestId === librarySearchRequest.current)
+          setLibraryLoading(false)
       })
     return () => {
       cancelled = true
+      if (librarySearchRequest.current === requestId) {
+        librarySearchRequest.current += 1
+        setLibraryLoading(false)
+      }
     }
   }, [backendStatus, connection, libraryCorpus, topic])
 
   async function runLibrarySearch(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault()
     if (!libraryQuery.trim()) return
+    const requestId = ++librarySearchRequest.current
     setLibraryLoading(true)
     setLibraryError('')
     try {
@@ -1143,15 +1151,17 @@ export default function SystemExplorer({
         corpus,
         connection
       )
+      if (requestId !== librarySearchRequest.current) return
       setLibraryItems(items)
       setLibrarySearchKey(`${topic}:${corpus}:${libraryQuery}`)
     } catch {
+      if (requestId !== librarySearchRequest.current) return
       setLibraryItems([])
       setLibraryError(
         '자료 검색을 완료하지 못했습니다. 백엔드 상태를 확인한 뒤 다시 시도해 주세요.'
       )
     } finally {
-      setLibraryLoading(false)
+      if (requestId === librarySearchRequest.current) setLibraryLoading(false)
     }
   }
 

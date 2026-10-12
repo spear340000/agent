@@ -8,6 +8,11 @@ export type Source = {
   url?: string
   status?: 'queued' | 'collecting' | 'ready' | 'error'
 }
+export type SourceUploadProgress = {
+  completed: number
+  total: number
+  current: string
+}
 export type WorkflowStage =
   | 'planning'
   | 'collecting'
@@ -87,6 +92,8 @@ export type Task = {
   artifactMimeType?: string
   sourceFileIds?: string[]
   documentDirty?: boolean
+  documentDraftBase?: string
+  documentDraftConflict?: string
   legal?: LegalAnswerView
 }
 export const stageMeta: Record<

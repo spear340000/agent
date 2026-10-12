@@ -4,7 +4,34 @@ import { useRef, useState } from 'react'
 import React from 'react'
 import { ArrowUp, FilePlus2, Link2, X } from 'lucide-react'
 import { validateSourceFile } from '@/api/workroom'
-import type { Source } from './types'
+import type { Source, SourceUploadProgress } from './types'
+type ComposerDraft = {
+  request: string
+  sources: Source[]
+  link: string
+  linkOpen: boolean
+}
+const composerDrafts = new Map<string, ComposerDraft>()
+const MAX_STORED_COMPOSER_DRAFTS = 50
+
+function storeComposerDraft(key: string | undefined, draft: ComposerDraft) {
+  if (!key) return
+  if (
+    !draft.request &&
+    !draft.sources.length &&
+    !draft.link &&
+    !draft.linkOpen
+  ) {
+    composerDrafts.delete(key)
+    return
+  }
+  composerDrafts.delete(key)
+  composerDrafts.set(key, draft)
+  if (composerDrafts.size > MAX_STORED_COMPOSER_DRAFTS) {
+    const oldest = composerDrafts.keys().next().value
+    if (oldest) composerDrafts.delete(oldest)
+  }
+}
 const suggestions = [
   ['조문 확인', '민법 제398조가 정하는 손해배상 예정은 어떻게 되나요?'],
   [
@@ -22,28 +49,39 @@ export default function Composer({
   disabled = false,
   modelUnavailable = false,
   placeholder,
+  draftKey,
   workflow: initialWorkflow = 'legal'
 }: {
   onSubmit: (
     request: string,
     sources: Source[],
-    workflow?: 'legal' | 'document'
+    workflow?: 'legal' | 'document',
+    onUploadProgress?: (progress: SourceUploadProgress) => void
   ) => void | boolean | Promise<void | boolean>
   compact?: boolean
   disabled?: boolean
   modelUnavailable?: boolean
   placeholder?: string
+  draftKey?: string
   workflow?: 'legal' | 'document'
 }) {
+  const initialDraft = draftKey ? composerDrafts.get(draftKey) : undefined
   const [workflow, setWorkflow] = useState(initialWorkflow)
-  const [request, setRequest] = useState('')
-  const [sources, setSources] = useState<Source[]>([])
-  const [link, setLink] = useState('')
-  const [linkOpen, setLinkOpen] = useState(false)
+  const [request, setRequest] = useState(initialDraft?.request ?? '')
+  const [sources, setSources] = useState<Source[]>(initialDraft?.sources ?? [])
+  const [link, setLink] = useState(initialDraft?.link ?? '')
+  const [linkOpen, setLinkOpen] = useState(initialDraft?.linkOpen ?? false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [uploadProgress, setUploadProgress] =
+    useState<SourceUploadProgress | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const submissionBlocked = disabled || modelUnavailable
+
+  React.useEffect(() => {
+    storeComposerDraft(draftKey, { request, sources, link, linkOpen })
+  }, [draftKey, link, linkOpen, request, sources])
+
   function addLink() {
     try {
       const url = new URL(link.trim())
@@ -92,9 +130,16 @@ export default function Composer({
           event.preventDefault()
           if (!request.trim() || submitting || submissionBlocked) return
           setSubmitting(true)
+          setUploadProgress(null)
           try {
-            const accepted = await onSubmit(request, sources, workflow)
+            const accepted = await onSubmit(
+              request,
+              sources,
+              workflow,
+              setUploadProgress
+            )
             if (accepted !== false) {
+              if (draftKey) composerDrafts.delete(draftKey)
               setRequest('')
               setSources([])
               setError('')
@@ -107,6 +152,7 @@ export default function Composer({
             )
           } finally {
             setSubmitting(false)
+            setUploadProgress(null)
           }
         }}
       >
@@ -219,6 +265,12 @@ export default function Composer({
             ))}
           </div>
         )}
+        {uploadProgress ? (
+          <p className="composer-upload-progress" role="status">
+            자료 업로드 {uploadProgress.completed}/{uploadProgress.total}:{' '}
+            {uploadProgress.current}
+          </p>
+        ) : null}
         <input
           ref={fileInput}
           hidden

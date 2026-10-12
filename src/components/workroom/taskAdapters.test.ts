@@ -171,6 +171,44 @@ test('backend task details supply the document and real source metadata shown in
   )
 })
 
+test('server refreshes preserve the base version of a dirty local document', () => {
+  const details: TaskDetails = {
+    task: {
+      id: 'task_draft',
+      title: 'Draft',
+      prompt: 'Edit',
+      sourceFileIds: [],
+      sourceUrls: [],
+      status: 'completed',
+      steps: [],
+      createdAt: '',
+      updatedAt: ''
+    },
+    events: [],
+    artifacts: [
+      {
+        id: 'artifact_new',
+        taskId: 'task_draft',
+        name: 'document.md',
+        kind: 'document',
+        mimeType: 'text/markdown',
+        content: 'server version 2',
+        createdAt: '2026-10-12T00:00:00Z'
+      }
+    ]
+  }
+  const task = toWorkroomTask(details, {
+    document: 'local edit',
+    documentDirty: true,
+    savedDocument: 'server version 2',
+    documentDraftBase: 'server version 1'
+  })
+
+  assert.equal(task.document, 'local edit')
+  assert.equal(task.savedDocument, 'server version 2')
+  assert.equal(task.documentDraftBase, 'server version 1')
+})
+
 test('preservesDirtyDocumentWhenTaskDetailsRefresh', () => {
   const localDraft = '# Local edit\n\nUnsaved changes stay visible.'
   const task = toWorkroomTask(

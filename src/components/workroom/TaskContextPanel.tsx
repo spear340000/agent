@@ -15,17 +15,26 @@ import {
   stageMeta,
   stageOrder
 } from './types'
-import type { Source, Task, TaskState, WorkflowStage } from './types'
+import type {
+  Source,
+  SourceUploadProgress,
+  Task,
+  TaskState,
+  WorkflowStage
+} from './types'
 
 export type TaskContextPanelProps = {
   task: Task
   mobileOpen: boolean
   onMobileOpenChange: (open: boolean) => void
+  backendKey?: string
+  canceling?: boolean
   onCancel: () => void
   onFollowup: (
     request: string,
     kind?: 'revision' | 'followup',
-    sources?: Source[]
+    sources?: Source[],
+    onUploadProgress?: (progress: SourceUploadProgress) => void
   ) => Promise<boolean>
   onDraftFromAnswer?: () => void
 }
@@ -277,6 +286,8 @@ export default function TaskContextPanel({
   task,
   mobileOpen,
   onMobileOpenChange,
+  backendKey = '',
+  canceling = false,
   onCancel,
   onFollowup,
   onDraftFromAnswer
@@ -474,6 +485,8 @@ export default function TaskContextPanel({
               <button
                 className="task-context__action"
                 type="button"
+                disabled={canceling}
+                aria-busy={canceling}
                 onClick={onCancel}
               >
                 <X aria-hidden="true" size={14} />
@@ -544,14 +557,15 @@ export default function TaskContextPanel({
         <Composer
           key={task.id}
           compact
+          draftKey={`${backendKey}:${task.id}`}
           placeholder={
             requestKind === 'revision'
               ? '문서에서 바꿀 내용을 적어 주세요.'
               : undefined
           }
           disabled={['queued', 'running'].includes(task.state)}
-          onSubmit={(request, sources) =>
-            onFollowup(request, requestKind, sources)
+          onSubmit={(request, sources, _workflow, onUploadProgress) =>
+            onFollowup(request, requestKind, sources, onUploadProgress)
           }
         />
       </div>

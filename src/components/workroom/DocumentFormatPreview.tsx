@@ -5,10 +5,60 @@ export type DocumentFormat = 'md' | 'docx' | 'xlsx' | 'pdf'
 
 type Sheet = { name: string; rows: string[][] }
 
+type WorkbookBudget = { remainingBytes: number }
+
+const MAX_WORKBOOK_FILE_BYTES = 20 * 1024 * 1024
+const MAX_WORKBOOK_DECOMPRESSED_BYTES = 32 * 1024 * 1024
+const MAX_WORKBOOK_ENTRY_BYTES = 16 * 1024 * 1024
+const MAX_ZIP_ENTRIES = 2048
+const MAX_WORKBOOK_SHEETS = 20
+const MAX_PREVIEW_ROWS = 500
+const MAX_PREVIEW_COLUMNS = 100
+
+function workbookSizeError() {
+  return new Error(
+    'Excel 미리보기 파일이 너무 큽니다. 파일을 나누거나 범위를 줄여 다시 시도해 주세요.'
+  )
+}
+
+async function decodeBoundedStream(
+  stream: ReadableStream<Uint8Array>,
+  budget: WorkbookBudget
+): Promise<string> {
+  const reader = stream.getReader()
+  const chunks: Uint8Array[] = []
+  const maxBytes = Math.min(MAX_WORKBOOK_ENTRY_BYTES, budget.remainingBytes)
+  let totalBytes = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      totalBytes += value.byteLength
+      if (totalBytes > maxBytes) throw workbookSizeError()
+      chunks.push(value)
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => undefined)
+    throw error
+  } finally {
+    reader.releaseLock()
+  }
+
+  const output = new Uint8Array(totalBytes)
+  let offset = 0
+  for (const chunk of chunks) {
+    output.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  budget.remainingBytes -= totalBytes
+  return new TextDecoder().decode(output)
+}
+
 async function readZipEntry(
   bytes: Uint8Array,
   view: DataView,
-  target: string
+  target: string,
+  budget: WorkbookBudget
 ): Promise<string | null> {
   let endRecord = -1
   for (
@@ -23,30 +73,56 @@ async function readZipEntry(
   }
   if (endRecord < 0) throw new Error('Excel 파일 구조를 읽지 못했습니다.')
   const entries = view.getUint16(endRecord + 10, true)
+  if (entries > MAX_ZIP_ENTRIES) throw workbookSizeError()
   let cursor = view.getUint32(endRecord + 16, true)
   const decoder = new TextDecoder()
   for (let index = 0; index < entries; index += 1) {
+    if (cursor + 46 > endRecord) break
     if (view.getUint32(cursor, true) !== 0x02014b50) break
     const method = view.getUint16(cursor + 10, true)
     const compressedSize = view.getUint32(cursor + 20, true)
+    const uncompressedSize = view.getUint32(cursor + 24, true)
     const nameLength = view.getUint16(cursor + 28, true)
     const extraLength = view.getUint16(cursor + 30, true)
     const commentLength = view.getUint16(cursor + 32, true)
     const localOffset = view.getUint32(cursor + 42, true)
+    if (cursor + 46 + nameLength + extraLength + commentLength > endRecord) {
+      throw new Error('Excel 파일 구조가 올바르지 않습니다.')
+    }
     const name = decoder.decode(
       bytes.subarray(cursor + 46, cursor + 46 + nameLength)
     )
     if (name === target) {
+      if (
+        compressedSize > bytes.byteLength ||
+        uncompressedSize > MAX_WORKBOOK_ENTRY_BYTES ||
+        uncompressedSize > budget.remainingBytes
+      )
+        throw workbookSizeError()
+      if (localOffset + 30 > bytes.byteLength) {
+        throw new Error('Excel 파일 구조가 올바르지 않습니다.')
+      }
       const localNameLength = view.getUint16(localOffset + 26, true)
       const localExtraLength = view.getUint16(localOffset + 28, true)
       const dataOffset = localOffset + 30 + localNameLength + localExtraLength
-      const compressed = bytes.slice(dataOffset, dataOffset + compressedSize)
-      if (method === 0) return decoder.decode(compressed)
+      if (dataOffset + compressedSize > bytes.byteLength) {
+        throw new Error('Excel 파일 구조가 올바르지 않습니다.')
+      }
+      const compressed = bytes.subarray(dataOffset, dataOffset + compressedSize)
+      if (method === 0) {
+        if (
+          compressed.byteLength > MAX_WORKBOOK_ENTRY_BYTES ||
+          compressed.byteLength > budget.remainingBytes
+        )
+          throw workbookSizeError()
+        budget.remainingBytes -= compressed.byteLength
+        return decoder.decode(compressed)
+      }
       if (method !== 8) throw new Error('지원하지 않는 Excel 압축 형식입니다.')
       const stream = new Blob([compressed])
         .stream()
         .pipeThrough(new DecompressionStream('deflate-raw'))
-      return decoder.decode(await new Response(stream).arrayBuffer())
+      return decodeBoundedStream(stream, budget)
     }
     cursor += 46 + nameLength + extraLength + commentLength
   }
@@ -63,14 +139,22 @@ function columnIndex(reference: string): number {
   )
 }
 
-async function readWorkbook(blob: Blob): Promise<Sheet[]> {
+export async function readWorkbook(blob: Blob): Promise<Sheet[]> {
+  if (blob.size > MAX_WORKBOOK_FILE_BYTES) throw workbookSizeError()
   const bytes = new Uint8Array(await blob.arrayBuffer())
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  const workbookText = await readZipEntry(bytes, view, 'xl/workbook.xml')
+  const budget = { remainingBytes: MAX_WORKBOOK_DECOMPRESSED_BYTES }
+  const workbookText = await readZipEntry(
+    bytes,
+    view,
+    'xl/workbook.xml',
+    budget
+  )
   const relationsText = await readZipEntry(
     bytes,
     view,
-    'xl/_rels/workbook.xml.rels'
+    'xl/_rels/workbook.xml.rels',
+    budget
   )
   if (!workbookText || !relationsText)
     throw new Error('Excel 시트 정보를 찾지 못했습니다.')
@@ -83,7 +167,12 @@ async function readWorkbook(blob: Blob): Promise<Sheet[]> {
       item.getAttribute('Target') ?? ''
     ])
   )
-  const sharedText = await readZipEntry(bytes, view, 'xl/sharedStrings.xml')
+  const sharedText = await readZipEntry(
+    bytes,
+    view,
+    'xl/sharedStrings.xml',
+    budget
+  )
   const sharedStrings = sharedText
     ? Array.from(
         parser
@@ -92,31 +181,43 @@ async function readWorkbook(blob: Blob): Promise<Sheet[]> {
       ).map((item) => item.textContent ?? '')
     : []
   const sheets: Sheet[] = []
-  for (const sheet of Array.from(workbook.getElementsByTagName('sheet'))) {
+  const sheetNodes = Array.from(workbook.getElementsByTagName('sheet'))
+  if (sheetNodes.length > MAX_WORKBOOK_SHEETS) throw workbookSizeError()
+  for (const sheet of sheetNodes) {
     const relationId = sheet.getAttribute('r:id') ?? ''
     const target = targets.get(relationId)
     if (!target) continue
     const path = target.startsWith('/') ? target.slice(1) : `xl/${target}`
-    const sheetText = await readZipEntry(bytes, view, path)
+    const sheetText = await readZipEntry(bytes, view, path, budget)
     if (!sheetText) continue
     const xml = parser.parseFromString(sheetText, 'application/xml')
-    const rows = Array.from(xml.getElementsByTagName('row'))
-      .slice(0, 500)
-      .map((row) => {
-        const cells: string[] = []
-        for (const cell of Array.from(row.getElementsByTagName('c'))) {
-          const index = columnIndex(cell.getAttribute('r') ?? 'A1')
-          const value = cell.getElementsByTagName('v')[0]?.textContent ?? ''
-          const type = cell.getAttribute('t')
-          cells[index] =
-            type === 's'
-              ? (sharedStrings[Number(value)] ?? '')
-              : type === 'inlineStr'
-                ? (cell.getElementsByTagName('is')[0]?.textContent ?? '')
-                : value
+    const rowNodes = xml.getElementsByTagName('row')
+    const rows: string[][] = []
+    for (
+      let rowIndex = 0;
+      rowIndex < Math.min(rowNodes.length, MAX_PREVIEW_ROWS);
+      rowIndex += 1
+    ) {
+      const row = rowNodes[rowIndex]
+      const cells: string[] = []
+      const cellNodes = row.getElementsByTagName('c')
+      for (let cellIndex = 0; cellIndex < cellNodes.length; cellIndex += 1) {
+        const cell = cellNodes[cellIndex]
+        const index = columnIndex(cell.getAttribute('r') ?? 'A1')
+        if (index >= MAX_PREVIEW_COLUMNS) {
+          continue
         }
-        return cells
-      })
+        const value = cell.getElementsByTagName('v')[0]?.textContent ?? ''
+        const type = cell.getAttribute('t')
+        cells[index] =
+          type === 's'
+            ? (sharedStrings[Number(value)] ?? '')
+            : type === 'inlineStr'
+              ? (cell.getElementsByTagName('is')[0]?.textContent ?? '')
+              : value
+      }
+      rows.push(cells)
+    }
     sheets.push({ name: sheet.getAttribute('name') ?? '시트', rows })
   }
   return sheets
@@ -145,6 +246,8 @@ export default function DocumentFormatPreview({
   const [pdfUrl, setPdfUrl] = useState('')
   const [sheets, setSheets] = useState<Sheet[]>([])
   const [sheetError, setSheetError] = useState('')
+  const [parsedFile, setParsedFile] = useState<Blob | null>(null)
+  const [sheetsLoading, setSheetsLoading] = useState(false)
   const [activeSheet, setActiveSheet] = useState(0)
 
   useEffect(() => {
@@ -163,25 +266,39 @@ export default function DocumentFormatPreview({
     if (format !== 'xlsx' || !file) {
       setSheets([])
       setSheetError('')
+      setParsedFile(null)
+      setSheetsLoading(false)
       setActiveSheet(0)
       return
     }
     let cancelled = false
+    setSheets([])
+    setSheetError('')
+    setSheetsLoading(true)
     void readWorkbook(file)
       .then((nextSheets) => {
-        if (!cancelled) {
-          setSheets(nextSheets)
-          setActiveSheet(0)
-          setSheetError('')
+        if (cancelled) return
+        setParsedFile(file)
+        setActiveSheet(0)
+        if (nextSheets.length === 0) {
+          setSheets([])
+          setSheetError('Excel 파일에서 읽을 수 있는 시트를 찾지 못했습니다.')
+          return
         }
+        setSheets(nextSheets)
       })
       .catch((cause) => {
-        if (!cancelled)
+        if (!cancelled) {
+          setParsedFile(file)
           setSheetError(
             cause instanceof Error
               ? cause.message
               : 'Excel 미리보기를 읽지 못했습니다.'
           )
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSheetsLoading(false)
       })
     return () => {
       cancelled = true
@@ -204,9 +321,11 @@ export default function DocumentFormatPreview({
   }
 
   if (format === 'xlsx') {
+    if (!file || parsedFile !== file || sheetsLoading)
+      return <p role="status">Excel 미리보기를 불러오는 중입니다…</p>
     if (sheetError) return <p role="alert">{sheetError}</p>
     if (!sheets.length)
-      return <p role="status">Excel 미리보기를 불러오는 중입니다…</p>
+      return <p role="alert">Excel 파일에서 읽을 수 있는 시트가 없습니다.</p>
     return (
       <section className="document-format-preview document-format-preview--excel">
         {sheets.length > 1 && (
@@ -259,11 +378,9 @@ export default function DocumentFormatPreview({
             </tbody>
           </table>
         </div>
-        {rows.length >= 500 && (
-          <p className="document-format-preview__note">
-            시트는 처음 500행까지만 표시합니다.
-          </p>
-        )}
+        <p className="document-format-preview__note">
+          시트별 미리보기는 최대 500행과 100열까지만 표시합니다.
+        </p>
       </section>
     )
   }

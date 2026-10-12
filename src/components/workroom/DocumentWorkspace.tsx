@@ -40,6 +40,7 @@ export type DocumentWorkspaceProps = {
   hasPersistedDocument: boolean
   dirty: boolean
   saving: boolean
+  exporting?: boolean
   canSave?: boolean
   saveError: string | null
   initialMode?: 'view' | 'edit'
@@ -83,6 +84,7 @@ export default function DocumentWorkspace({
   hasPersistedDocument,
   dirty,
   saving,
+  exporting = false,
   canSave = true,
   saveError,
   initialMode = 'view',
@@ -325,6 +327,7 @@ export default function DocumentWorkspace({
             onClick={() =>
               previewMode ? void selectPreviewFormat('md') : onExport('md')
             }
+            disabled={exporting && !previewMode}
           >
             {previewMode ? (
               <Eye aria-hidden="true" size={15} />
@@ -340,6 +343,7 @@ export default function DocumentWorkspace({
             onClick={() =>
               previewMode ? void selectPreviewFormat('docx') : onExport('docx')
             }
+            disabled={exporting && !previewMode}
           >
             {previewMode ? (
               <Eye aria-hidden="true" size={15} />
@@ -355,6 +359,7 @@ export default function DocumentWorkspace({
             onClick={() =>
               previewMode ? void selectPreviewFormat('xlsx') : onExport('xlsx')
             }
+            disabled={exporting && !previewMode}
           >
             {previewMode ? (
               <Eye aria-hidden="true" size={15} />
@@ -370,6 +375,7 @@ export default function DocumentWorkspace({
             onClick={() =>
               previewMode ? void selectPreviewFormat('pdf') : onExport('pdf')
             }
+            disabled={exporting && !previewMode}
           >
             {previewMode ? (
               <Eye aria-hidden="true" size={15} />
@@ -382,6 +388,7 @@ export default function DocumentWorkspace({
             <button
               className="document-workspace__button document-workspace__button--quiet"
               type="button"
+              disabled={exporting}
               onClick={() => onExport(previewFormat)}
             >
               <Download aria-hidden="true" size={15} />
