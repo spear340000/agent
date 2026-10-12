@@ -1237,6 +1237,31 @@ test('relevance filtering drops clearly unrelated law records, keeps the rest, a
   assert.equal((await off.selectRelevantSources('x', sources, signal, false)).dropped, 0);
 });
 
+test('a wiki article fetch that fails once is retried, and a repeated failure is reported instead of vanishing', async () => {
+  const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
+  const wikiHints = { find: async () => [{ lawName: '민법', article: '제398조', title: '손해배상액의 예정' }], sourceUrlFor: async () => undefined };
+  let fetches = 0;
+  const flaky = {
+    retrieve: async (steps: StubStep[]) => {
+      fetches += 1;
+      if (fetches === 1) throw new Error('legal retrieval process is starting');
+      return { sources: [{ ...lawSource, citationId: 'L1' }], status: STATUS, degraded: [], failures: [], toolCalls: steps.length, maxToolCalls: 12, steps, trace: steps.map(step => ({ step: step as never, results: 1 })) };
+    }
+  } as unknown as LegalRetrievalService;
+  const workflow = new LegalWorkflow({ retrieval: flaky, limits, wikiHints, model: { complete: async () => '' } });
+  const base = { sources: [], status: STATUS, degraded: [], failures: [], toolCalls: 0, maxToolCalls: 12, steps: [], trace: [] } as never;
+  const recovered = await workflow.addWikiHints('손해배상액의 예정', base, new AbortController().signal);
+  assert.equal(fetches, 2, 'one retry');
+  assert.equal(recovered.wikiHints, 1);
+
+  const reports: string[] = [];
+  const { runWithProgress } = await import('../src/shared/task-progress.ts');
+  const broken = new LegalWorkflow({ retrieval: { retrieve: async () => { throw new Error('process down'); } } as unknown as LegalRetrievalService, limits, wikiHints, model: { complete: async () => '' } });
+  const unchanged = await runWithProgress(report => reports.push(report.title), () => broken.addWikiHints('손해배상액의 예정', base, new AbortController().signal));
+  assert.equal(unchanged.sources.length, 0);
+  assert.ok(reports.includes('LLM Wiki 핵심 조문집 건너뜀'), 'the failure is visible in the task log');
+});
+
 test('wiki key-article hints are fetched from the corpus, deduplicated, and give the law its official link', async () => {
   const router = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 });
   const decision = router.route({ prompt: '회사에서 갑자기 해고당했어요 어떻게 하나요?' });

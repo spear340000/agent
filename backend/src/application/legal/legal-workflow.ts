@@ -338,10 +338,29 @@ export class LegalWorkflow {
     }
   }
 
+  /**
+   * Curated key articles for the question. The article fetch can fail right after the legal process starts, and the old
+   * behaviour dropped the whole stage without a trace, so it is retried once and a final failure is shown in the log.
+   */
   async addWikiHints(question: string, evidence: LegalEvidence, signal: AbortSignal): Promise<LegalEvidence> {
-    const wiki = this.deps.wikiHints;
-    if (!wiki) return evidence;
-    try {
+    if (!this.deps.wikiHints) return evidence;
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await this.addWikiHintsOnce(question, evidence, signal);
+      } catch (error) {
+        if (signal.aborted) throw error;
+        if (attempt >= 2) {
+          reportProgress('LLM Wiki 핵심 조문집 건너뜀', `핵심 조문을 가져오지 못했습니다: ${(error instanceof Error ? error.message : String(error)).slice(0, 140)}`);
+          return evidence;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1_000));
+      }
+    }
+  }
+
+  private async addWikiHintsOnce(question: string, evidence: LegalEvidence, signal: AbortSignal): Promise<LegalEvidence> {
+    const wiki = this.deps.wikiHints!;
+    {
       const squash = (value: string): string => value.replace(/\s+/g, '');
       const have = new Set(evidence.sources.map(source => `${squash(source.lawName ?? '')}|${squash(source.articleNumber ?? '')}`));
       const budget = Math.min(WIKI_HINT_LIMIT, evidence.maxToolCalls - evidence.toolCalls);
@@ -369,9 +388,6 @@ export class LegalWorkflow {
       const urls = new Map<string, string | undefined>();
       for (const lawName of new Set(merged.sources.map(source => source.lawName).filter((name): name is string => Boolean(name)))) urls.set(lawName, await wiki.sourceUrlFor(lawName));
       return { ...merged, sources: merged.sources.map(source => (!source.officialUrl && source.lawName && urls.get(source.lawName) ? { ...source, officialUrl: urls.get(source.lawName)! } : source)) };
-    } catch (error) {
-      if (signal.aborted) throw error;
-      return evidence;
     }
   }
 
