@@ -1165,6 +1165,26 @@ test('citation labels written after the period are neither sent to the verifier 
   assert.doesNotMatch(result.answer, /^\[L1\]$/m);
 });
 
+test('when the verifier removes the only cited sentence, a substantial remainder is kept with a notice, otherwise the answer is refused', async () => {
+  const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
+  const record = { ...lawSource, citationId: 'L1', excerpt: '법원은 손해배상 예정액이 부당하게 과다한 경우 적당히 감액할 수 있다.' };
+  const flag = (positions: number[]) => new LegalWorkflow({ claimVerification: true, retrieval: {} as LegalRetrievalService, limits, model: { complete: async () => JSON.stringify({ unsupported: positions }) } });
+  const signal = new AbortController().signal;
+  const body = '임대차 갱신은 계약기간이 끝나기 전에 임차인이 언제 어떤 방식으로 의사를 밝혀야 하는지, 그리고 임대인이 어떤 사유로 거절할 수 있는지에 따라 달라지므로 실제 계약서의 기간과 통지 내용을 먼저 확인하셔야 합니다. 통지가 오갔다면 그 날짜와 방법을 증거로 남겨 두는 것이 좋으며, 분쟁이 생기면 내용증명이나 문자 기록처럼 시점을 확인할 수 있는 자료가 도움이 됩니다.';
+
+  const kept = await flag([1]).verifyClaims(`${body}\n두 제도를 합치면 항상 감액이 가능합니다 [L1].`, [record], signal);
+  assert.equal(kept.removed, 1);
+  assert.match(kept.answer, /실제 계약서의 기간과 통지 내용/, 'the explanation stays');
+  assert.doesNotMatch(kept.answer, /항상 감액이 가능/, 'the flagged sentence is gone');
+  assert.match(kept.answer, /남은 설명에는 확인된 인용이 없습니다/, 'the reader is told nothing left is cited');
+
+  const scrap = await flag([1]).verifyClaims('짧은 설명입니다.\n항상 감액이 가능합니다 [L1].', [record], signal);
+  assert.match(scrap.answer, /법적 결론을 제시할 수 없습니다/, 'only a scrap left: refused');
+
+  const many = await flag([1, 2, 3]).verifyClaims(`${body}\n첫째 주장입니다 가나다라 [L1].\n둘째 주장입니다 마바사아 [L1].\n셋째 주장입니다 자차카타 [L1].`, [record], signal);
+  assert.match(many.answer, /법적 결론을 제시할 수 없습니다/, 'three or more removed: the draft was not backed by the evidence');
+});
+
 test('malformed claim-verification responses never claim successful verification', async () => {
   const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
   const answer = '근거를 검토했습니다 [L1].';

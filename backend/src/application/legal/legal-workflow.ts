@@ -140,6 +140,9 @@ const CLAIM_EXCERPT_MIN_CHARACTERS = 800;
 /** A simple question stops searching once it has what it needs: at most this many rewrite searches and linked decisions. */
 const REWRITE_STEP_LIMIT = 3;
 const LINKED_PRECEDENT_TARGET = 2;
+/** When the verifier removes every cited sentence, keep the rest only if little was removed and a real answer remains. */
+const SALVAGE_MAX_REMOVED = 3;
+const SALVAGE_MIN_CHARACTERS = 120;
 /** Key articles fetched from the wiki per question: enough to hold the rule, its filing article and its remedy. */
 const WIKI_HINT_LIMIT = 3;
 const QUOTATION_CONTAINMENT = 0.9;
@@ -480,13 +483,22 @@ ${listing}`,
       if (drop.size === 0) return { answer, removed: 0, checked: true };
       const kept = parts.filter((_part, index) => !drop.has(index));
       const next = joinAnswerParts(kept);
-      return {
-        answer: next && legalCitationIds(next).length > 0
-          ? next
-          : '확보한 근거가 답변의 주장을 뒷받침하지 않아 법적 결론을 제시할 수 없습니다. 질문과 직접 관련된 조문·판례 또는 추가 사실관계를 확인해 주세요.',
-        removed: drop.size,
-        checked: true
-      };
+      const refusal = '확보한 근거가 답변의 주장을 뒷받침하지 않아 법적 결론을 제시할 수 없습니다. 질문과 직접 관련된 조문·판례 또는 추가 사실관계를 확인해 주세요.';
+      if (next && legalCitationIds(next).length > 0) return { answer: next, removed: drop.size, checked: true };
+      // Every cited sentence was flagged. One or two flagged sentences (often a conclusion that combines two articles)
+      // do not make the rest of a substantial answer worthless, but it must say that nothing in it is cited any more;
+      // three or more, or only a scrap of text left, means the draft was not backed by the evidence at all.
+      const substantial = next.replace(/\[[A-Z]\d+\]|\s/gu, '').length >= SALVAGE_MIN_CHARACTERS;
+      if (substantial && drop.size < SALVAGE_MAX_REMOVED) {
+        return {
+          answer: `${next}
+
+※ 근거로 뒷받침되지 않는 문장 ${drop.size}개를 제외했고, 남은 설명에는 확인된 인용이 없습니다. 아래 근거 목록과 원문을 직접 확인해 주세요.`,
+          removed: drop.size,
+          checked: true
+        };
+      }
+      return { answer: refusal, removed: drop.size, checked: true };
     } catch (error) {
       if (signal.aborted) throw error;
       return { answer, removed: 0, checked: false };
