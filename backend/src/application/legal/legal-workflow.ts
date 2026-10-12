@@ -423,15 +423,22 @@ ${listing}`,
   private async verifyCitedClaims(answer: string, sources: LegalSource[], signal: AbortSignal): Promise<{ answer: string; removed: number; checked: boolean }> {
     if (!this.deps.claimVerification) return { answer, removed: 0, checked: false };
     const parts = splitAnswerParts(answer);
-    const cited = parts.map((part, index) => ({ index, sentence: part.sentence.trim(), records: citedSourcesOf(part.sentence, sources) })).filter(item => item.sentence && item.records.length > 0);
-    if (cited.length === 0) return { answer, removed: 0, checked: false };
+    const allCited = parts.map((part, index) => ({ index, sentence: part.sentence.trim(), records: citedSourcesOf(part.sentence, sources) })).filter(item => item.sentence && item.records.length > 0);
+    if (allCited.length === 0) return { answer, removed: 0, checked: false };
+    // A sentence that nearly quotes its cited record is supported by construction, so it needs no model call: only the
+    // sentences that paraphrase or conclude are sent to the verifier.
+    const cited = allCited.filter(item => !item.records.some(record => containment(item.sentence, record.excerpt) >= QUOTATION_CONTAINMENT));
+    if (cited.length === 0) {
+      reportProgress('문장 검증 생략', `인용 문장 ${allCited.length}개가 모두 근거 원문과 거의 같아 모델 검증 없이 통과`);
+      return { answer, removed: 0, checked: true };
+    }
     const recordIds = [...new Set(cited.flatMap(item => item.records.map(record => record.citationId)))];
     const checkedSources = sources.filter(source => recordIds.includes(source.citationId));
     const window = Math.min(CLAIM_EXCERPT_MAX_CHARACTERS, Math.max(CLAIM_EXCERPT_MIN_CHARACTERS, Math.floor(CLAIM_EXCERPT_TOTAL_CHARACTERS / Math.max(1, checkedSources.length))));
     const recordText = checkedSources
       .map(source => `[${source.citationId}] ${source.title}\n${relevantExcerpt(source.excerpt, cited.filter(item => item.records.includes(source)).map(item => item.sentence), window)}`).join('\n\n');
     const sentenceText = cited.map((item, position) => `${position + 1}. ${item.sentence}`).join('\n');
-    reportProgress('문장 검증 시작', `인용한 문장 ${cited.length}개를 인용 근거 원문과 대조`);
+    reportProgress('문장 검증 시작', `인용한 문장 ${allCited.length}개 중 원문과 다른 표현 ${cited.length}개를 근거 원문과 대조`);
     try {
       const raw = await this.deps.model.complete({
         system: CLAIM_VERIFY_SYSTEM,
@@ -443,14 +450,9 @@ ${listing}`,
       if (!parsed || !Array.isArray(parsed.unsupported) || parsed.unsupported.some(item => !Number.isInteger(item) || item < 1 || item > cited.length)) {
         return { answer, removed: 0, checked: false };
       }
-      // A sentence that nearly quotes its cited record is supported; the model's occasional false alarm on one must not
-      // erase a verbatim article.
-      const flagged = new Set<number>(parsed.unsupported.filter(position => {
-        const item = cited[position - 1]!;
-        return !item.records.some(record => containment(item.sentence, record.excerpt) >= QUOTATION_CONTAINMENT);
-      }));
+      const flagged = new Set<number>(parsed.unsupported);
       const drop = new Set([...flagged].map(position => cited[position - 1]!.index));
-      reportProgress('문장 검증', drop.size > 0 ? `근거가 뒷받침하지 않는 문장 ${drop.size}개를 제외` : `인용 문장 ${cited.length}개가 모두 근거와 일치`, [...drop].map(index => `제외: ${parts[index]!.sentence.trim().slice(0, 90)}`));
+      reportProgress('문장 검증', drop.size > 0 ? `근거가 뒷받침하지 않는 문장 ${drop.size}개를 제외` : `검증한 문장 ${cited.length}개가 모두 근거와 일치`, [...drop].map(index => `제외: ${parts[index]!.sentence.trim().slice(0, 90)}`));
       if (drop.size === 0) return { answer, removed: 0, checked: true };
       const kept = parts.filter((_part, index) => !drop.has(index));
       const next = joinAnswerParts(kept);
