@@ -213,7 +213,7 @@ export class AgentService {
       ? await stageStep<LegalPlan>({ prompt: task.prompt, title: task.title, decision }, async () => workflow.plan({ task, decision, documents: docs, signal }))
       : decision;
     const plannedSteps = 'retrievalSteps' in plan ? plan.retrievalSteps : plan.steps;
-    const evidence = await stageStep<LegalEvidence>({ steps: plannedSteps, retrievalVersion: 3 }, async () => workflow.retrieve(plan, signal));
+    const evidence = await stageStep<LegalEvidence>({ steps: plannedSteps, retrievalVersion: 3 }, async () => workflow.retrieve(plan, signal, task.prompt));
     const sourceStatus = workflow.executionStatus(evidence, decision);
     this.event(taskId, 'legal.retrieval', '법령·판례 검색 완료', `${evidence.sources.length}건의 실제 검색 근거를 확보했습니다.`, 'completed', {
       intent: decision.intent,

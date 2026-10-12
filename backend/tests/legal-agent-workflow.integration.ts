@@ -1152,6 +1152,19 @@ ${paraphrase}`, [quote], new AbortController().signal);
   assert.doesNotMatch(result.answer, /항상 배상이 면제/);
 });
 
+test('citation labels written after the period are neither sent to the verifier nor removed by it', async () => {
+  const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
+  const record = { ...lawSource, citationId: 'L1', excerpt: '법원은 손해배상 예정액이 부당하게 과다한 경우 적당히 감액할 수 있다.' };
+  const answer = '대법원은 위약벌의 약정을 손해배상 예정과 구별해 법원이 마음대로 줄일 수 없다고 판단했다. [L1]';
+  const seen: string[] = [];
+  const workflow = new LegalWorkflow({ claimVerification: true, retrieval: {} as LegalRetrievalService, limits, model: { complete: async ({ user }) => { seen.push(user); return '{"unsupported":[1]}'; } } });
+  const result = await workflow.verifyClaims(answer, [record], new AbortController().signal);
+  const sentences = seen[0]!.split('SENTENCES')[1]!.trim().split('\n');
+  assert.equal(sentences.length, 1, 'the label is part of its sentence, not a sentence of its own');
+  assert.equal(result.removed, 1);
+  assert.doesNotMatch(result.answer, /^\[L1\]$/m);
+});
+
 test('malformed claim-verification responses never claim successful verification', async () => {
   const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
   const answer = '근거를 검토했습니다 [L1].';

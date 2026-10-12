@@ -305,3 +305,31 @@ test('the article title helps the index fallback find an article the number alon
   assert.deepEqual(queries, ['푸른하늘법 제3조', '푸른하늘법 제3조 대항력 등'], 'the number alone is tried first, then the number with the title');
   assert.equal((await retrieval.retrieve([{ kind: 'law-article', lawName: '푸른하늘법', articleNumber: '제3조' }])).sources.length, 0, 'without a title the neighbour is still not accepted');
 });
+
+test('a judgment found by case number and by its text becomes one record that keeps the text', () => {
+  const summary = { corpus: 'precedent', kind: 'precedent', recordId: 'a', title: '대법원_2022-07-21_2018다248855_248862', excerpt: '', provenance: ['사건번호 조회'] };
+  const full = { corpus: 'precedent', kind: 'precedent', recordId: 'b', title: '손해배상(기)·위약벌', caseNumber: '2018다248855, 248862', excerpt: '위약벌의 약정은 손해배상액의 예정과 내용이 다르다.', provenance: ['판례 원문'] };
+  const other = { corpus: 'precedent', kind: 'precedent', recordId: 'c', title: '다른 사건', caseNumber: '2019다111111', excerpt: '다른 판결' };
+  const sources = assignCitationIds([summary, full, other] as never);
+  assert.equal(sources.length, 2);
+  assert.equal(sources[0]!.citationId, 'P1');
+  assert.match(sources[0]!.excerpt, /위약벌의 약정/, 'the surviving record is the one with the judgment text');
+  assert.deepEqual(sources[0]!.provenance, ['사건번호 조회', '판례 원문']);
+  assert.equal(sources[1]!.citationId, 'P2');
+});
+
+test('a long planner sentence that mentions an article is searched, not read as a lookup of a law named after the sentence', async () => {
+  const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const retrieval = new LegalRetrievalService({
+    callTool: async (name: string, args: Record<string, unknown>) => {
+      calls.push({ name, args });
+      return { text: ['Search: x', 'Results: 1', '', '[1] 민법', 'data/민법/법률.md', '법률명: 민법 ##### 제750조 (불법행위의 내용) 고의 또는 과실로 인한 위법행위로 타인에게 손해를 가한 자는 배상할 책임이 있다.'].join('\n'), isError: false };
+    }
+  } as never, { maxToolCalls: 4, maxRetrievalSteps: 4, maxQueryCharacters: 200, maxPrecedentCharacters: 1000 });
+  await retrieval.retrieve([{ kind: 'search-laws', query: '교통사고 손해배상 합의금 산정 기준 민법 제750조 및 손해액 계산 방법', limit: 5 }]);
+  const lookups = (): string[] => calls.map(call => call.name).filter(name => name === 'search_laws' || name === 'get_law_article');
+  assert.deepEqual(lookups(), ['search_laws'], 'a keyword search, not get_law_article');
+  calls.length = 0;
+  await retrieval.retrieve([{ kind: 'search-laws', query: '민법 제750조 내용 알려줘', limit: 5 }]);
+  assert.equal(lookups()[0], 'get_law_article', 'a short request for one article is still a lookup');
+});

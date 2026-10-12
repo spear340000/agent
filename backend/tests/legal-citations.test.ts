@@ -228,3 +228,10 @@ test('a date or list number does not end a sentence', () => {
   assert.equal(parts.length, 2);
   assert.equal(parts[0]!.sentence, '대법원 2022. 7. 21. 선고 판결입니다.');
 });
+
+test('a citation tag after the period stays with its sentence', () => {
+  const parts = splitAnswerParts('위약벌은 감액할 수 없다고 판단했다. [P1]\n다음 문장입니다 [L1].');
+  assert.equal(parts.length, 2);
+  assert.equal(parts[0]!.sentence, '위약벌은 감액할 수 없다고 판단했다. [P1]');
+  assert.equal(parts[1]!.sentence, '다음 문장입니다 [L1].');
+});
