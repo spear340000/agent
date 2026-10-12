@@ -15,6 +15,7 @@ import {
   BookOpen,
   Boxes,
   Braces,
+  ChevronDown,
   CircleHelp,
   Database,
   GitBranch,
@@ -152,6 +153,43 @@ function SiteFlowArrow() {
     >
       <path d="M2 14H62M50 4l12 10-12 10" />
     </svg>
+  )
+}
+
+function SiteFlowGroup({
+  title,
+  detail,
+  steps
+}: {
+  title: string
+  detail: string
+  steps: React.ReactNode[]
+}) {
+  return (
+    <details className="site-flow__node site-flow__disclosure">
+      <summary>
+        <span className="site-flow__disclosure-heading">
+          <span className="site-flow__node-kind">
+            {steps.length}개 세부 단계
+          </span>
+          <strong>{title}</strong>
+          <small>{detail}</small>
+        </span>
+        <ChevronDown
+          className="site-flow__disclosure-arrow"
+          size={20}
+          aria-hidden="true"
+        />
+      </summary>
+      <ol
+        className="site-flow__disclosure-steps"
+        aria-label={`${title} 세부 단계`}
+      >
+        {steps.map((step, index) => (
+          <li key={index}>{step}</li>
+        ))}
+      </ol>
+    </details>
   )
 }
 
@@ -730,17 +768,6 @@ function stepDetail(step: Task['steps'][number]): string {
 
 function WorkflowCanvas({ task }: { task: Task }) {
   const tools = task.legal?.sourceStatus.ledger?.tools ?? []
-  const planningSteps = task.steps.filter((step) =>
-    /plan|계획|요청 정리/iu.test(step.title)
-  )
-  const collectionSteps = task.steps.filter(
-    (step) =>
-      /collect|수집|검색|자료 확인|첨부.*확인/iu.test(step.title) &&
-      !planningSteps.includes(step)
-  )
-  const otherSteps = task.steps.filter(
-    (step) => !planningSteps.includes(step) && !collectionSteps.includes(step)
-  )
   const citations = task.legal?.citations ?? []
   const taskLabel =
     task.state === 'completed'
@@ -768,20 +795,17 @@ function WorkflowCanvas({ task }: { task: Task }) {
         : task.state === 'queued' || task.state === 'paused'
           ? 'waiting'
           : 'active'
-  const flowItems: (
-    | {
-        key: string
-        type: 'node'
-        node: {
-          title: string
-          detail: string
-          meta?: string
-          status: string
-          kind?: 'start' | 'planner' | 'step' | 'result'
-        }
-      }
-    | { key: string; type: 'tools' }
-  )[] = [
+  const flowItems: {
+    key: string
+    type: 'node'
+    node: {
+      title: string
+      detail: string
+      meta?: string
+      status: string
+      kind?: 'start' | 'planner' | 'step' | 'result'
+    }
+  }[] = [
     {
       key: 'request',
       type: 'node',
@@ -796,46 +820,16 @@ function WorkflowCanvas({ task }: { task: Task }) {
         status: 'complete'
       }
     },
-    ...planningSteps.map((step) => ({
+    ...task.steps.map((step) => ({
       key: step.id,
       type: 'node' as const,
       node: {
         title: step.title,
         detail: stepDetail(step),
-        status: stepState(step)
-      }
-    })),
-    ...(task.legal?.plannerCalls
-      ? [
-          {
-            key: 'planner',
-            type: 'node' as const,
-            node: {
-              kind: 'planner' as const,
-              title: '조사 계획 수립',
-              detail: `복합 조사 경로 · 플래너 ${task.legal.plannerCalls}회 호출`,
-              status: 'complete'
-            }
-          }
-        ]
-      : []),
-    ...collectionSteps.map((step) => ({
-      key: step.id,
-      type: 'node' as const,
-      node: {
-        title: step.title,
-        detail: stepDetail(step),
-        status: stepState(step)
-      }
-    })),
-    ...(tools.length ? [{ key: 'tools', type: 'tools' as const }] : []),
-    ...otherSteps.map((step) => ({
-      key: step.id,
-      type: 'node' as const,
-      node: {
-        title: step.title,
-        detail: stepDetail(step),
-        status: stepState(step)
+        status: stepState(step),
+        kind: /plan|계획|요청 정리/iu.test(step.title)
+          ? ('planner' as const)
+          : ('step' as const)
       }
     })),
     {
@@ -899,30 +893,7 @@ function WorkflowCanvas({ task }: { task: Task }) {
               data-row-end-three={itemNumber % 3 === 0 || undefined}
               data-row-end-two={itemNumber % 2 === 0 || undefined}
             >
-              {item.type === 'node' ? (
-                <FlowNode {...item.node} listItem={false} />
-              ) : (
-                <section
-                  className="system-flow__group"
-                  aria-label="실제 검색 도구 호출"
-                >
-                  <header>
-                    <strong>실제 RAG 검색</strong>
-                    <small>{tools.length}회 · 호출 순서</small>
-                  </header>
-                  <div className="system-flow__tool-list" role="list">
-                    {tools.map((tool, toolIndex) => (
-                      <FlowNode
-                        key={`${tool.tool}:${toolIndex}`}
-                        kind="tool"
-                        title={tool.label}
-                        detail={`${tool.query ? `질의: ${tool.query} · ` : ''}결과 ${tool.results}건`}
-                        status={tool.results > 0 ? 'complete' : 'empty'}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
+              <FlowNode {...item.node} listItem={false} />
               {hasNext ? (
                 <ArrowRight
                   className="system-flow__connector"
@@ -935,6 +906,29 @@ function WorkflowCanvas({ task }: { task: Task }) {
           )
         })}
       </div>
+      {tools.length > 0 ? (
+        <section
+          className="system-flow__group"
+          aria-label="실제 검색 도구 호출"
+        >
+          <header>
+            <strong>실제 검색 도구 호출</strong>
+            <small>{tools.length}회 · 백엔드 기록 순서</small>
+          </header>
+          <p>실행 단계와 별도로 표시한 검색 기록입니다.</p>
+          <div className="system-flow__tool-list" role="list">
+            {tools.map((tool, index) => (
+              <FlowNode
+                key={`${tool.tool}:${index}`}
+                kind="tool"
+                title={tool.label}
+                detail={`${tool.query ? `질의: ${tool.query} · ` : ''}결과 ${tool.results}건`}
+                status={tool.results > 0 ? 'complete' : 'empty'}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
       {task.legal?.sourceStatus.ledger?.layers.length ? (
         <section
           className="system-flow__layers"
@@ -1016,9 +1010,7 @@ export default function SystemExplorer({
   onTopicChange
 }: Props) {
   const retrieval = capabilities?.legalRetrieval
-  const [siteFlowPath, setSiteFlowPath] = useState<
-    'law' | 'file' | 'web' | 'url'
-  >('law')
+  const [siteFlowPath, setSiteFlowPath] = useState<'law' | 'document'>('law')
   const [libraryQuery, setLibraryQuery] = useState('민법')
   const [libraryCorpus, setLibraryCorpus] = useState<
     'law' | 'precedent' | 'graph' | 'all'
@@ -1623,11 +1615,24 @@ export default function SystemExplorer({
   const routeFlowSteps: Record<typeof siteFlowPath, React.ReactNode[]> = {
     law: [
       <SiteFlowNode
+        key="legal-files"
+        phase="첨부 파일이 있을 때"
+        title="첨부 자료 확인"
+        detail="첨부 문서의 본문을 추출하고 조사 계획과 답변 문맥에 포함합니다."
+      />,
+      <SiteFlowNode
+        key="legal-plan"
+        kind="planner"
+        phase="검색 계획"
+        title="직접 조회 또는 복합 조사 계획"
+        detail="분류된 직접 조회 경로는 별도 플래너 없이 조회합니다. 복합 조사 경로는 첨부 자료 확인 후 모델로 검색 계획을 수립합니다."
+      />,
+      <SiteFlowNode
         key="legal-rag"
         kind="tool"
         phase="기본 검색"
         title="법령·판례 후보 찾기"
-        detail="질문을 검색어로 바꾸고, 준비된 법령·판례 색인에서 근거 후보를 찾습니다."
+        detail="직접 조회 조건 또는 조사 계획에 따라 조문·사건번호 조회와 키워드·벡터·그래프 검색을 실행합니다."
         technologies={[
           {
             name: 'RAG · 키워드/벡터',
@@ -1659,6 +1664,25 @@ export default function SystemExplorer({
         }}
       />,
       <SiteFlowNode
+        key="legal-search-supplement"
+        phase="조건부 검색 보강"
+        title="검색어 재작성·근거 보강"
+        detail="직접 검색은 설정에 따라 검색어를 모델로 재작성해 보강합니다. 복합 조사는 부족한 검색을 보완하며, 근거가 적고 그래프가 준비된 경우 관계 검색도 사용할 수 있습니다."
+      />,
+      <SiteFlowNode
+        key="legal-web"
+        kind="tool"
+        phase="공개 웹 자료가 필요할 때"
+        title="참고 URL·웹 검색 본문 확보"
+        detail="제공한 URL을 방문하고, 검색어가 있으면 SearXNG 검색 결과 페이지도 방문해 본문을 읽습니다. 법률 근거와 함께 답변에 사용합니다."
+      />,
+      <SiteFlowNode
+        key="legal-evidence-check"
+        phase="복합 조사일 때"
+        title="계획한 쟁점의 근거 확인"
+        detail="계획한 검색별 결과와 실패 기록을 검사하고, 근거를 확보하지 못한 쟁점은 단정하지 않도록 표시합니다."
+      />,
+      <SiteFlowNode
         key="relevance-filter"
         phase="검색 후 검토"
         title="질문 관련성 확인"
@@ -1669,7 +1693,7 @@ export default function SystemExplorer({
             role: '검색 결과와 질문을 대조해 다음 관계 탐색에 사용할 조문을 선택'
           }
         ]}
-        meta="설정과 검색 결과에 따라 수행"
+        meta="필터 활성 · 법령·판례 후보 4건 이상 · 사용자가 조문을 지정하지 않은 경우"
       />,
       <SiteFlowNode
         key="relation-graph"
@@ -1692,7 +1716,14 @@ export default function SystemExplorer({
         }}
       />
     ],
-    file: [
+    document: [
+      <SiteFlowNode
+        key="document-plan"
+        kind="planner"
+        phase="계획 수립"
+        title="모델로 문서 작업 계획"
+        detail="요청을 바탕으로 제목·목차·검색어를 정합니다. 외부 정보가 필요 없는 작업은 검색어를 비웁니다."
+      />,
       <SiteFlowNode
         key="file-extract"
         phase="파일 처리"
@@ -1700,41 +1731,25 @@ export default function SystemExplorer({
         detail="첨부한 문서에서 읽을 수 있는 내용을 추출합니다."
       />,
       <SiteFlowNode
-        key="file-context"
-        phase="자료 전달"
-        title="요청 문맥에 포함"
-        detail="추출한 내용을 요청과 함께 공통 분석 단계로 전달합니다."
-      />
-    ],
-    web: [
+        key="document-url"
+        kind="tool"
+        phase="참고 URL이 있을 때"
+        title="Browser로 참고 URL 본문 읽기"
+        detail="제공한 URL을 방문해 본문을 추출합니다. 파일·URL·웹 검색은 한 작업에서 함께 사용할 수 있습니다."
+      />,
       <SiteFlowNode
         key="web-search"
         kind="tool"
-        phase="웹 검색 설정 시"
+        phase="계획에 검색어가 있을 때"
         title="SearXNG 검색"
-        detail="검색 환경이 설정된 경우 공개 웹 자료를 찾습니다."
+        detail="계획의 검색어로 공개 웹 자료를 찾습니다. 검색이 필요한데 SearXNG가 미설정이거나 실패하면 작업이 실패합니다."
       />,
       <SiteFlowNode
         key="web-sources"
         kind="tool"
         phase="검색 결과"
-        title="출처와 함께 자료 전달"
-        detail="검색 결과와 출처 URL을 공통 분석 단계로 전달합니다."
-      />
-    ],
-    url: [
-      <SiteFlowNode
-        key="visit-url"
-        kind="tool"
-        phase="페이지 확인"
-        title="Browser로 URL 열기"
-        detail="사용자가 제공한 주소를 브라우저 도구로 방문합니다."
-      />,
-      <SiteFlowNode
-        key="read-url"
-        phase="본문 추출"
-        title="페이지 내용을 자료로 전달"
-        detail="접근 가능한 페이지 내용을 읽어 공통 분석 단계로 전달합니다."
+        title="검색 결과 페이지 방문·본문 추출"
+        detail="검색 결과 URL을 브라우저로 방문합니다. 읽은 본문과 출처를 분석에 전달하고, 본문을 확인하지 못한 페이지는 사실 근거에서 제외합니다."
       />
     ]
   }
@@ -1758,7 +1773,7 @@ export default function SystemExplorer({
       kind="planner"
       phase="백엔드"
       title="작업 접수·분배"
-      detail="AgentService가 요청에 맞는 처리 경로를 시작합니다."
+      detail="작업을 저장하고 법률 또는 일반 문서 경로를 시작합니다. 동시 실행은 최대 2개이며 나머지는 대기합니다."
       meta="ApiRouter → TaskService → AgentService"
     />,
     ...routeFlowSteps[siteFlowPath],
@@ -1773,7 +1788,11 @@ export default function SystemExplorer({
       kind="planner"
       phase="작성 단계"
       title="답변·문서 생성"
-      detail="확인한 근거를 바탕으로 답변을 구성하고, 필요한 경우 모델이 문서 초안을 작성합니다."
+      detail={
+        siteFlowPath === 'law'
+          ? '확보한 근거로 모델이 답변·초안을 작성하고 인용 규칙을 검사합니다. 오류가 있으면 한 번 수정을 요청합니다. 근거가 없으면 근거 부족 안내 또는 검색 실패로 처리합니다.'
+          : '모델이 분석 결과를 바탕으로 Markdown 문서를 작성합니다. 자료가 없는 창작·문서 작업도 가능하며 모델 API 설정이 필요합니다.'
+      }
       technologies={[
         {
           name: 'LLM',
@@ -1806,13 +1825,26 @@ export default function SystemExplorer({
             meta="검증 수행 여부는 실제 작업 기록에 표시"
           />
         ]
-      : []),
+      : [
+          <SiteFlowNode
+            key="document-citations"
+            phase="생성 후 검증"
+            title="인용 ID 검사·수정"
+            detail="허용된 출처 ID와 인용 유무를 검사하고, 오류가 있으면 모델에 한 번 수정을 요청합니다. 재검사에도 실패하면 작업을 실패 처리합니다."
+          />
+        ]),
+    <SiteFlowNode
+      key="save-artifact"
+      phase="결과 저장"
+      title="DOCX·작업 결과 저장"
+      detail="최종 Markdown으로 DOCX를 만들고 작업 결과와 이벤트를 저장합니다."
+    />,
     <SiteFlowNode
       key="show-result"
       kind="result"
       phase="결과"
       title="진행·문서 표시"
-      detail="진행 상황을 반영하고 문서 미리보기와 내보내기를 제공합니다."
+      detail="실행 중 모든 단계의 진행 이벤트를 SSE로 받아 화면을 갱신합니다. 완료 후 문서 미리보기와 내보내기를 제공합니다."
       technologies={[
         {
           name: 'SSE',
@@ -1822,9 +1854,48 @@ export default function SystemExplorer({
       meta="SSE /api/tasks/:id/events"
     />
   ]
+  const collectionSteps = routeFlowSteps[siteFlowPath]
+  const groupedCollectionSteps =
+    siteFlowPath === 'law'
+      ? [
+          <SiteFlowGroup
+            key="prepare"
+            title="자료 확인·조사 계획"
+            detail="첨부 자료를 읽고 요청에 맞는 조회·조사 경로를 준비합니다."
+            steps={collectionSteps.slice(0, 2)}
+          />,
+          <SiteFlowGroup
+            key="retrieve"
+            title="법률 근거 검색·보강"
+            detail="RAG 검색과 Wiki 조문, 검색어 보강으로 근거 후보를 확보합니다."
+            steps={collectionSteps.slice(2, 5)}
+          />,
+          collectionSteps[5],
+          <SiteFlowGroup
+            key="verify"
+            title="근거 검토·관계 확인"
+            detail="쟁점과 질문 관련성을 검토하고 조문·판례의 인용 관계를 확인합니다."
+            steps={collectionSteps.slice(6)}
+          />
+        ]
+      : [
+          collectionSteps[0],
+          <SiteFlowGroup
+            key="sources"
+            title="첨부 파일·참고 URL 읽기"
+            detail="제공한 문서와 링크에서 분석에 사용할 본문을 읽습니다."
+            steps={collectionSteps.slice(1, 3)}
+          />,
+          <SiteFlowGroup
+            key="web"
+            title="웹 검색·본문 수집"
+            detail="SearXNG로 자료를 찾고 검색 결과 페이지의 본문을 읽습니다."
+            steps={collectionSteps.slice(3)}
+          />
+        ]
   const flowGroups = [
     { title: '요청 접수', steps: flowSteps.slice(0, 3) },
-    { title: '자료 확보', steps: routeFlowSteps[siteFlowPath] },
+    { title: '자료 확보', steps: groupedCollectionSteps },
     {
       title: '결과 생성',
       steps: flowSteps.slice(3 + routeFlowSteps[siteFlowPath].length)
@@ -2033,7 +2104,8 @@ export default function SystemExplorer({
         <div className="system-explorer__content site-flow">
           <h2>사이트 동작 흐름</h2>
           <p className="system-explorer__lead">
-            요청에 필요한 자료 경로를 실행한 뒤, 결과를 만드는 흐름입니다.
+            백엔드 코드에 따른 처리 순서입니다. 조건부 단계는 생략될 수 있으며,
+            실제 실행 여부는 에이전틱 플로우에서 확인하세요.
           </p>
 
           <div className="site-flow__connection" aria-label="현재 연결 상태">
@@ -2067,8 +2139,10 @@ export default function SystemExplorer({
             <div className="site-flow__map" aria-label="사이트 요청 처리 흐름">
               <div className="site-flow__fork-heading">
                 <div>
-                  <strong>요청 종류별 자료 경로</strong>
-                  <span>공통 단계 사이에 선택한 경로가 이어집니다.</span>
+                  <strong>작업 유형별 처리 경로</strong>
+                  <span>
+                    파일·참고 URL·웹 검색은 한 작업에 함께 포함될 수 있습니다.
+                  </span>
                 </div>
                 <label className="site-flow__path-picker">
                   <span>요청 종류</span>
@@ -2080,9 +2154,7 @@ export default function SystemExplorer({
                     }
                   >
                     <option value="law">법률 요청</option>
-                    <option value="file">첨부 자료</option>
-                    <option value="web">웹 검색</option>
-                    <option value="url">참고 URL</option>
+                    <option value="document">일반 문서 요청</option>
                   </select>
                 </label>
               </div>
