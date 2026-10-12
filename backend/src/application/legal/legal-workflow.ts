@@ -112,6 +112,9 @@ const SYSTEM_PROMPT = [
   '사용자가 요청한 언어로 답변하세요. 기본은 한국어입니다.'
 ].join('\n');
 
+/** Output length is most of an answer's latency, so questions (not drafts) are answered briefly. */
+const CONCISE_RULE = '답변은 간결하게 쓰세요. 첫 문장에 결론을 쓰고, 근거 조문·판례를 짚어 핵심만 6~8문장 또는 짧은 목록 안에서 정리하세요. 서론, 요약 반복, 일반론 설명, 확인되지 않은 항목의 긴 나열은 생략하세요.';
+
 const REWRITE_SYSTEM = [
   'You rewrite search queries. Output only JSON: {"queries":[string],"precedentQueries":[string],"articles":[{"lawName":string,"articleNumber":string}]}.',
   'Rewrite a colloquial Korean legal question into 1 or 2 short search queries (at most 6 words each) made of statutory terms, for a Korean statute full-text index. The index does not weight law names, so keep queries topical.',
@@ -558,7 +561,7 @@ ${listing}`,
   async synthesize(input: LegalSynthesisInput): Promise<string> {
     const { sources, mode } = input;
     if (sources.length === 0) return noEvidenceAnswer(input.evidence);
-    const system = `${SYSTEM_PROMPT}${mode === 'orchestrated' ? '\n이 요청은 여러 쟁점을 포함하므로 쟁점별로 나누어 정리하고 쟁점마다 근거 ID를 붙이세요.' : ''}`;
+    const system = `${SYSTEM_PROMPT}${mode === 'orchestrated' ? '\n이 요청은 여러 쟁점을 포함하므로 쟁점별로 나누어 정리하고 쟁점마다 근거 ID를 붙이세요.' : ''}${input.decision.draftKind ? '' : `\n${CONCISE_RULE}`}`;
     const user = this.buildSynthesisUser(input);
     reportProgress('답변 작성', `근거 ${sources.length}건을 모델에 전달해 답변을 작성`, sources.slice(0, 12).map(source => `[${source.citationId}] ${citationLabel(source)}`));
     const validIds = sources.map(source => source.citationId);

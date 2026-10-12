@@ -502,6 +502,29 @@ test('an explicitly document-mode task never starts the legal retrieval process'
   });
 });
 
+test('questions are answered briefly while drafts keep their full length', async () => {
+  const systems: string[] = [];
+  const run = async (prompt: string): Promise<void> => withWorkspace(async ({ tasks, files }) => {
+    const model: ModelProvider = {
+      complete: async ({ system }) => {
+        if (system.startsWith('Return only valid JSON')) throw new Error('planner must not run');
+        systems.push(system);
+        return '근거에 따른 설명입니다 [L1].';
+      }
+    };
+    const { agent } = buildAgent({ tasks, files, model, retrieval: stubRetrieval([lawSource]).retrieval });
+    const task = tasks.createTask(prompt);
+    await agent.run(task.id);
+    await agent.drain();
+  });
+  await run('민법 제398조가 정하는 손해배상 예정이 어떻게 되나요?');
+  await run('민법 제398조에 따른 손해배상 청구 서면 초안을 작성해 주세요.');
+  const answers = systems.filter(system => system.includes('대한민국 법률 정보'));
+  assert.ok(answers.length >= 2, 'both runs wrote an answer');
+  assert.match(answers[0]!, /간결하게 쓰세요/, 'a question gets the concision rule');
+  assert.doesNotMatch(answers[answers.length - 1]!, /간결하게 쓰세요/, 'a draft keeps its full length');
+});
+
 test('a draft that keeps naming law that was never retrieved is replaced by an answer within the retrieved evidence', async () => {
   await withWorkspace(async ({ tasks, files }) => {
     const model: ModelProvider = {
