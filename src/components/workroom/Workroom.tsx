@@ -452,7 +452,7 @@ export default function Workroom() {
           '백엔드가 연결되지 않았습니다. 서버 상태를 확인한 뒤 다시 시도해 주세요.'
         )
       }
-      if (workflow === 'legal' && capabilities?.model.configured === false) {
+      if (capabilities?.model.configured === false) {
         throw new Error(
           '모델 제공자 API 키가 설정되지 않아 작업을 시작할 수 없습니다.'
         )
@@ -949,23 +949,19 @@ export default function Workroom() {
               ) : null}
               {loaded && capabilities?.model.configured === false ? (
                 <p className="workfolio-start__warning" role="status">
-                  모델 제공자 API 키가 설정되지 않아 법률 답변을 시작할 수
-                  없습니다.
+                  모델 제공자 API 키가 설정되지 않아 작업을 시작할 수 없습니다.
                 </p>
               ) : null}
               {loaded &&
               capabilities?.legalRetrieval &&
-              capabilities.legalRetrieval.state === 'unavailable' ? (
-                <p className="workfolio-start__warning" role="status">
-                  {capabilities.legalRetrieval.message} 인용 없는 법률 답변은
-                  제공하지 않습니다.
-                </p>
-              ) : null}
-              {loaded &&
-              capabilities?.legalRetrieval &&
-              capabilities.legalRetrieval.state === 'degraded' ? (
+              ['unavailable', 'degraded', 'unknown'].includes(
+                capabilities.legalRetrieval.state
+              ) ? (
                 <p className="workfolio-start__warning" role="status">
                   {capabilities.legalRetrieval.message}
+                  {capabilities.legalRetrieval.state === 'unavailable'
+                    ? ' 인용 없는 법률 답변은 제공하지 않습니다.'
+                    : ''}
                 </p>
               ) : null}
               <p className="workfolio-start__privacy">
@@ -976,7 +972,7 @@ export default function Workroom() {
               <Composer
                 onSubmit={startTask}
                 disabled={!loaded || backendStatus !== 'online'}
-                legalUnavailable={capabilities?.model.configured === false}
+                modelUnavailable={capabilities?.model.configured === false}
               />
             </section>
           )}

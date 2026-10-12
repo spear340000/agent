@@ -2280,7 +2280,7 @@ export default function SystemExplorer({
                 <b>법령 키워드 검색</b>
                 <small>법령·조문 코퍼스</small>
               </span>
-              <Status ready={retrieval?.enabled ?? null} label="상태" />
+              <Status ready={retrieval?.ready ?? null} label="상태" />
             </li>
             <li>
               <Search />
@@ -2288,7 +2288,7 @@ export default function SystemExplorer({
                 <b>판례 키워드 검색</b>
                 <small>사건명·사건번호·본문 색인</small>
               </span>
-              <Status ready={retrieval?.enabled ?? null} label="상태" />
+              <Status ready={retrieval?.ready ?? null} label="상태" />
             </li>
             <li>
               <Database />

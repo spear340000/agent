@@ -20,7 +20,7 @@ export default function Composer({
   onSubmit,
   compact = false,
   disabled = false,
-  legalUnavailable = false,
+  modelUnavailable = false,
   placeholder,
   workflow: initialWorkflow = 'legal'
 }: {
@@ -31,7 +31,7 @@ export default function Composer({
   ) => void | boolean | Promise<void | boolean>
   compact?: boolean
   disabled?: boolean
-  legalUnavailable?: boolean
+  modelUnavailable?: boolean
   placeholder?: string
   workflow?: 'legal' | 'document'
 }) {
@@ -43,8 +43,7 @@ export default function Composer({
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
-  const submissionBlocked =
-    disabled || (workflow === 'legal' && legalUnavailable)
+  const submissionBlocked = disabled || modelUnavailable
   function addLink() {
     try {
       const url = new URL(link.trim())

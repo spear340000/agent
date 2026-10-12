@@ -103,14 +103,40 @@ export default function DocumentWorkspace({
     number | null
   >(null)
   const [previewFormat, setPreviewFormat] = useState<DocumentFormat>('md')
-  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null)
+  const [previewArtifact, setPreviewArtifact] = useState<{
+    format: 'xlsx' | 'pdf'
+    document: string
+    blob: Blob
+  } | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewError, setPreviewError] = useState('')
+  const [previewError, setPreviewError] = useState<{
+    format: 'xlsx' | 'pdf'
+    document: string
+    message: string
+  } | null>(null)
+  const [previewRevision, setPreviewRevision] = useState(0)
   const previewRequest = useRef(0)
+  const onFormatPreviewRef = useRef(onFormatPreview)
+  onFormatPreviewRef.current = onFormatPreview
   const finalDocument = useMemo(
     () => prepareFinalDocument(value, title),
     [title, value]
   )
+  const needsFilePreview =
+    previewMode && (previewFormat === 'pdf' || previewFormat === 'xlsx')
+  const currentPreviewArtifact =
+    previewArtifact?.format === previewFormat &&
+    previewArtifact.document === finalDocument
+      ? previewArtifact
+      : null
+  const currentPreviewError =
+    previewError?.format === previewFormat &&
+    previewError.document === finalDocument
+      ? previewError.message
+      : ''
+  const currentPreviewLoading =
+    needsFilePreview &&
+    (previewLoading || (!currentPreviewArtifact && !currentPreviewError))
   const headings = useMemo(
     () => getDocumentOutline(previewMode ? finalDocument : value),
     [finalDocument, previewMode, value]
@@ -129,6 +155,47 @@ export default function DocumentWorkspace({
     editor.focus()
     editor.setSelectionRange(selection.selectionStart, selection.selectionEnd)
   }, [value])
+
+  useEffect(() => {
+    const request = ++previewRequest.current
+    if (!previewMode || (previewFormat !== 'pdf' && previewFormat !== 'xlsx')) {
+      setPreviewLoading(false)
+      return
+    }
+
+    let active = true
+    const format = previewFormat
+    const document = finalDocument
+    setPreviewArtifact(null)
+    setPreviewError(null)
+    setPreviewLoading(true)
+
+    void onFormatPreviewRef
+      .current(format)
+      .then((blob) => {
+        if (active && request === previewRequest.current)
+          setPreviewArtifact({ format, document, blob })
+      })
+      .catch((cause: unknown) => {
+        if (active && request === previewRequest.current)
+          setPreviewError({
+            format,
+            document,
+            message:
+              cause instanceof Error
+                ? cause.message
+                : '미리보기를 불러오지 못했습니다.'
+          })
+      })
+      .finally(() => {
+        if (active && request === previewRequest.current)
+          setPreviewLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [finalDocument, previewFormat, previewMode, previewRevision])
 
   function applyCommand(command: DocumentCommand) {
     const editor = editorRef.current
@@ -166,29 +233,9 @@ export default function DocumentWorkspace({
     setHighlightedHeadingLine(null)
   }
 
-  async function selectPreviewFormat(format: DocumentFormat) {
-    const request = ++previewRequest.current
+  function selectPreviewFormat(format: DocumentFormat) {
     setPreviewFormat(format)
-    setPreviewBlob(null)
-    setPreviewError('')
-    if (format !== 'pdf' && format !== 'xlsx') {
-      setPreviewLoading(false)
-      return
-    }
-    setPreviewLoading(true)
-    try {
-      const blob = await onFormatPreview(format)
-      if (request === previewRequest.current) setPreviewBlob(blob)
-    } catch (cause) {
-      if (request === previewRequest.current)
-        setPreviewError(
-          cause instanceof Error
-            ? cause.message
-            : `${formatLabels[format]} 미리보기를 불러오지 못했습니다.`
-        )
-    } finally {
-      if (request === previewRequest.current) setPreviewLoading(false)
-    }
+    setPreviewRevision((revision) => revision + 1)
   }
 
   return (
@@ -396,7 +443,7 @@ export default function DocumentWorkspace({
             >
               {previewMode ? (
                 <>
-                  {previewLoading ? (
+                  {currentPreviewLoading ? (
                     <p
                       className="document-format-preview__message"
                       role="status"
@@ -404,18 +451,18 @@ export default function DocumentWorkspace({
                       {formatLabels[previewFormat]} 미리보기를 준비하고
                       있습니다…
                     </p>
-                  ) : previewError ? (
+                  ) : currentPreviewError ? (
                     <p
                       className="document-format-preview__message"
                       role="alert"
                     >
-                      {previewError}
+                      {currentPreviewError}
                     </p>
                   ) : (
                     <DocumentFormatPreview
                       format={previewFormat}
                       markdown={finalDocument}
-                      file={previewBlob}
+                      file={currentPreviewArtifact?.blob ?? null}
                     />
                   )}
                 </>
