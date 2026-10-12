@@ -119,7 +119,44 @@ function rankSearchEvidence(
   });
 }
 
-export function assignCitationIds(records: NormalizedRecord[]): LegalSource[] {
+const CASE_NUMBER_IN_TEXT = /\d{2,4}[가-힣]{1,2}\d{2,}/u;
+
+/**
+ * A judgment reached by a case-number lookup (a summary with no body) and by fetching its text arrives as two records
+ * with different ids; the answer model then cites the summary and the claim check finds nothing to compare with. Keep
+ * the record with the most text and merge the routes of the other.
+ */
+export function collapseSameJudgment(records: NormalizedRecord[]): NormalizedRecord[] {
+  const keyOf = (record: NormalizedRecord): string | undefined =>
+    record.corpus === "precedent" ? CASE_NUMBER_IN_TEXT.exec(`${record.caseNumber ?? ""} ${record.title}`)?.[0] : undefined;
+  const best = new Map<string, NormalizedRecord>();
+  for (const record of records) {
+    const key = keyOf(record);
+    if (!key) continue;
+    const current = best.get(key);
+    if (!current || record.excerpt.length > current.excerpt.length) best.set(key, record);
+  }
+  const routes = new Map<string, string[]>();
+  for (const record of records) {
+    const key = keyOf(record);
+    if (key) routes.set(key, [...new Set([...(routes.get(key) ?? []), ...(record.provenance ?? [])])]);
+  }
+  const result: NormalizedRecord[] = [];
+  const placed = new Set<string>();
+  for (const record of records) {
+    const key = keyOf(record);
+    if (!key) { result.push(record); continue; }
+    if (placed.has(key)) continue;
+    placed.add(key);
+    const winner = best.get(key)!;
+    const merged = routes.get(key) ?? [];
+    result.push(merged.length > 0 ? { ...winner, provenance: merged } : winner);
+  }
+  return result;
+}
+
+export function assignCitationIds(input: NormalizedRecord[]): LegalSource[] {
+  const records = collapseSameJudgment(input);
   const counters = new Map<string, number>();
   const seen = new Set<string>();
   const sources: LegalSource[] = [];
@@ -514,7 +551,16 @@ export class LegalRetrievalService {
   ): Promise<NormalizedRecord[]> {
     if (tool === "search_laws" && !overrideArguments) {
       const article = extractLawArticle(query);
-      if (article?.lawName) return this.getLawArticle(article.lawName, article.articleNumber, signal);
+      // Only a query that is essentially the citation is an article lookup. A planner-written sentence that merely
+      // mentions "민법 제750조" would otherwise be read as a lookup of a law named after the whole phrase before it.
+      const compact = (value: string): string => value.replace(/\s+/g, "");
+      // A law name is a few words ("개인정보 보호법") or a formal long title ("… 에 관한 법률"); a longer run of words in front of
+      // the article is the sentence around it.
+      const nameWords = article?.lawName?.split(" ").filter(Boolean).length ?? 0;
+      const plausibleName = nameWords <= 4 || /에\s*관한\s*법률$/u.test(article?.lawName ?? "");
+      if (article?.lawName && plausibleName && compact(query).length - compact(`${article.lawName}${article.articleNumber}`).length <= 14) {
+        return this.getLawArticle(article.lawName, article.articleNumber, signal);
+      }
     }
     const args: Record<string, unknown> = overrideArguments ?? {
       query: preserveLegalSearchQuery(query, this.limits.maxQueryCharacters),

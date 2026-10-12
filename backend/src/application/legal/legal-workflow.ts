@@ -185,7 +185,7 @@ export class LegalWorkflow {
     return this.normalizePlan(raw, input.task.title, input.decision);
   }
 
-  async retrieve(plan: LegalPlan | LegalRouteDecision, signal: AbortSignal): Promise<LegalEvidence> {
+  async retrieve(plan: LegalPlan | LegalRouteDecision, signal: AbortSignal, question?: string): Promise<LegalEvidence> {
     const steps = 'retrievalSteps' in plan ? plan.retrievalSteps : plan.steps;
     let evidence = tagSources(await this.deps.retrieval.retrieve(steps, signal), source => RAG_TAG[source.corpus] ?? 'RAG 검색');
     evidence = withStage(evidence, {
@@ -197,7 +197,8 @@ export class LegalWorkflow {
     if (this.deps.knowledgeChain) this.okfEntries = await this.deps.knowledgeChain.loadOkf();
     if ('retrievalSteps' in plan) {
       evidence = await this.fillEvidenceGaps(evidence, signal);
-      return this.addWikiHints(plan.issue || plan.title, evidence, signal);
+      // The planner's issue sentence is its own paraphrase; the user's wording is what the key articles are matched on.
+      return this.addWikiHints(question?.trim() ? question.slice(0, 600) : plan.issue || plan.title, evidence, signal);
     }
     if (steps.some(step => step.kind === 'graph')) return evidence;
     const questionStep = steps.find(step => step.kind === 'search-laws' || step.kind === 'search-all');
@@ -444,7 +445,9 @@ ${listing}`,
   private async verifyCitedClaims(answer: string, sources: LegalSource[], signal: AbortSignal): Promise<{ answer: string; removed: number; checked: boolean }> {
     if (!this.deps.claimVerification) return { answer, removed: 0, checked: false };
     const parts = splitAnswerParts(answer);
-    const allCited = parts.map((part, index) => ({ index, sentence: part.sentence.trim(), records: citedSourcesOf(part.sentence, sources) })).filter(item => item.sentence && item.records.length > 0);
+    // A part that is only a citation label carries no claim; sent to the verifier, every label was flagged and erased.
+    const allCited = parts.map((part, index) => ({ index, sentence: part.sentence.trim(), records: citedSourcesOf(part.sentence, sources) }))
+      .filter(item => item.sentence.replace(/\[[A-Z]\d+\]|[\s【】†]/gu, '').length >= 6 && item.records.length > 0);
     if (allCited.length === 0) return { answer, removed: 0, checked: false };
     // A sentence that nearly quotes its cited record is supported by construction, so it needs no model call: only the
     // sentences that paraphrase or conclude are sent to the verifier.
