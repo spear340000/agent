@@ -2,6 +2,7 @@
 import React from 'react'
 import { ExternalLink, FileText, Link2 } from 'lucide-react'
 import type { Source, Task } from './types'
+import { safeHttpUrl } from './safe-http-url'
 import { prepareFinalDocument } from './documentModel'
 import { markdownToDocxBlocks } from './markdownDocx'
 export function DocumentPreview({ text }: { text: string }) {
@@ -40,9 +41,9 @@ export function Sources({ sources }: { sources: Source[] }) {
                 ) : (
                   <FileText size={14} />
                 )}
-                {source.url ? (
+                {safeHttpUrl(source.url) ? (
                   <a
-                    href={source.url}
+                    href={safeHttpUrl(source.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                   >

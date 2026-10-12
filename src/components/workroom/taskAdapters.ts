@@ -298,9 +298,6 @@ export function legalAnswerFromEvents(
         ...(typeof citation.officialUrl === 'string'
           ? { officialUrl: citation.officialUrl }
           : {}),
-        ...(Array.isArray(citation.provenance)
-          ? { provenance: citation.provenance.map(String) }
-          : {}),
         ...(isRecord(citation.date) &&
         typeof citation.date.value === 'string' &&
         (citation.date.kind === 'amendment' ||
@@ -310,6 +307,13 @@ export function legalAnswerFromEvents(
                 kind: citation.date.kind as 'amendment' | 'decision',
                 value: citation.date.value
               }
+            }
+          : {}),
+        ...(Array.isArray(citation.provenance)
+          ? {
+              provenance: citation.provenance.filter(
+                (item): item is string => typeof item === 'string'
+              )
             }
           : {})
       }))
@@ -381,7 +385,8 @@ export function toWorkroomTask(
   const messageMap = new Map(
     (previous?.messages ?? []).map((message) => [message.id, message])
   )
-  for (const message of messagesFromEvents(details.events)) {
+  const events = Array.isArray(details.events) ? details.events : []
+  for (const message of messagesFromEvents(events)) {
     const previousMessage = messageMap.get(message.id)
     messageMap.set(
       message.id,
@@ -428,14 +433,12 @@ export function toWorkroomTask(
     updatedAt: Date.parse(task.updatedAt) || 0,
     error: task.error ? friendlyTaskError(task.error) : task.error,
     ...(() => {
-      const legal = legalAnswerFromEvents(details.events)
+      const legal = legalAnswerFromEvents(events)
       return legal ? { legal } : {}
     })(),
-    ...(details.events.length > 0
-      ? { activity: activityFromEvents(details.events) }
-      : {}),
+    ...(events.length > 0 ? { activity: activityFromEvents(events) } : {}),
     ...(() => {
-      const modelUse = modelUseFromEvents(details.events)
+      const modelUse = modelUseFromEvents(events)
       return modelUse ? { modelUse } : {}
     })()
   }

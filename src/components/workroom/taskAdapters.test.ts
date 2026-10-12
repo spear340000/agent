@@ -504,3 +504,22 @@ test('model totals from the backend become one readable usage line', () => {
   )
   assert.equal(modelUseFromEvents([])?.totals, undefined)
 })
+
+test('task details from an older backend without events still convert', () => {
+  const task = toWorkroomTask({
+    task: {
+      id: 't',
+      title: '제목',
+      prompt: '질문',
+      sourceFileIds: [],
+      sourceUrls: [],
+      status: 'running',
+      steps: [],
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z'
+    },
+    artifacts: []
+  } as unknown as TaskDetails)
+  assert.equal(task.activity, undefined)
+  assert.equal(task.legal, undefined)
+})
