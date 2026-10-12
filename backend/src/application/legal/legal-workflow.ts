@@ -140,6 +140,8 @@ const CLAIM_EXCERPT_MIN_CHARACTERS = 800;
 /** A simple question stops searching once it has what it needs: at most this many rewrite searches and linked decisions. */
 const REWRITE_STEP_LIMIT = 3;
 const LINKED_PRECEDENT_TARGET = 2;
+/** Key articles fetched from the wiki per question: enough to hold the rule, its filing article and its remedy. */
+const WIKI_HINT_LIMIT = 3;
 const QUOTATION_CONTAINMENT = 0.9;
 const CLAIM_EXCERPT_MAX_CHARACTERS = 3_500;
 const DEFAULT_EVIDENCE_BUDGET_CHARS = 6_000;
@@ -342,7 +344,7 @@ export class LegalWorkflow {
     try {
       const squash = (value: string): string => value.replace(/\s+/g, '');
       const have = new Set(evidence.sources.map(source => `${squash(source.lawName ?? '')}|${squash(source.articleNumber ?? '')}`));
-      const budget = Math.min(2, evidence.maxToolCalls - evidence.toolCalls);
+      const budget = Math.min(WIKI_HINT_LIMIT, evidence.maxToolCalls - evidence.toolCalls);
       const matches = (await wiki.find(question, 3)).filter(match => !have.has(`${squash(match.lawName)}|${squash(match.article)}`)).slice(0, Math.max(0, budget));
       let merged: LegalEvidence = { ...evidence, wikiHints: 0 };
       let found = 0;
@@ -350,7 +352,7 @@ export class LegalWorkflow {
         const titleFor = (source: LegalSource): string | undefined =>
           matches.find(match => squash(match.lawName) === squash(source.lawName ?? '') && squash(match.article) === squash(source.articleNumber ?? ''))?.title;
         const extra = tagSources(
-          await this.deps.retrieval.retrieve(matches.map(match => ({ kind: 'law-article' as const, lawName: match.lawName, articleNumber: match.article })), signal),
+          await this.deps.retrieval.retrieve(matches.map(match => ({ kind: 'law-article' as const, lawName: match.lawName, articleNumber: match.article, title: match.title })), signal),
           source => `LLM Wiki 핵심 조문집${titleFor(source) ? ` '${titleFor(source)}'` : ''} → MCP get_law_article로 원문 확인`
         );
         found = extra.trace.filter(entry => entry.results > 0).length;
