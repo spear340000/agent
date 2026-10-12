@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { officeApi, type WebSource } from '@/api/automation'
 import { ToolButton, type ToolProps } from './ToolFields'
+import { safeHttpUrl } from '@/components/workroom/safe-http-url'
 
 export default function SearchTools({
   connection,
@@ -45,9 +46,17 @@ export default function SearchTools({
         <section aria-label="웹 검색 결과">
           {sources.map((source) => (
             <article key={source.url} className="workfolio-search-source">
-              <a href={source.url} target="_blank" rel="noopener noreferrer">
-                {source.title}
-              </a>
+              {safeHttpUrl(source.url) ? (
+                <a
+                  href={safeHttpUrl(source.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {source.title}
+                </a>
+              ) : (
+                <span>{source.title}</span>
+              )}
               <p>
                 {source.retrievalStatus === 'retrieved'
                   ? `원문 확인 · ${new Date(source.retrievedAt).toLocaleString('ko-KR')}`

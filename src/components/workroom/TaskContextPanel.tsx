@@ -51,6 +51,8 @@ function statusMessage(task: Task): string {
     case 'queued':
       return '백엔드 작업 대기열에 등록되어 있습니다.'
     case 'running': {
+      const latest = task.activity?.filter((item) => item.detail).at(-1)
+      if (latest) return latest.detail
       const active = task.steps.find((step) => step.status === 'running')
       return active
         ? `${active.title} 단계에서 진행 중입니다.`
