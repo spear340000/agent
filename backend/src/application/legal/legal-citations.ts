@@ -196,8 +196,8 @@ export type AnswerPart = { sentence: string; separator: string };
 /** Splits an answer into sentences, keeping each one's trailing separator so the text can be rebuilt exactly. */
 export function splitAnswerParts(text: string): AnswerPart[] {
   // A period after a digit belongs to a date or list number ("2022. 7. 21. 선고", "1. 항목"), not a sentence end.
-  // A citation tag written after the period ("…판단했다. [P1]") belongs to the sentence before it, not to a sentence of its own.
-  const pieces = text.split(/(\n+|(?<=[!?。]|(?<!\d)\.)\s+(?!\[[A-Z]\d+\]))/);
+  // A citation tag written after the period ("…판단했다. [P1]", also wrapped as "【[L1]】") belongs to the sentence before it, not to a sentence of its own.
+  const pieces = text.split(/(\n+|(?<=[!?。】]|(?<!\d)\.)\s+(?!【?\[[A-Z]\d+\]))/);
   const parts: AnswerPart[] = [];
   for (let index = 0; index < pieces.length; index += 2) parts.push({ sentence: pieces[index] ?? '', separator: pieces[index + 1] ?? '' });
   return parts;

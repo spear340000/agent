@@ -235,3 +235,10 @@ test('a citation tag after the period stays with its sentence', () => {
   assert.equal(parts[0]!.sentence, '위약벌은 감액할 수 없다고 판단했다. [P1]');
   assert.equal(parts[1]!.sentence, '다음 문장입니다 [L1].');
 });
+
+test('a bracket-wrapped citation after the period stays with its sentence', () => {
+  const parts = splitAnswerParts('민법 제750조는 손해배상 책임을 규정합니다. 【[L1]】  다음 문장입니다. 【[L2]】');
+  assert.equal(parts.length, 2);
+  assert.match(parts[0]!.sentence, /【\[L1\]】$/u);
+  assert.match(parts[1]!.sentence, /【\[L2\]】$/u);
+});
