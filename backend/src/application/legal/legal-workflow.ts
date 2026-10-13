@@ -73,6 +73,9 @@ export type LegalOutputInput = {
 /** What the agent's own checks did to the evidence and the answer before it was published. */
 export type LegalAgentStats = { filtered: number; removedSentences: number; checked: boolean };
 
+/** `exhausted`: the check left nothing citable (a refusal or an uncited remainder); `rejected` are the sentences it removed. */
+export type ClaimCheck = { answer: string; removed: number; checked: boolean; rejected?: string[]; exhausted?: boolean };
+
 export type LegalRunOutput = {
   mode: LegalRetrievalMode;
   intent: LegalIntent;
@@ -440,14 +443,14 @@ ${listing}`,
    * sentences that are not. Citation ids alone cannot show that a claim matches its source. Fails open: when the
    * check cannot run, the answer is returned unchanged and `checked` is false so the caller can say so.
    */
-  async verifyClaims(answer: string, sources: LegalSource[], signal: AbortSignal): Promise<{ answer: string; removed: number; checked: boolean }> {
+  async verifyClaims(answer: string, sources: LegalSource[], signal: AbortSignal): Promise<ClaimCheck> {
     const limits = dropUnbackedTimeLimits(answer, sources);
     if (limits.removed > 0) reportProgress('근거 없는 기간 표현 제거', `인용 없이 쓴 신청 기한 등 ${limits.removed}문장이 어떤 근거에도 없어 제외`);
     const result = await this.verifyCitedClaims(limits.text, sources, signal);
     return { ...result, removed: result.removed + limits.removed };
   }
 
-  private async verifyCitedClaims(answer: string, sources: LegalSource[], signal: AbortSignal): Promise<{ answer: string; removed: number; checked: boolean }> {
+  private async verifyCitedClaims(answer: string, sources: LegalSource[], signal: AbortSignal): Promise<ClaimCheck> {
     if (!this.deps.claimVerification) return { answer, removed: 0, checked: false };
     const parts = splitAnswerParts(answer);
     // A part that is only a citation label carries no claim; sent to the verifier, every label was flagged and erased.
@@ -491,6 +494,7 @@ ${listing}`,
       const kept = parts.filter((_part, index) => !drop.has(index));
       const next = joinAnswerParts(kept);
       const refusal = '확보한 근거가 답변의 주장을 뒷받침하지 않아 법적 결론을 제시할 수 없습니다. 질문과 직접 관련된 조문·판례 또는 추가 사실관계를 확인해 주세요.';
+      const rejected = [...drop].map(index => parts[index]!.sentence.trim().slice(0, 300));
       if (next && legalCitationIds(next).length > 0) return { answer: next, removed: drop.size, checked: true };
       // Every cited sentence was flagged. One or two flagged sentences (often a conclusion that combines two articles)
       // do not make the rest of a substantial answer worthless, but it must say that nothing in it is cited any more;
@@ -502,10 +506,12 @@ ${listing}`,
 
 ※ 근거로 뒷받침되지 않는 문장 ${drop.size}개를 제외했고, 남은 설명에는 확인된 인용이 없습니다. 아래 근거 목록과 원문을 직접 확인해 주세요.`,
           removed: drop.size,
-          checked: true
+          checked: true,
+          rejected,
+          exhausted: true
         };
       }
-      return { answer: refusal, removed: drop.size, checked: true };
+      return { answer: refusal, removed: drop.size, checked: true, rejected, exhausted: true };
     } catch (error) {
       if (signal.aborted) throw error;
       reportProgress('문장 검증 건너뜀', `검증 모델 호출이 실패해 검증 없이 진행: ${error instanceof Error ? error.message.slice(0, 100) : String(error).slice(0, 100)}`);
@@ -599,10 +605,54 @@ ${listing}`,
     return buildSourceStatus(evidence, evidence.sources, 0, plannerCalls, this.vectorState);
   }
 
+  private synthesisSystem(input: LegalSynthesisInput): string {
+    return `${SYSTEM_PROMPT}${input.mode === 'orchestrated' ? '\n이 요청은 여러 쟁점을 포함하므로 쟁점별로 나누어 정리하고 쟁점마다 근거 ID를 붙이세요.' : ''}${input.decision.draftKind ? '' : `\n${CONCISE_RULE}`}`;
+  }
+
+  /**
+   * Verification can leave nothing citable (every cited sentence was unsupported). Instead of stopping at a refusal,
+   * the model gets one chance to answer again from the same records, told which sentences were rejected. The rewrite is
+   * verified like any draft and replaces the first result only when it survives; otherwise the first result stands.
+   */
+  async verifyWithRewrite(input: LegalSynthesisInput, draft: string, outputSources: LegalSource[]): Promise<ClaimCheck & { rewritten: boolean }> {
+    const first = await this.verifyClaims(draft, outputSources, input.signal);
+    if (!first.exhausted || !first.rejected?.length || input.sources.length === 0) return { ...first, rewritten: false };
+    reportProgress('답변 다시 작성', `검증에서 인용 문장 ${first.rejected.length}개가 모두 제외되어 근거 원문에 맞춰 한 번 다시 작성`, first.rejected.map(sentence => `제외됨: ${sentence.slice(0, 90)}`));
+    try {
+      const validIds = input.sources.map(source => source.citationId);
+      const text = attachCaseCitations(normalizeLegalCitations((await this.deps.model.complete({
+        system: this.synthesisSystem(input),
+        user: [
+          this.buildSynthesisUser(input),
+          'REWRITE REQUIRED',
+          '직전 초안의 아래 문장은 인용한 근거 원문이 뒷받침하지 않아 검증에서 삭제되었습니다.',
+          ...first.rejected.map(sentence => `- ${sentence}`),
+          '같은 표현을 반복하지 말고, 근거 원문에 실제로 적힌 내용만 그 용어와 범위 그대로 사용해 질문에 다시 답하세요.',
+          '근거 원문이 질문의 일부만 다룬다면 다루는 범위만 쓰고, 나머지는 확인되지 않았다고 적으세요.',
+          `허용 인용 ID: ${validIds.join(', ')}`,
+          '인용은 반드시 대괄호로 감싸 [L1] 형태로 표기하세요. Sources 섹션을 만들지 마세요.'
+        ].join('\n'),
+        signal: input.signal
+      })).trim(), validIds), input.sources);
+      if (input.signal.aborted) throw new Error('task cancelled');
+      if (!text || isUninformativeAnswer(text) || isRetrievalPlanOutput(text)) return { ...first, rewritten: false };
+      const second = await this.verifyClaims(text, outputSources, input.signal);
+      if (second.checked && !second.exhausted && legalCitationIds(second.answer).length > 0) {
+        reportProgress('다시 쓴 답변 채택', `다시 쓴 답변이 검증을 통과했습니다(제외 ${second.removed}문장)`);
+        return { ...second, rewritten: true };
+      }
+      reportProgress('다시 쓴 답변 폐기', '다시 쓴 답변도 검증을 통과하지 못해 첫 검증 결과를 유지');
+    } catch (error) {
+      if (input.signal.aborted) throw error;
+      reportProgress('답변 다시 쓰기 실패', `다시 쓰기에 실패해 첫 검증 결과를 유지: ${error instanceof Error ? error.message.slice(0, 100) : String(error).slice(0, 100)}`);
+    }
+    return { ...first, rewritten: false };
+  }
+
   async synthesize(input: LegalSynthesisInput): Promise<string> {
     const { sources, mode } = input;
     if (sources.length === 0) return noEvidenceAnswer(input.evidence);
-    const system = `${SYSTEM_PROMPT}${mode === 'orchestrated' ? '\n이 요청은 여러 쟁점을 포함하므로 쟁점별로 나누어 정리하고 쟁점마다 근거 ID를 붙이세요.' : ''}${input.decision.draftKind ? '' : `\n${CONCISE_RULE}`}`;
+    const system = this.synthesisSystem(input);
     const user = this.buildSynthesisUser(input);
     reportProgress('답변 작성', `근거 ${sources.length}건을 모델에 전달해 답변을 작성`, sources.slice(0, 12).map(source => `[${source.citationId}] ${citationLabel(source)}`));
     const validIds = sources.map(source => source.citationId);

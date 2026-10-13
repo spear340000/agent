@@ -1411,3 +1411,43 @@ test('the knowledge layers feed each other and every step shows up in the answer
   assert.ok(precedentCitation?.provenance?.some(route => route.startsWith('관계 그래프')), 'the citation carries its route for the UI');
   assert.ok(precedentCitation?.provenance?.some(route => route.includes('Legal Corpus — Precedents')));
 });
+
+test('when verification leaves nothing citable the answer is rewritten once from the rejected sentences', async () => {
+  const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
+  const decision = new LegalRequestRouter({ multiIssueThreshold: 2, complexDraftCharacters: 700, multiAttachmentThreshold: 2, directQueryLimit: 2 }).route({ prompt: '손해배상 예정액은 감액할 수 있나요?' });
+  const sources = [lawSource];
+  const calls: string[] = [];
+  const bad = '예정액이 부당하게 과다하면 일반 채권도 법원이 직권으로 감액할 수 있습니다 [L1].';
+  const good = '당사자는 채무불이행에 관한 손해배상액을 예정할 수 있습니다 [L1].';
+  const make = (rewrite: string, verdicts: string[]) => new LegalWorkflow({
+    claimVerification: true,
+    retrieval: {} as LegalRetrievalService,
+    limits,
+    model: {
+      complete: async ({ user }) => {
+        if (user.startsWith('SOURCES')) { calls.push('verify'); return verdicts.shift() ?? '{"unsupported":[]}'; }
+        calls.push('rewrite');
+        assert.match(user, /REWRITE REQUIRED/);
+        assert.match(user, /일반 채권도 법원이 직권으로/, 'the rejected sentence is shown to the model');
+        return rewrite;
+      }
+    }
+  });
+  const input = { task: { prompt: '손해배상 예정액은 감액할 수 있나요?' }, decision, evidence: { sources, failures: [], toolCalls: 0 }, sources, documents: [], webSources: [], baseDocument: '', mode: 'direct', title: 't', signal: new AbortController().signal } as unknown as Parameters<LegalWorkflow['verifyWithRewrite']>[0];
+
+  const adopted = await make(good, ['{"unsupported":[1]}', '{"unsupported":[]}']).verifyWithRewrite(input, bad, sources);
+  assert.equal(adopted.rewritten, true);
+  assert.equal(adopted.answer, good);
+  assert.deepEqual(calls, ['verify', 'rewrite', 'verify']);
+
+  calls.length = 0;
+  const stillBad = await make(bad, ['{"unsupported":[1]}', '{"unsupported":[1]}']).verifyWithRewrite(input, bad, sources);
+  assert.equal(stillBad.rewritten, false, 'a rewrite that fails verification again is dropped, not retried');
+  assert.match(stillBad.answer, /법적 결론을 제시할 수 없습니다/);
+  assert.deepEqual(calls, ['verify', 'rewrite', 'verify']);
+
+  calls.length = 0;
+  const fine = await make(good, []).verifyWithRewrite(input, good, sources);
+  assert.equal(fine.rewritten, false);
+  assert.deepEqual(calls, ['verify'], 'no rewrite when verification keeps the answer');
+});

@@ -298,7 +298,7 @@ export class AgentService {
     const answerEvidence = await workflow.linkPrecedentsViaGraph({ ...evidence, sources: relevance.sources.filter(isLegal) }, signal);
     const promptSources = [...answerEvidence.sources, ...relevance.sources.filter(source => !isLegal(source))];
     const outputSources = [...answerEvidence.sources, ...sources.filter(source => !isLegal(source))];
-    const synthesized = await workflow.synthesize({
+    const synthesisInput = {
       task,
       decision,
       evidence: answerEvidence,
@@ -309,8 +309,9 @@ export class AgentService {
       mode: legalRetrievalMode(decision.path),
       title,
       signal
-    });
-    const verified = await workflow.verifyClaims(synthesized, outputSources, signal);
+    };
+    const synthesized = await workflow.synthesize(synthesisInput);
+    const verified = await workflow.verifyWithRewrite(synthesisInput, synthesized, outputSources);
     const answer = verified.answer;
     const notes = [
       ...(relevance.dropped > 0 ? [`질문과 관련 없어 보이는 검색 결과 ${relevance.dropped}건은 답변 근거에서 제외했습니다.`] : []),
