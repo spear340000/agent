@@ -8,6 +8,11 @@ export type Source = {
   url?: string
   status?: 'queued' | 'collecting' | 'ready' | 'error'
 }
+export type SourceUploadProgress = {
+  completed: number
+  total: number
+  current: string
+}
 export type WorkflowStage =
   | 'planning'
   | 'collecting'
@@ -40,6 +45,16 @@ export type TaskStep = {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
   progress: number
   error?: string
+}
+export type TaskStageUsage = {
+  stepId: string
+  tokenCount?: number
+  durationMs?: number
+}
+export type TaskUsageMetrics = {
+  stages?: TaskStageUsage[]
+  totalTokenCount?: number
+  totalDurationMs?: number
 }
 export type LegalAnswerView = {
   intent: string
@@ -79,6 +94,9 @@ export type Task = {
   artifactMimeType?: string
   sourceFileIds?: string[]
   documentDirty?: boolean
+  documentDraftBase?: string
+  documentDraftConflict?: string
+  usageMetrics?: TaskUsageMetrics
   legal?: LegalAnswerView
   modelUse?: TaskModelUse
   /** What the backend reported so far, oldest first; shown while the task is still running. */

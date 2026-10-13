@@ -378,7 +378,14 @@ export function toWorkroomTask(
   previous?: Partial<
     Pick<
       Task,
-      'sources' | 'messages' | 'document' | 'documentDirty' | 'revisionBaseline'
+      | 'sources'
+      | 'messages'
+      | 'document'
+      | 'documentDirty'
+      | 'documentDraftBase'
+      | 'documentDraftConflict'
+      | 'savedDocument'
+      | 'revisionBaseline'
     >
   >
 ): Task {
@@ -430,6 +437,12 @@ export function toWorkroomTask(
       : savedDocument,
     savedDocument,
     documentDirty,
+    documentDraftBase: documentDirty
+      ? (previous?.documentDraftBase ??
+        previous?.savedDocument ??
+        savedDocument)
+      : undefined,
+    documentDraftConflict: previous?.documentDraftConflict,
     artifactFileId: artifact?.fileId,
     artifactName: artifact?.name,
     artifactMimeType: artifact?.mimeType,
@@ -445,7 +458,21 @@ export function toWorkroomTask(
     ...(events.length > 0 ? { activity: activityFromEvents(events) } : {}),
     ...(() => {
       const modelUse = modelUseFromEvents(events)
-      return modelUse ? { modelUse } : {}
+      if (!modelUse) return {}
+      const totals = modelUse.totals
+      // The usage panel's totals are the backend's real per-task model totals; per-stage rows stay empty until the
+      // backend attributes calls to steps.
+      return {
+        modelUse,
+        ...(totals && totals.calls > 0
+          ? {
+              usageMetrics: {
+                totalTokenCount: totals.promptTokens + totals.completionTokens,
+                totalDurationMs: totals.totalMs
+              }
+            }
+          : {})
+      }
     })()
   }
 }
