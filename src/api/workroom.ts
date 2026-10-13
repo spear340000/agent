@@ -457,6 +457,46 @@ export function getTaskDetails(
   )
 }
 
+export type TaskTraceSpan = {
+  kind: 'step' | 'llm' | 'error'
+  name: string
+  startMs: number
+  durationMs: number
+  status: 'ok' | 'error' | 'running'
+  detail?: string
+  promptTokens?: number
+  completionTokens?: number
+}
+
+export type TaskTrajectoryStep = {
+  order: number
+  offsetMs: number
+  title: string
+  detail: string
+}
+
+export type TaskTrace = {
+  taskId: string
+  status: string
+  totalMs: number
+  spans: TaskTraceSpan[]
+  trajectory: TaskTrajectoryStep[]
+}
+
+export function getTaskTrace(
+  id: string,
+  connection: Connection = defaultConnection,
+  fetcher: Fetcher = fetch,
+  signal?: AbortSignal
+): Promise<TaskTrace> {
+  return request(
+    connection,
+    `/api/tasks/${encodeURIComponent(id)}/trace`,
+    { signal },
+    fetcher
+  )
+}
+
 export function getFile(
   id: string,
   connection: Connection = defaultConnection,

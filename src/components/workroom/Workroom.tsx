@@ -984,6 +984,7 @@ export default function Workroom() {
                   mobileOpen={mobileContextOpen}
                   onMobileOpenChange={setMobileContextOpen}
                   backendKey={connection.baseUrl}
+                  connection={connection}
                   canceling={pendingTaskActionIds.has(active.id)}
                   onCancel={() => void cancelActiveTask()}
                   onFollowup={submitTaskRequest}

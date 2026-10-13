@@ -9,7 +9,9 @@ import {
 } from 'lucide-react'
 import Composer from './Composer'
 import ActivityLog from './ActivityLog'
+import TaskTrace from './TaskTrace'
 import ModelUsage from './ModelUsage'
+import type { Connection } from '../../api/workroom'
 import { safeHttpUrl } from './safe-http-url'
 import EvidenceChain, { RouteChips } from './EvidenceChain'
 import { Sources } from './Documents'
@@ -32,6 +34,8 @@ export type TaskContextPanelProps = {
   mobileOpen: boolean
   onMobileOpenChange: (open: boolean) => void
   backendKey?: string
+  /** Needed to fetch the run's trace; the panel never reads the token itself. */
+  connection?: Connection
   canceling?: boolean
   onCancel: () => void
   onFollowup: (
@@ -388,6 +392,7 @@ export default function TaskContextPanel({
   mobileOpen,
   onMobileOpenChange,
   backendKey = '',
+  connection,
   canceling = false,
   onCancel,
   onFollowup,
@@ -565,6 +570,9 @@ export default function TaskContextPanel({
                     <summary>처리 과정 기록 {task.activity.length}건</summary>
                     <ActivityLog activity={task.activity} />
                   </details>
+                ) : null}
+                {connection ? (
+                  <TaskTrace taskId={task.id} connection={connection} />
                 ) : null}
               </div>
             </details>
