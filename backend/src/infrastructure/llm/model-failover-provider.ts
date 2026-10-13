@@ -54,10 +54,10 @@ export class ModelFailoverProvider implements ModelProvider {
         const usage: ModelUsage = {};
         const result = await withUsageSlot(usage, () => provider.complete(input));
         this.lastSuccessfulModelName = provider.name;
-        recordModelAttempt({ model: provider.name, ok: true, ms: Date.now() - startedAt, ...usage });
+        recordModelAttempt({ model: provider.name, ok: true, ms: Date.now() - startedAt, startedAt, ...usage });
         return result;
       } catch (error) {
-        recordModelAttempt({ model: provider.name, ok: false, ms: Date.now() - startedAt, error: (error instanceof Error ? error.message : String(error)).slice(0, 200) });
+        recordModelAttempt({ model: provider.name, ok: false, ms: Date.now() - startedAt, startedAt, error: (error instanceof Error ? error.message : String(error)).slice(0, 200) });
         if (input.signal?.aborted || (error instanceof Error && error.message === 'model request cancelled')) throw new Error('model request cancelled');
         if (!(error instanceof ModelProviderError)) throw error;
         if (error.retryAfterMs) this.rateLimitedUntil.set(provider, this.now() + error.retryAfterMs);

@@ -1,7 +1,9 @@
 import type { Artifact, Task, TaskDetails } from '../domain/task.js';
 import type { TaskRepository } from '../domain/task-repository.js';
+import type { TaskTrace } from '../domain/trace.js';
 import { badRequest, conflict, notFound } from '../shared/app-error.js';
 import { AgentService } from './agent-service.js';
+import { buildTaskTrace } from './task-trace.js';
 import type { DocumentService } from './document-service.js';
 import type { FileService } from './file-service.js';
 
@@ -28,6 +30,10 @@ export class TaskService {
     const task = this.tasks.createTask(input.prompt, input.title?.trim() || undefined, sourceFileIds, sourceUrls, input.workflow);
     void this.agent.run(task.id);
     return task;
+  }
+
+  trace(id: string): TaskTrace {
+    return buildTaskTrace(this.getDetails(id));
   }
 
   getDetails(id: string): TaskDetails {

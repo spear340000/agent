@@ -306,6 +306,8 @@ export class ApiRouter {
   ) {
     if (req.method === "GET" && !action)
       return sendJson(res, 200, this.deps.tasks.getDetails(id));
+    if (req.method === "GET" && action === "trace")
+      return sendJson(res, 200, this.deps.tasks.trace(id));
     if (req.method === "POST" && action === "run")
       return sendJson(res, 202, this.deps.tasks.rerun(id));
     if (req.method === "POST" && action === "cancel")
