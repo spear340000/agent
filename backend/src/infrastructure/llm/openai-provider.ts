@@ -20,7 +20,7 @@ export class OpenAiProvider implements ModelProvider {
     if (options.maxOutputBytes !== undefined && (!Number.isSafeInteger(options.maxOutputBytes) || options.maxOutputBytes < 1)) throw new Error('maxOutputBytes must be a positive integer');
     if (options.maxAttempts !== undefined && (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 1 || options.maxAttempts > 3)) throw new Error('maxAttempts must be an integer from 1 to 3');
   }
-  async complete(input: { system: string; user: string; signal?: AbortSignal; expectedOutputTokens?: number }): Promise<string> {
+  async complete(input: { system: string; user: string; signal?: AbortSignal; expectedOutputTokens?: number; maxRateLimitWaitMs?: number }): Promise<string> {
     const maxInputCharacters = this.options.maxInputCharacters ?? 200_000;
     if (input.system.length + input.user.length > maxInputCharacters) throw new ModelProviderError(`model input exceeds the configured limit of ${maxInputCharacters} characters`, true);
     if (!this.options.apiKey) throw new ModelProviderError('모델 제공자 API 키가 설정되지 않았습니다.');
@@ -28,7 +28,7 @@ export class OpenAiProvider implements ModelProvider {
     if (this.limiter) {
       const tokens = estimateTokens(input.system.length + input.user.length, input.expectedOutputTokens);
       const wait = this.limiter.waitMs(tokens);
-      if (wait > (this.options.failFastOnRateLimit ? FAILOVER_RATE_LIMIT_WAIT_MS : MAX_RATE_LIMIT_WAIT_MS)) {
+      if (wait > (input.maxRateLimitWaitMs ?? (this.options.failFastOnRateLimit ? FAILOVER_RATE_LIMIT_WAIT_MS : MAX_RATE_LIMIT_WAIT_MS))) {
         const reason = Number.isFinite(wait) ? `분당 토큰 한도에 도달했습니다(약 ${Math.ceil(wait / 1000)}초 뒤에 여유가 생겨 대기하지 않고 다음 모델로 전환합니다).` : '이 요청은 분당 토큰 한도보다 커서 이 모델로 보낼 수 없어 다음 모델로 전환합니다.';
         throw new ModelProviderError(reason, true, false, this.options.failFastOnRateLimit && Number.isFinite(wait) ? Math.min(wait, 60_000) : undefined);
       }

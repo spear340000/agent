@@ -29,11 +29,11 @@ export class ModelFailoverProvider implements ModelProvider {
   }
 
   /** Providers whose account is not in cooldown; when every account is in cooldown, all of them are tried again. */
-  private candidates(): readonly NamedModelProvider[] {
+  private candidates(patienceMs = 0): readonly NamedModelProvider[] {
     const now = this.now();
     const healthy = this.providers.filter(provider =>
       (!provider.failureDomain || (this.unhealthyUntil.get(provider.failureDomain) ?? 0) <= now) &&
-      (this.rateLimitedUntil.get(provider) ?? 0) <= now
+      (this.rateLimitedUntil.get(provider) ?? 0) <= now + patienceMs
     );
     return healthy.length > 0 ? healthy : this.providers;
   }
@@ -42,7 +42,7 @@ export class ModelFailoverProvider implements ModelProvider {
     const failures: string[] = [];
     const failedDomains = new Set<string>();
     const startedAtRequest = this.now();
-    for (const provider of this.candidates()) {
+    for (const provider of this.candidates(input.maxRateLimitWaitMs)) {
       if (input.signal?.aborted) throw new Error('model request cancelled');
       if (provider.failureDomain && failedDomains.has(provider.failureDomain)) continue;
       if (this.options.totalBudgetMs !== undefined && failures.length > 0 && this.now() - startedAtRequest >= this.options.totalBudgetMs) {
