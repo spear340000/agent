@@ -56,3 +56,26 @@ test('a server-side failure from a provider with a fallback makes the failover s
     server.close();
   }
 });
+
+test('with a fallback configured a token window that frees up in 20 seconds is skipped instead of waited for', async () => {
+  const http = await import('node:http');
+  const server = http.createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ choices: [{ message: { content: 'ok' } }], usage: { total_tokens: 2_500, prompt_tokens: 2_000, completion_tokens: 500 } }));
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = (server.address() as { port: number }).port;
+  let clock = 0;
+  try {
+    const provider = new OpenAiProvider({ apiKey: 'test', model: 'm', baseUrl: `http://127.0.0.1:${port}`, tokensPerMinute: 3_000, failFastOnRateLimit: true, now: () => clock });
+    const input = { system: 'x'.repeat(100), user: 'y'.repeat(100), expectedOutputTokens: 500 };
+    assert.equal(await provider.complete(input), 'ok');
+    clock = 40_000;
+    await assert.rejects(
+      () => provider.complete(input),
+      (error: Error & { retryAfterMs?: number }) => /다음 모델로 전환/.test(error.message) && error.retryAfterMs === 20_000
+    );
+  } finally {
+    server.close();
+  }
+});

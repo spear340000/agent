@@ -3,8 +3,13 @@ import { ModelProviderError } from './model-provider-error.js';
 import { TokenRateLimiter, estimateTokens } from './token-rate-limiter.js';
 import { noteModelUsage } from './model-attempts.js';
 
-/** Longest a request waits for the token window to free up before the next provider is used instead. */
+/** Longest a request waits for the token window to free up when this is the only provider. */
 const MAX_RATE_LIMIT_WAIT_MS = 45_000;
+/**
+ * With another provider configured a long wait only delays the answer, and a wait as long as a caller's own timeout
+ * (the claim verifier allows 45 s) ends the call as cancelled without ever reaching the next provider.
+ */
+const FAILOVER_RATE_LIMIT_WAIT_MS = 8_000;
 
 export class OpenAiProvider implements ModelProvider {
   private readonly limiter?: TokenRateLimiter;
@@ -23,9 +28,9 @@ export class OpenAiProvider implements ModelProvider {
     if (this.limiter) {
       const tokens = estimateTokens(input.system.length + input.user.length, input.expectedOutputTokens);
       const wait = this.limiter.waitMs(tokens);
-      if (wait > MAX_RATE_LIMIT_WAIT_MS) {
+      if (wait > (this.options.failFastOnRateLimit ? FAILOVER_RATE_LIMIT_WAIT_MS : MAX_RATE_LIMIT_WAIT_MS)) {
         const reason = Number.isFinite(wait) ? `분당 토큰 한도에 도달했습니다(약 ${Math.ceil(wait / 1000)}초 뒤에 여유가 생겨 대기하지 않고 다음 모델로 전환합니다).` : '이 요청은 분당 토큰 한도보다 커서 이 모델로 보낼 수 없어 다음 모델로 전환합니다.';
-        throw new ModelProviderError(reason, true);
+        throw new ModelProviderError(reason, true, false, this.options.failFastOnRateLimit && Number.isFinite(wait) ? Math.min(wait, 60_000) : undefined);
       }
       if (wait > 0) await this.delay(0, input.signal, wait);
       reservation = this.limiter.record(tokens);
