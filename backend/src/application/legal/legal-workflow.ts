@@ -148,7 +148,7 @@ const WIKI_HINT_LIMIT = 3;
 const QUOTATION_CONTAINMENT = 0.9;
 const CLAIM_EXCERPT_MAX_CHARACTERS = 3_500;
 const DEFAULT_EVIDENCE_BUDGET_CHARS = 6_000;
-const CLAIM_VERIFY_TIMEOUT_MS = 45_000;
+const CLAIM_VERIFY_TIMEOUT_MS = 60_000;
 
 /** The rewrite only improves recall, so a slow model must not stall a direct lookup. */
 const REWRITE_TIMEOUT_MS = 6_000;
@@ -473,8 +473,10 @@ ${listing}`,
         user: `SOURCES\n${recordText}\n\nSENTENCES\n${sentenceText}`,
         signal: AbortSignal.any([signal, AbortSignal.timeout(CLAIM_VERIFY_TIMEOUT_MS)])
       });
-      const parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')) as { unsupported?: unknown };
+      let parsed: { unsupported?: unknown } | undefined;
+      try { parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')) as { unsupported?: unknown }; } catch { parsed = undefined; }
       if (!parsed || !Array.isArray(parsed.unsupported) || parsed.unsupported.some(item => !Number.isInteger(item) || item < 1 || item > cited.length)) {
+        reportProgress('문장 검증 건너뜀', `검증 모델의 응답을 해석하지 못해 검증 없이 진행: ${raw.replace(/\s+/g, ' ').slice(0, 120)}`);
         return { answer, removed: 0, checked: false };
       }
       const flagged = new Set<number>(parsed.unsupported);
@@ -501,6 +503,7 @@ ${listing}`,
       return { answer: refusal, removed: drop.size, checked: true };
     } catch (error) {
       if (signal.aborted) throw error;
+      reportProgress('문장 검증 건너뜀', `검증 모델 호출이 실패해 검증 없이 진행: ${error instanceof Error ? error.message.slice(0, 100) : String(error).slice(0, 100)}`);
       return { answer, removed: 0, checked: false };
     }
   }
