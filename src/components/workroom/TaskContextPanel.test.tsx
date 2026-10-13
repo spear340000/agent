@@ -144,6 +144,49 @@ test('rendersTaskRequestAndSources', () => {
   assert.match(markup, /링크 추가/)
 })
 
+test('shows stage usage placeholders until backend measurements are connected', () => {
+  const markup = renderPanel('completed')
+  assert.match(markup, /단계별 토큰·시간/)
+  assert.match(markup, /계측 연동 대기/)
+  assert.match(
+    markup,
+    /백엔드 계측값이 연결되면 단계별 토큰과 소요 시간을 표시합니다\./
+  )
+  assert.match(markup, /<th scope="col">단계<\/th>/)
+  assert.match(markup, /<th scope="col">토큰<\/th>/)
+  assert.match(markup, /<th scope="col">소요 시간<\/th>/)
+  assert.match(markup, /<th scope="row">합계<\/th>/)
+})
+
+test('renders measured token and duration values by task step', () => {
+  const task = createTask('completed')
+  task.steps = [
+    {
+      id: 'analysis',
+      title: '자료 분석',
+      status: 'completed',
+      progress: 100
+    }
+  ]
+  task.usageMetrics = {
+    stages: [{ stepId: 'analysis', tokenCount: 1240, durationMs: 2450 }],
+    totalTokenCount: 1240,
+    totalDurationMs: 2450
+  }
+  const markup = renderToStaticMarkup(
+    createElement(TaskContextPanel, {
+      task,
+      mobileOpen: false,
+      onMobileOpenChange: () => undefined,
+      onCancel: () => undefined,
+      onFollowup: async () => true
+    })
+  )
+  assert.match(markup, /자료 분석/)
+  assert.match(markup, /1,240/)
+  assert.match(markup, /2\.5초/)
+})
+
 test('renders user requests as bubbles without styling assistant content', () => {
   const markup = renderPanel('completed')
   const userBubbleCount = [
@@ -377,4 +420,22 @@ test('the technology ledger shows which retrieval layers actually ran', () => {
     /계획 모델 미사용 · 결정적 라우팅으로 직접 조회/,
     'the planner must be shown as unused rather than implied'
   )
+})
+
+test('shows the task-wide model totals without an empty per-stage table', () => {
+  const task = createTask('completed')
+  task.usageMetrics = { totalTokenCount: 4600, totalDurationMs: 21000 }
+  const markup = renderToStaticMarkup(
+    createElement(TaskContextPanel, {
+      task,
+      mobileOpen: false,
+      onMobileOpenChange: () => undefined,
+      onCancel: () => undefined,
+      onFollowup: async () => true
+    })
+  )
+  assert.match(markup, /4,600 토큰 · 21\.0초/)
+  assert.match(markup, /모델 호출 전체 합계입니다/)
+  assert.doesNotMatch(markup, /<th scope="col">단계<\/th>/)
+  assert.doesNotMatch(markup, /계측 연동 대기/)
 })

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   createTask,
+  backendUrl,
+  getFileContent,
   checkConnection,
   searchLegalLibrary,
   listLegalWikiPages,
@@ -54,6 +56,46 @@ test('fetchFileContent reports an unavailable source file instead of returning a
       async () => new Response('not found', { status: 404 })
     ),
     /파일 내용을 불러오지 못했습니다\. \(404\)/
+  )
+})
+
+test('plain HTTP backend URLs are accepted', () => {
+  assert.equal(
+    backendUrl({ baseUrl: 'http://localhost:8787', token: 'local' }, '/api'),
+    'http://localhost:8787/api'
+  )
+  assert.equal(
+    backendUrl({ baseUrl: 'http://127.0.0.1:8787', token: '' }, '/api'),
+    'http://127.0.0.1:8787/api'
+  )
+  assert.equal(
+    backendUrl({ baseUrl: 'https://api.example.com', token: 'secret' }, '/api'),
+    'https://api.example.com/api'
+  )
+  assert.equal(
+    backendUrl({ baseUrl: 'http://api.example.com', token: 'secret' }, '/api'),
+    'http://api.example.com/api'
+  )
+})
+
+test('file downloads abort after their configured timeout', async () => {
+  const connection: Connection = { baseUrl: 'http://127.0.0.1:8787', token: '' }
+  await assert.rejects(
+    getFileContent(
+      'file_1',
+      connection,
+      async (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal
+          if (signal?.aborted) reject(new Error('aborted'))
+          else
+            signal?.addEventListener('abort', () =>
+              reject(new Error('aborted'))
+            )
+        }),
+      5
+    ),
+    /시간이 초과/
   )
 })
 

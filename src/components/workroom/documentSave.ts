@@ -7,11 +7,14 @@ export function applySavedDocument(
   submittedMarkdown: string
 ): Task {
   const unchangedDuringSave = task.document === submittedMarkdown
+  const documentDirty =
+    !unchangedDuringSave || task.document !== artifact.content
 
   return {
     ...task,
     savedDocument: artifact.content,
-    documentDirty: !unchangedDuringSave || task.document !== artifact.content,
+    documentDirty,
+    documentDraftBase: documentDirty ? artifact.content : undefined,
     artifactFileId: artifact.fileId,
     artifactName: artifact.name,
     artifactMimeType: artifact.mimeType

@@ -103,7 +103,8 @@ function SiteFlowNode({
   detail,
   meta,
   technologies,
-  action
+  action,
+  status
 }: {
   kind?: 'start' | 'step' | 'planner' | 'tool' | 'result'
   phase: string
@@ -112,10 +113,27 @@ function SiteFlowNode({
   meta?: string
   technologies?: { name: string; role: string }[]
   action?: { label: string; onClick: () => void }
+  status?: string
 }) {
   return (
-    <article className={`site-flow__node site-flow__node--${kind}`}>
+    <article
+      className={`site-flow__node site-flow__node--${kind}${status ? ` site-flow__node--${status}` : ''}`}
+    >
       <span className="site-flow__node-kind">{phase}</span>
+      {status ? (
+        <span className="site-flow__node-status">
+          {(
+            {
+              complete: '완료',
+              active: '진행 중',
+              failed: '실패',
+              cancelled: '취소됨',
+              waiting: '대기 중',
+              empty: '결과 없음'
+            } as Record<string, string>
+          )[status] ?? status}
+        </span>
+      ) : null}
       <strong>{title}</strong>
       <small>{detail}</small>
       {technologies?.length ? (
@@ -169,7 +187,10 @@ function SiteFlowGroup({
   steps: React.ReactNode[]
 }) {
   return (
-    <details className="site-flow__node site-flow__disclosure">
+    <details
+      className="site-flow__node site-flow__disclosure"
+      aria-label={title}
+    >
       <summary>
         <span className="site-flow__disclosure-heading">
           <span className="site-flow__node-kind">
@@ -197,9 +218,11 @@ function SiteFlowGroup({
 }
 
 function SiteFlowDiagram({
-  groups
+  groups,
+  label = '요청 접수부터 자료 확보, 결과 생성으로 이어지는 처리 순서'
 }: {
   groups: { title: string; steps: React.ReactNode[] }[]
+  label?: string
 }) {
   const container = useRef<HTMLDivElement>(null)
   const markerId = `flow-arrow-${useId().replace(/:/gu, '')}`
@@ -239,6 +262,9 @@ function SiteFlowDiagram({
         const startY = from.top - origin.top + from.height / 2
         const endX = to.left - origin.left - 9
         const endY = to.top - origin.top + to.height / 2
+        if (Math.abs(startY - endY) < 2) {
+          return `M ${startX} ${startY} H ${endX}`
+        }
         const bendX = (from.right + to.left) / 2 - origin.left
         return `M ${startX} ${startY} H ${bendX - 10} Q ${bendX} ${startY} ${bendX} ${startY - 10} V ${endY + 10} Q ${bendX} ${endY} ${bendX + 10} ${endY} H ${endX}`
       })
@@ -259,7 +285,7 @@ function SiteFlowDiagram({
       ref={container}
       className="site-flow__diagram"
       style={{ position: 'relative' }}
-      aria-label="요청 접수부터 자료 확보, 결과 생성으로 이어지는 처리 순서"
+      aria-label={label}
     >
       {geometry.width > 0 ? (
         <svg
@@ -715,23 +741,23 @@ function FlowNode({
   detail,
   meta,
   status,
-  kind = 'step',
-  listItem = true
+  kind = 'step'
 }: {
   title: string
   detail: string
   meta?: string
   status: string
   kind?: 'start' | 'planner' | 'tool' | 'step' | 'result'
-  listItem?: boolean
 }) {
   return (
-    <article
-      className={`system-flow__node system-flow__node--${kind} system-flow__node--${status}`}
-      role={listItem ? 'listitem' : undefined}
-    >
-      <span className="system-flow__node-kind">
-        {kind === 'start'
+    <SiteFlowNode
+      kind={kind}
+      title={title}
+      detail={detail}
+      meta={meta}
+      status={status}
+      phase={
+        kind === 'start'
           ? '사용자 요청'
           : kind === 'planner'
             ? '플래너'
@@ -739,12 +765,9 @@ function FlowNode({
               ? '검색 도구'
               : kind === 'result'
                 ? '결과'
-                : '실행 단계'}
-      </span>
-      <strong>{title}</strong>
-      <small>{detail}</small>
-      {meta ? <span className="system-flow__node-meta">{meta}</span> : null}
-    </article>
+                : '실행 단계'
+      }
+    />
   )
 }
 
@@ -852,8 +875,33 @@ function WorkflowCanvas({ task }: { task: Task }) {
     }
   ]
 
+  // Split only at the first result-processing step; never regroup earlier
+  // file, planning, or retrieval steps by title and change their order.
+  const firstResult = task.steps.findIndex((step) =>
+    /analy|generat|write|분석|작성|생성|근거 검증/iu.test(step.title)
+  )
+  const resultStart = firstResult < 0 ? task.steps.length : firstResult
+  const flowGroups = [
+    {
+      title: '요청 접수',
+      steps: [<FlowNode key="request" {...flowItems[0].node} />]
+    },
+    {
+      title: '자료 확보',
+      steps: flowItems
+        .slice(1, resultStart + 1)
+        .map((item) => <FlowNode key={item.key} {...item.node} />)
+    },
+    {
+      title: '결과 생성',
+      steps: flowItems
+        .slice(resultStart + 1)
+        .map((item) => <FlowNode key={item.key} {...item.node} />)
+    }
+  ]
+
   return (
-    <div className="system-flow" aria-label="실행 워크플로 그래프">
+    <div className="system-flow site-flow" aria-label="실행 워크플로 그래프">
       <div className="system-flow__summary" aria-label="실행 현황">
         <div>
           <span>현재 상태</span>
@@ -883,54 +931,27 @@ function WorkflowCanvas({ task }: { task: Task }) {
           <strong>{citations.length}건</strong>
         </div>
       </div>
-      <div className="system-flow__canvas" role="list">
-        {flowItems.map((item, index) => {
-          const itemNumber = index + 1
-          const hasNext = index < flowItems.length - 1
-          return (
-            <div
-              className="system-flow__item"
-              key={item.key}
-              role="listitem"
-              data-has-next={hasNext || undefined}
-              data-row-end-three={itemNumber % 3 === 0 || undefined}
-              data-row-end-two={itemNumber % 2 === 0 || undefined}
-            >
-              <FlowNode {...item.node} listItem={false} />
-              {hasNext ? (
-                <ArrowRight
-                  className="system-flow__connector"
-                  aria-hidden="true"
-                  size={18}
-                  strokeWidth={2.4}
-                />
-              ) : null}
-            </div>
-          )
-        })}
+      <p className="site-flow__scroll-hint">
+        각 열을 위에서 아래로 읽고 연결선을 따라 이동하세요. 백엔드가 전달한
+        단계 순서입니다.
+      </p>
+      <div className="site-flow__diagram-viewport">
+        <SiteFlowDiagram groups={flowGroups} label="백엔드 실행 단계 순서" />
       </div>
       {tools.length > 0 ? (
-        <section
-          className="system-flow__group"
-          aria-label="실제 검색 도구 호출"
-        >
-          <header>
-            <strong>실제 검색 도구 호출</strong>
-            <small>{tools.length}회 · 백엔드 기록 순서</small>
-          </header>
-          <p>실행 단계와 별도로 표시한 검색 기록입니다.</p>
-          <div className="system-flow__tool-list" role="list">
-            {tools.map((tool, index) => (
-              <FlowNode
-                key={`${tool.tool}:${index}`}
-                kind="tool"
-                title={tool.label}
-                detail={`${tool.query ? `질의: ${tool.query} · ` : ''}결과 ${tool.results}건`}
-                status={tool.results > 0 ? 'complete' : 'empty'}
-              />
-            ))}
-          </div>
-        </section>
+        <SiteFlowGroup
+          title="실제 검색 도구 호출"
+          detail={`${tools.length}회 · 백엔드 기록 순서. 실행 단계와 별도로 펼쳐 보는 검색 기록입니다.`}
+          steps={tools.map((tool, index) => (
+            <FlowNode
+              key={`${tool.tool}:${index}`}
+              kind="tool"
+              title={tool.label}
+              detail={`${tool.query ? `질의: ${tool.query} · ` : ''}결과 ${tool.results}건`}
+              status={tool.results > 0 ? 'complete' : 'empty'}
+            />
+          ))}
+        />
       ) : null}
       {task.legal?.sourceStatus.ledger?.layers.length ? (
         <section
@@ -1954,7 +1975,9 @@ function SystemExplorerSession({
     <section
       className={[
         'system-explorer',
-        topic === 'site-flow' ? 'system-explorer--site-flow' : ''
+        topic === 'site-flow' || topic === 'flow'
+          ? 'system-explorer--site-flow'
+          : ''
       ]
         .filter(Boolean)
         .join(' ')}
@@ -2188,10 +2211,52 @@ function SystemExplorerSession({
               ) : null}
             </>
           ) : (
-            <p className="system-explorer__note">
-              아직 표시할 작업 실행 기록이 없습니다. 채팅에서 작업을 실행하면
-              이곳에 기록됩니다.
-            </p>
+            <div className="site-flow">
+              <p className="system-explorer__note">
+                아직 표시할 작업 실행 기록이 없습니다. 채팅에서 작업을 실행하면
+                실제 단계와 상태가 아래 흐름도에 표시됩니다.
+              </p>
+              <div className="site-flow__diagram-viewport">
+                <SiteFlowDiagram
+                  label="작업 실행 기록 대기"
+                  groups={[
+                    {
+                      title: '요청 접수',
+                      steps: [
+                        <SiteFlowNode
+                          key="request"
+                          phase="기록 대기"
+                          title="작업 요청 대기"
+                          detail="채팅에서 작업을 시작하면 요청과 참고 자료가 표시됩니다."
+                        />
+                      ]
+                    },
+                    {
+                      title: '자료 확보',
+                      steps: [
+                        <SiteFlowNode
+                          key="sources"
+                          phase="기록 대기"
+                          title="계획·검색 기록 대기"
+                          detail="백엔드가 전달한 실제 계획과 자료 수집 단계가 표시됩니다."
+                        />
+                      ]
+                    },
+                    {
+                      title: '결과 생성',
+                      steps: [
+                        <SiteFlowNode
+                          key="result"
+                          phase="기록 대기"
+                          title="분석·문서 기록 대기"
+                          detail="실제 분석·작성 단계와 결과 상태가 표시됩니다."
+                        />
+                      ]
+                    }
+                  ]}
+                />
+              </div>
+            </div>
           )}
         </div>
       ) : null}
@@ -2311,7 +2376,7 @@ function SystemExplorerSession({
                 <b>법령 키워드 검색</b>
                 <small>법령·조문 코퍼스</small>
               </span>
-              <Status ready={retrieval?.enabled ?? null} label="상태" />
+              <Status ready={retrieval?.ready ?? null} label="상태" />
             </li>
             <li>
               <Search />
@@ -2319,7 +2384,7 @@ function SystemExplorerSession({
                 <b>판례 키워드 검색</b>
                 <small>사건명·사건번호·본문 색인</small>
               </span>
-              <Status ready={retrieval?.enabled ?? null} label="상태" />
+              <Status ready={retrieval?.ready ?? null} label="상태" />
             </li>
             <li>
               <Database />

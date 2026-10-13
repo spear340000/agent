@@ -29,7 +29,11 @@ import { officeApi } from '@/api/automation'
 import FileToolsWorkspace from '@/components/tools/FileToolsWorkspace'
 import ConnectionDialog from './ConnectionDialog'
 import useBackendConnection from './useBackendConnection'
-import { persistDocumentDraft, restoreDocumentDraft } from './documentDrafts'
+import {
+  clearDocumentDraft,
+  persistDocumentDraft,
+  restoreDocumentDraft
+} from './documentDrafts'
 import Composer from './Composer'
 import DocumentWorkspace from './DocumentWorkspace'
 import TaskContextPanel from './TaskContextPanel'
@@ -44,7 +48,7 @@ import {
   toTaskSummary,
   toWorkroomTask
 } from './taskAdapters'
-import type { Source, Task, TaskState } from './types'
+import type { Source, SourceUploadProgress, Task, TaskState } from './types'
 import { stageMeta } from './types'
 import ActivityLog from './ActivityLog'
 import { friendlyErrorMessage } from './displayText'
@@ -155,6 +159,7 @@ export default function Workroom() {
     reconnect,
     connect
   } = useBackendConnection()
+  const [explorerConnection, setExplorerConnection] = useState(connection)
   const [connectionOpen, setConnectionOpen] = useState(false)
   const [view, setView] = useState<'tasks' | 'tools'>('tasks')
   const [sidebarSection, setSidebarSection] = useState<'chat' | 'system'>(
@@ -169,7 +174,17 @@ export default function Workroom() {
   const [loaded, setLoaded] = useState(false)
   const [notice, setNotice] = useState('')
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null)
+  const [exportingDocument, setExportingDocument] = useState(false)
+  const exportingDocumentRef = useRef(false)
+  const pendingTaskActionIdsRef = useRef(new Set<string>())
+  const [pendingTaskActionIds, setPendingTaskActionIds] = useState<Set<string>>(
+    () => new Set()
+  )
   const [saveFailure, setSaveFailure] = useState<SaveFailure | null>(null)
+
+  useEffect(() => {
+    setExplorerConnection(connection)
+  }, [connection])
 
   useEffect(() => {
     try {
@@ -280,6 +295,9 @@ export default function Workroom() {
           messages: previous?.messages ?? [],
           document: previous?.document ?? '',
           documentDirty: previous?.documentDirty ?? false,
+          documentDraftBase: previous?.documentDraftBase,
+          documentDraftConflict: previous?.documentDraftConflict,
+          savedDocument: previous?.savedDocument,
           revisionBaseline: previous?.revisionBaseline
         })
         let restored = mapped
@@ -440,7 +458,10 @@ export default function Workroom() {
     setSaveFailure(null)
   }
 
-  async function prepareSources(sources: Source[]) {
+  async function prepareSources(
+    sources: Source[],
+    onUploadProgress?: (progress: SourceUploadProgress) => void
+  ) {
     if (currentConnection.current !== connection)
       throw new Error('백엔드 연결이 변경되었습니다. 다시 요청해 주세요.')
     const cache = uploadedFiles.current
@@ -448,24 +469,39 @@ export default function Workroom() {
     const links = sources.filter((source) => source.kind === 'link')
     if (files.length > 5 || links.length > 5)
       throw new Error('파일과 링크는 각각 최대 5개까지 추가할 수 있습니다.')
-    const uploaded: Source[] = []
-    for (const source of files) {
+    const uploaded: Source[] = new Array(files.length)
+    let completedFiles = 0
+    if (files.length > 0) {
+      onUploadProgress?.({
+        completed: 0,
+        total: files.length,
+        current: files[0]?.name ?? ''
+      })
+    }
+    for (const [index, source] of files.entries()) {
       if (source.file) {
-        const file =
-          cache.get(source.file) ??
-          (await uploadSourceFile(source.file, connection))
-        cache.set(source.file, file)
+        let file = cache.get(source.file)
+        if (!file) {
+          file = await uploadSourceFile(source.file, connection)
+          cache.set(source.file, file)
+        }
         if (currentConnection.current !== connection)
           throw new Error('백엔드 연결이 변경되었습니다. 다시 요청해 주세요.')
-        uploaded.push({
+        uploaded[index] = {
           id: file.id,
           fileId: file.id,
           name: file.name,
           kind: 'file',
           status: 'queued'
-        })
-      } else if (source.fileId) uploaded.push(source)
+        }
+      } else if (source.fileId) uploaded[index] = source
       else throw new Error(`${source.name}: 파일을 다시 첨부해 주세요.`)
+      completedFiles += 1
+      onUploadProgress?.({
+        completed: completedFiles,
+        total: files.length,
+        current: source.name
+      })
     }
     return {
       sources: [...uploaded, ...links],
@@ -479,7 +515,8 @@ export default function Workroom() {
   async function startTask(
     request: string,
     sources: Source[],
-    workflow: 'legal' | 'document' = 'legal'
+    workflow: 'legal' | 'document' = 'legal',
+    onUploadProgress?: (progress: SourceUploadProgress) => void
   ): Promise<boolean> {
     try {
       if (!loaded || backendStatus !== 'online') {
@@ -487,13 +524,13 @@ export default function Workroom() {
           '백엔드가 연결되지 않았습니다. 서버 상태를 확인한 뒤 다시 시도해 주세요.'
         )
       }
-      if (workflow === 'legal' && capabilities?.model.configured === false) {
+      if (capabilities?.model.configured === false) {
         throw new Error(
           '모델 제공자 API 키가 설정되지 않아 작업을 시작할 수 없습니다.'
         )
       }
 
-      const prepared = await prepareSources(sources)
+      const prepared = await prepareSources(sources, onUploadProgress)
 
       const created = await createTask(
         connection,
@@ -526,7 +563,8 @@ export default function Workroom() {
   async function submitTaskRequest(
     request: string,
     kind: 'revision' | 'followup' = 'followup',
-    sources: Source[] = []
+    sources: Source[] = [],
+    onUploadProgress?: (progress: SourceUploadProgress) => void
   ): Promise<boolean> {
     if (!active || !request.trim()) return false
     try {
@@ -545,7 +583,7 @@ export default function Workroom() {
           )
         )
       }
-      const prepared = await prepareSources(sources)
+      const prepared = await prepareSources(sources, onUploadProgress)
       const { task: accepted } = await sendRevision(
         active.id,
         kind,
@@ -606,26 +644,44 @@ export default function Workroom() {
     )
   }
 
+  function beginTaskAction(id: string) {
+    if (pendingTaskActionIdsRef.current.has(id)) return false
+    pendingTaskActionIdsRef.current.add(id)
+    setPendingTaskActionIds(new Set(pendingTaskActionIdsRef.current))
+    return true
+  }
+
+  function finishTaskAction(id: string) {
+    pendingTaskActionIdsRef.current.delete(id)
+    setPendingTaskActionIds(new Set(pendingTaskActionIdsRef.current))
+  }
+
   async function cancelActiveTask() {
-    if (!active) return
+    if (!active || !beginTaskAction(active.id)) return
+    const taskId = active.id
     try {
-      updateTaskDetails(await cancelTask(active.id, connection))
+      updateTaskDetails(await cancelTask(taskId, connection))
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : '작업 취소에 실패했습니다.'
       )
+    } finally {
+      finishTaskAction(taskId)
     }
   }
 
   async function rerunActiveTask() {
-    if (!active) return
+    if (!active || !beginTaskAction(active.id)) return
+    const taskId = active.id
     try {
-      updateTaskDetails(await rerunTask(active.id, connection))
+      updateTaskDetails(await rerunTask(taskId, connection))
       setNotice('작업을 다시 실행했습니다.')
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : '작업 재실행에 실패했습니다.'
       )
+    } finally {
+      finishTaskAction(taskId)
     }
   }
 
@@ -661,7 +717,9 @@ export default function Workroom() {
   }
 
   async function exportDocument(format: ExportFormat) {
-    if (!active?.document) return
+    if (!active?.document || exportingDocumentRef.current) return
+    exportingDocumentRef.current = true
+    setExportingDocument(true)
     try {
       const finalDocument = prepareFinalDocument(
         active.document,
@@ -694,6 +752,9 @@ export default function Workroom() {
       setNotice(
         error instanceof Error ? error.message : '다운로드에 실패했습니다.'
       )
+    } finally {
+      exportingDocumentRef.current = false
+      setExportingDocument(false)
     }
   }
 
@@ -723,13 +784,43 @@ export default function Workroom() {
           ? {
               ...task,
               document: value,
-              documentDirty: value !== (task.savedDocument ?? '')
+              documentDirty: value !== (task.savedDocument ?? ''),
+              documentDraftBase:
+                value === (task.savedDocument ?? '')
+                  ? undefined
+                  : task.documentDirty
+                    ? (task.documentDraftBase ?? task.savedDocument ?? '')
+                    : (task.savedDocument ?? '')
             }
           : task
       )
     )
     setSaveFailure((current) =>
       current?.taskId === active.id ? null : current
+    )
+  }
+
+  function resolveDocumentDraftConflict(recoverDraft: boolean) {
+    if (!active?.documentDraftConflict) return
+    const { id, documentDraftConflict, savedDocument } = active
+    try {
+      clearDocumentDraft(id, connection.baseUrl, localStorage)
+    } catch {
+      /* The in-memory choice still takes effect if storage is unavailable. */
+    }
+    setTasks((current) =>
+      current.map((task) => {
+        if (task.id !== id) return task
+        if (!recoverDraft) return { ...task, documentDraftConflict: undefined }
+        const documentDirty = documentDraftConflict !== (savedDocument ?? '')
+        return {
+          ...task,
+          document: documentDraftConflict,
+          documentDirty,
+          documentDraftBase: documentDirty ? (savedDocument ?? '') : undefined,
+          documentDraftConflict: undefined
+        }
+      })
     )
   }
 
@@ -862,15 +953,21 @@ export default function Workroom() {
 
         <main className="workfolio-main">
           {sidebarSection === 'system' ? (
-            <SystemExplorer
-              capabilities={capabilities}
-              backendStatus={backendStatus}
-              connection={connection}
-              tasks={tasks}
-              onRetry={reconnect}
-              topic={systemTopic}
-              onTopicChange={setSystemTopic}
-            />
+            explorerConnection === connection ? (
+              <SystemExplorer
+                capabilities={capabilities}
+                backendStatus={backendStatus}
+                connection={connection}
+                tasks={tasks}
+                onRetry={reconnect}
+                topic={systemTopic}
+                onTopicChange={setSystemTopic}
+              />
+            ) : (
+              <p className="workfolio-document-state" role="status">
+                새 백엔드 자료를 불러오는 중입니다.
+              </p>
+            )
           ) : toolsActive ? (
             <FileToolsWorkspace
               connection={connection}
@@ -886,6 +983,8 @@ export default function Workroom() {
                   task={active}
                   mobileOpen={mobileContextOpen}
                   onMobileOpenChange={setMobileContextOpen}
+                  backendKey={connection.baseUrl}
+                  canceling={pendingTaskActionIds.has(active.id)}
                   onCancel={() => void cancelActiveTask()}
                   onFollowup={submitTaskRequest}
                   onDraftFromAnswer={
@@ -905,6 +1004,28 @@ export default function Workroom() {
                   className="workfolio-document-column"
                   aria-label="문서 작업 공간"
                 >
+                  {active.documentDraftConflict ? (
+                    <div className="document-draft-conflict" role="alert">
+                      <p>
+                        서버 문서가 로컬 초안을 저장한 뒤 변경되어 두 버전을
+                        보존했습니다. 사용할 버전을 선택해 주세요.
+                      </p>
+                      <div className="document-draft-conflict__actions">
+                        <button
+                          type="button"
+                          onClick={() => resolveDocumentDraftConflict(true)}
+                        >
+                          로컬 초안 복구
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => resolveDocumentDraftConflict(false)}
+                        >
+                          서버 문서 사용
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   {active.document ? (
                     <DocumentWorkspace
                       title={documentHeading || active.title}
@@ -915,6 +1036,7 @@ export default function Workroom() {
                       previewMode={finalPreview}
                       dirty={Boolean(active.documentDirty)}
                       saving={savingTaskId === active.id}
+                      exporting={exportingDocument}
                       canSave={active.state === 'completed'}
                       saveError={
                         saveFailure?.taskId === active.id
@@ -946,6 +1068,8 @@ export default function Workroom() {
                           <button
                             className="workfolio-primary"
                             type="button"
+                            disabled={pendingTaskActionIds.has(active.id)}
+                            aria-busy={pendingTaskActionIds.has(active.id)}
                             onClick={() => void rerunActiveTask()}
                           >
                             <RefreshCw size={15} />
@@ -988,23 +1112,19 @@ export default function Workroom() {
               ) : null}
               {loaded && capabilities?.model.configured === false ? (
                 <p className="workfolio-start__warning" role="status">
-                  모델 제공자 API 키가 설정되지 않아 법률 답변을 시작할 수
-                  없습니다.
+                  모델 제공자 API 키가 설정되지 않아 작업을 시작할 수 없습니다.
                 </p>
               ) : null}
               {loaded &&
               capabilities?.legalRetrieval &&
-              capabilities.legalRetrieval.state === 'unavailable' ? (
-                <p className="workfolio-start__warning" role="status">
-                  {capabilities.legalRetrieval.message} 인용 없는 법률 답변은
-                  제공하지 않습니다.
-                </p>
-              ) : null}
-              {loaded &&
-              capabilities?.legalRetrieval &&
-              capabilities.legalRetrieval.state === 'degraded' ? (
+              ['unavailable', 'degraded', 'unknown'].includes(
+                capabilities.legalRetrieval.state
+              ) ? (
                 <p className="workfolio-start__warning" role="status">
                   {capabilities.legalRetrieval.message}
+                  {capabilities.legalRetrieval.state === 'unavailable'
+                    ? ' 인용 없는 법률 답변은 제공하지 않습니다.'
+                    : ''}
                 </p>
               ) : null}
               <p className="workfolio-start__privacy">
@@ -1019,7 +1139,7 @@ export default function Workroom() {
               <Composer
                 onSubmit={startTask}
                 disabled={!loaded || backendStatus !== 'online'}
-                legalUnavailable={capabilities?.model.configured === false}
+                modelUnavailable={capabilities?.model.configured === false}
               />
             </section>
           )}

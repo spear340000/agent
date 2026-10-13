@@ -315,6 +315,7 @@ export const defaultConnection: Connection = {
 
 type Fetcher = typeof fetch
 type JsonError = { error?: string; message?: string }
+const FILE_DOWNLOAD_TIMEOUT_MS = 120_000
 const fileMimeTypes: Record<string, string> = {
   pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -359,6 +360,7 @@ export async function request<T>(
   options: RequestInit = {},
   fetcher: Fetcher = fetch
 ): Promise<T> {
+  const url = backendUrl(connection, path)
   const headers = new Headers(options.headers)
   if (connection.token.trim()) {
     headers.set('Authorization', `Bearer ${connection.token.trim()}`)
@@ -378,7 +380,7 @@ export async function request<T>(
     ? AbortSignal.any([options.signal, timeout])
     : timeout
   try {
-    response = await fetcher(backendUrl(connection, path), {
+    response = await fetcher(url, {
       ...options,
       headers,
       cache: 'no-store',
@@ -607,27 +609,41 @@ export function rerunTask(
 export async function getFileContent(
   id: string,
   connection: Connection = defaultConnection,
-  fetcher: Fetcher = fetch
+  fetcher: Fetcher = fetch,
+  timeoutMs = FILE_DOWNLOAD_TIMEOUT_MS
 ): Promise<Blob> {
+  const url = backendUrl(
+    connection,
+    `/api/files/${encodeURIComponent(id)}/content`
+  )
+  const timeout = AbortSignal.timeout(timeoutMs)
   let response: Response
   try {
-    response = await fetcher(
-      backendUrl(connection, `/api/files/${encodeURIComponent(id)}/content`),
-      {
-        headers: connection.token.trim()
-          ? { Authorization: `Bearer ${connection.token.trim()}` }
-          : undefined,
-        cache: 'no-store'
-      }
-    )
+    response = await fetcher(url, {
+      headers: connection.token.trim()
+        ? { Authorization: `Bearer ${connection.token.trim()}` }
+        : undefined,
+      cache: 'no-store',
+      signal: timeout
+    })
   } catch {
+    if (timeout.aborted)
+      throw new Error('파일 다운로드 시간이 초과됐습니다. 다시 시도해 주세요.')
     throw new Error(
       '백엔드에 연결할 수 없습니다. 주소와 서버 실행 상태를 확인해 주세요.'
     )
   }
   if (!response.ok)
     throw new Error(`파일 내용을 불러오지 못했습니다. (${response.status})`)
-  return response.blob()
+  try {
+    return await response.blob()
+  } catch {
+    if (timeout.aborted)
+      throw new Error('파일 다운로드 시간이 초과됐습니다. 다시 시도해 주세요.')
+    throw new Error(
+      '파일 내용을 끝까지 다운로드하지 못했습니다. 다시 시도해 주세요.'
+    )
+  }
 }
 
 /** Same as getFileContent; kept for the callers that use this name. */

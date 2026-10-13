@@ -19,17 +19,26 @@ import {
   stageMeta,
   stageOrder
 } from './types'
-import type { Source, Task, TaskState, WorkflowStage } from './types'
+import type {
+  Source,
+  SourceUploadProgress,
+  Task,
+  TaskState,
+  WorkflowStage
+} from './types'
 
 export type TaskContextPanelProps = {
   task: Task
   mobileOpen: boolean
   onMobileOpenChange: (open: boolean) => void
+  backendKey?: string
+  canceling?: boolean
   onCancel: () => void
   onFollowup: (
     request: string,
     kind?: 'revision' | 'followup',
-    sources?: Source[]
+    sources?: Source[],
+    onUploadProgress?: (progress: SourceUploadProgress) => void
   ) => Promise<boolean>
   onDraftFromAnswer?: () => void
 }
@@ -147,6 +156,132 @@ function Ledger({ task }: { task: Task }) {
   )
 }
 
+function formatTokenCount(value?: number): string {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? new Intl.NumberFormat('ko-KR').format(value)
+    : '—'
+}
+
+function formatDuration(value?: number): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+  if (value < 60_000) return `${(value / 1000).toFixed(1)}초`
+  const minutes = Math.floor(value / 60_000)
+  const seconds = Math.floor((value % 60_000) / 1000)
+  return seconds > 0 ? `${minutes}분 ${seconds}초` : `${minutes}분`
+}
+
+function UsageMetrics({
+  task,
+  timeline
+}: {
+  task: Task
+  timeline: Array<{ key: string; title: string }>
+}) {
+  const usageByStep = new Map(
+    (task.usageMetrics?.stages ?? []).map((stage) => [stage.stepId, stage])
+  )
+  const stageMetrics = timeline.map((step) => usageByStep.get(step.key))
+  const hasCompleteStageTotals =
+    stageMetrics.length > 0 &&
+    stageMetrics.every((stage) => typeof stage?.tokenCount === 'number')
+  const hasCompleteStageDurations =
+    stageMetrics.length > 0 &&
+    stageMetrics.every((stage) => typeof stage?.durationMs === 'number')
+  const totalTokenCount =
+    task.usageMetrics?.totalTokenCount ??
+    (hasCompleteStageTotals
+      ? stageMetrics.reduce(
+          (total, stage) => total + (stage?.tokenCount ?? 0),
+          0
+        )
+      : undefined)
+  const totalDurationMs =
+    task.usageMetrics?.totalDurationMs ??
+    (hasCompleteStageDurations
+      ? stageMetrics.reduce(
+          (total, stage) => total + (stage?.durationMs ?? 0),
+          0
+        )
+      : undefined)
+  const hasStageData = stageMetrics.some(
+    (stage) =>
+      stage?.tokenCount !== undefined || stage?.durationMs !== undefined
+  )
+  const hasUsageData =
+    totalTokenCount !== undefined ||
+    totalDurationMs !== undefined ||
+    stageMetrics.some(
+      (stage) =>
+        stage?.tokenCount !== undefined || stage?.durationMs !== undefined
+    )
+
+  return (
+    <section
+      className="task-context__section task-context__usage"
+      aria-labelledby="task-usage-title"
+    >
+      <details className="task-context__usage-details">
+        <summary>
+          <span id="task-usage-title">단계별 토큰·시간</span>
+          <span className="task-context__usage-summary">
+            {hasUsageData
+              ? `${formatTokenCount(totalTokenCount)} 토큰 · ${formatDuration(totalDurationMs)}`
+              : '계측 연동 대기'}
+          </span>
+          <ChevronDown
+            className="task-context__usage-chevron"
+            aria-hidden="true"
+            size={15}
+          />
+        </summary>
+        <div className="task-context__usage-content">
+          {!hasUsageData ? (
+            <p className="task-context__usage-note">
+              백엔드 계측값이 연결되면 단계별 토큰과 소요 시간을 표시합니다.
+            </p>
+          ) : null}
+          {hasUsageData && !hasStageData ? (
+            <p className="task-context__usage-note">
+              이 작업의 모델 호출 전체 합계입니다. 단계별 수치는 백엔드가
+              단계별로 기록하면 표시됩니다.
+            </p>
+          ) : null}
+          {hasStageData || !hasUsageData ? (
+            <table className="task-context__usage-table">
+              <thead>
+                <tr>
+                  <th scope="col">단계</th>
+                  <th scope="col">토큰</th>
+                  <th scope="col">소요 시간</th>
+                </tr>
+              </thead>
+              <tbody>
+                {timeline.map((step) => {
+                  const usage = usageByStep.get(step.key)
+                  return (
+                    <tr key={step.key}>
+                      <th scope="row">{step.title}</th>
+                      <td>{formatTokenCount(usage?.tokenCount)}</td>
+                      <td>{formatDuration(usage?.durationMs)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th scope="row">합계</th>
+                  <td>{formatTokenCount(totalTokenCount)}</td>
+                  <td>{formatDuration(totalDurationMs)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          ) : null}
+        </div>
+      </details>
+    </section>
+  )
+}
+
 function LegalAnswer({
   task,
   onDraftFromAnswer
@@ -252,6 +387,8 @@ export default function TaskContextPanel({
   task,
   mobileOpen,
   onMobileOpenChange,
+  backendKey = '',
+  canceling = false,
   onCancel,
   onFollowup,
   onDraftFromAnswer
@@ -435,6 +572,8 @@ export default function TaskContextPanel({
               <button
                 className="task-context__action"
                 type="button"
+                disabled={canceling}
+                aria-busy={canceling}
                 onClick={onCancel}
               >
                 <X aria-hidden="true" size={14} />
@@ -443,6 +582,8 @@ export default function TaskContextPanel({
             ) : null}
           </div>
         </section>
+
+        <UsageMetrics task={task} timeline={timeline} />
 
         {task.messages
           .filter((message) => message.kind !== 'system')
@@ -504,14 +645,15 @@ export default function TaskContextPanel({
         <Composer
           key={task.id}
           compact
+          draftKey={`${backendKey}:${task.id}`}
           placeholder={
             requestKind === 'revision'
               ? '문서에서 바꿀 내용을 적어 주세요.'
               : undefined
           }
           disabled={['queued', 'running'].includes(task.state)}
-          onSubmit={(request, sources) =>
-            onFollowup(request, requestKind, sources)
+          onSubmit={(request, sources, _workflow, onUploadProgress) =>
+            onFollowup(request, requestKind, sources, onUploadProgress)
           }
         />
       </div>

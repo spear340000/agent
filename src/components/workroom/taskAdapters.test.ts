@@ -176,6 +176,44 @@ test('backend task details supply the document and real source metadata shown in
   )
 })
 
+test('server refreshes preserve the base version of a dirty local document', () => {
+  const details: TaskDetails = {
+    task: {
+      id: 'task_draft',
+      title: 'Draft',
+      prompt: 'Edit',
+      sourceFileIds: [],
+      sourceUrls: [],
+      status: 'completed',
+      steps: [],
+      createdAt: '',
+      updatedAt: ''
+    },
+    events: [],
+    artifacts: [
+      {
+        id: 'artifact_new',
+        taskId: 'task_draft',
+        name: 'document.md',
+        kind: 'document',
+        mimeType: 'text/markdown',
+        content: 'server version 2',
+        createdAt: '2026-10-12T00:00:00Z'
+      }
+    ]
+  }
+  const task = toWorkroomTask(details, {
+    document: 'local edit',
+    documentDirty: true,
+    savedDocument: 'server version 2',
+    documentDraftBase: 'server version 1'
+  })
+
+  assert.equal(task.document, 'local edit')
+  assert.equal(task.savedDocument, 'server version 2')
+  assert.equal(task.documentDraftBase, 'server version 1')
+})
+
 test('preservesDirtyDocumentWhenTaskDetailsRefresh', () => {
   const localDraft = '# Local edit\n\nUnsaved changes stay visible.'
   const task = toWorkroomTask(
@@ -557,4 +595,49 @@ test('task details from an older backend without events still convert', () => {
   } as unknown as TaskDetails)
   assert.equal(task.activity, undefined)
   assert.equal(task.legal, undefined)
+})
+
+test('the usage panel totals come from the backend model totals of the task', () => {
+  const task = toWorkroomTask({
+    task: {
+      id: 't',
+      title: '제목',
+      prompt: '질문',
+      sourceFileIds: [],
+      sourceUrls: [],
+      status: 'completed',
+      steps: [],
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z'
+    },
+    events: [
+      {
+        id: 1,
+        taskId: 't',
+        type: 'model.attempts',
+        title: '모델 사용 기록',
+        message: '',
+        status: 'completed',
+        createdAt: '2026-01-01T00:00:00Z',
+        metadata: {
+          finalModel: 'Groq · m',
+          fellBack: false,
+          attempts: [],
+          totals: {
+            calls: 3,
+            failedCalls: 0,
+            promptTokens: 4000,
+            completionTokens: 600,
+            totalMs: 21000,
+            tokensPerSecond: 50
+          }
+        }
+      }
+    ],
+    artifacts: []
+  } as unknown as TaskDetails)
+  assert.deepEqual(task.usageMetrics, {
+    totalTokenCount: 4600,
+    totalDurationMs: 21000
+  })
 })

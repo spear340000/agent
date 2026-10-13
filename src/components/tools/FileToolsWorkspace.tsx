@@ -5,7 +5,6 @@ import { ArrowLeft, Download, RefreshCw, Upload } from 'lucide-react'
 import {
   downloadFile,
   uploadSourceFile,
-  validateSourceFile,
   type Connection,
   type ManagedFile,
   type RuntimeCapabilities
@@ -19,6 +18,7 @@ import SearchTools from './SearchTools'
 import ComputerTools from './ComputerTools'
 import ToolResultView from './ToolResultView'
 import type { RunTool } from './ToolFields'
+import { validateUploadBatch } from './uploadBatch'
 
 type Tool =
   | 'files'
@@ -50,6 +50,9 @@ export default function FileToolsWorkspace({
   onClose: () => void
 }) {
   const [tool, setTool] = useState<Tool>('files')
+  const [mountedTools, setMountedTools] = useState<Set<Tool>>(
+    () => new Set(['files'])
+  )
   const [files, setFiles] = useState<ManagedFile[]>([])
   const [cursor, setCursor] = useState<string>()
   const [busy, setBusy] = useState(false)
@@ -153,7 +156,7 @@ export default function FileToolsWorkspace({
         return
       }
       try {
-        selected.forEach(validateSourceFile)
+        validateUploadBatch(selected)
       } catch (cause) {
         setError(
           cause instanceof Error ? cause.message : '파일을 확인해 주세요.'
@@ -161,10 +164,21 @@ export default function FileToolsWorkspace({
         return
       }
       void run('파일 업로드', async () => {
-        const saved: ManagedFile[] = []
+        const saved: ManagedFile[] = new Array(selected.length)
+        let completed = 0
         try {
-          for (const file of selected)
-            saved.push(await uploadSourceFile(file, connection))
+          if (mounted.current)
+            setLabel(
+              `파일 업로드 0/${selected.length}: ${selected[0]?.name ?? ''}`
+            )
+          for (const [index, file] of selected.entries()) {
+            saved[index] = await uploadSourceFile(file, connection)
+            completed += 1
+            if (mounted.current)
+              setLabel(
+                `파일 업로드 ${completed}/${selected.length}: ${file.name}`
+              )
+          }
           return { files: saved }
         } finally {
           if (mounted.current) void loadFiles()
@@ -230,6 +244,7 @@ export default function FileToolsWorkspace({
             onClick={() => {
               if (!busy) {
                 setTool(id)
+                setMountedTools((current) => new Set(current).add(id))
                 setSearch('')
                 setSearchQuery('')
                 setResult(null)
@@ -297,106 +312,129 @@ export default function FileToolsWorkspace({
         </p>
       )}
       <div className="workfolio-tools__content">
-        {tool === 'files' && (
-          <section
-            className="workfolio-file-library"
-            aria-labelledby="workfolio-file-library-title"
-          >
-            <header className="workfolio-file-library__heading">
-              <div>
-                <h2 id="workfolio-file-library-title">파일 보관함</h2>
-                <p>업로드한 문서를 찾고 내려받을 수 있습니다.</p>
-              </div>
-            </header>
-            <div className="workfolio-file-library__filters">
-              <label>
-                파일 이름 검색
-                <input
-                  type="search"
-                  maxLength={200}
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </label>
-              {search.trim() && (
-                <button
-                  type="button"
-                  className="workfolio-file-library__clear-search"
-                  onClick={() => {
-                    setSearch('')
-                    setSearchQuery('')
-                  }}
-                >
-                  검색어 지우기
-                </button>
-              )}
-              <span>
-                DOCX · XLSX · PDF · PPTX · TXT · CSV <i>파일당 최대 10 MiB</i>
-              </span>
-            </div>
-            <ul>
-              {visibleFiles.map((file) => (
-                <li key={file.id}>
-                  <div>
-                    <strong>{file.name}</strong>
-                    <small>
-                      {(file.bytes / 1024).toFixed(1)} KiB ·{' '}
-                      {new Date(file.createdAt).toLocaleDateString('ko-KR')}
-                    </small>
-                  </div>
+        {mountedTools.has('files') && (
+          <div hidden={tool !== 'files'}>
+            <section
+              className="workfolio-file-library"
+              aria-labelledby="workfolio-file-library-title"
+            >
+              <header className="workfolio-file-library__heading">
+                <div>
+                  <h2 id="workfolio-file-library-title">파일 보관함</h2>
+                  <p>업로드한 문서를 찾고 내려받을 수 있습니다.</p>
+                </div>
+              </header>
+              <div className="workfolio-file-library__filters">
+                <span>한 번에 최대 5개 파일, 전체 25 MiB</span>
+                <label>
+                  파일 이름 검색
+                  <input
+                    type="search"
+                    maxLength={200}
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </label>
+                {search.trim() && (
                   <button
                     type="button"
-                    aria-label={`${file.name} 다운로드`}
-                    onClick={() =>
-                      void downloadFile(file.id, file.name, connection).catch(
-                        (cause) =>
-                          setError(
-                            cause instanceof Error
-                              ? cause.message
-                              : '다운로드 실패'
-                          )
-                      )
-                    }
+                    className="workfolio-file-library__clear-search"
+                    onClick={() => {
+                      setSearch('')
+                      setSearchQuery('')
+                    }}
                   >
-                    <Download size={16} />
+                    검색어 지우기
                   </button>
-                </li>
-              ))}
-            </ul>
-            {!visibleFiles.length &&
-              !loadingFiles &&
-              online &&
-              searchQuery.length > 0 &&
-              search.trim() === searchQuery && (
-                <div className="workfolio-file-library__empty">
-                  <p>“{searchQuery}”에 맞는 파일이 없습니다.</p>
-                </div>
-              )}
-            {!visibleFiles.length &&
-              !loadingFiles &&
-              online &&
-              !search.trim() && (
-                <div className="workfolio-file-library__empty">
-                  <p>아직 업로드한 파일이 없습니다.</p>
-                </div>
-              )}
-          </section>
+                )}
+                <span>
+                  DOCX · XLSX · PDF · PPTX · TXT · CSV <i>파일당 최대 10 MiB</i>
+                </span>
+              </div>
+              <ul>
+                {visibleFiles.map((file) => (
+                  <li key={file.id}>
+                    <div>
+                      <strong>{file.name}</strong>
+                      <small>
+                        {(file.bytes / 1024).toFixed(1)} KiB ·{' '}
+                        {new Date(file.createdAt).toLocaleDateString('ko-KR')}
+                      </small>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`${file.name} 다운로드`}
+                      onClick={() =>
+                        void downloadFile(file.id, file.name, connection).catch(
+                          (cause) =>
+                            setError(
+                              cause instanceof Error
+                                ? cause.message
+                                : '다운로드 실패'
+                            )
+                        )
+                      }
+                    >
+                      <Download size={16} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {!visibleFiles.length &&
+                !loadingFiles &&
+                online &&
+                searchQuery.length > 0 &&
+                search.trim() === searchQuery && (
+                  <div className="workfolio-file-library__empty">
+                    <p>“{searchQuery}”에 맞는 파일이 없습니다.</p>
+                  </div>
+                )}
+              {!visibleFiles.length &&
+                !loadingFiles &&
+                online &&
+                !search.trim() && (
+                  <div className="workfolio-file-library__empty">
+                    <p>아직 업로드한 파일이 없습니다.</p>
+                  </div>
+                )}
+            </section>
+          </div>
         )}
-        {tool === 'word' && <WordTools {...props} />}
-        {tool === 'excel' && <SpreadsheetTools {...props} />}
-        {tool === 'pdf' && <PdfTools {...props} />}
-        {tool === 'browser' && (
-          <BrowserTools
-            {...props}
-            available={Boolean(capabilities?.browserUse.available)}
-          />
+        {mountedTools.has('word') && (
+          <div hidden={tool !== 'word'}>
+            <WordTools {...props} />
+          </div>
         )}
-        {tool === 'search' && <SearchTools {...props} />}
-        {tool === 'computer' && (
-          <ComputerTools
-            {...props}
-            available={Boolean(capabilities?.computerUse.available)}
-          />
+        {mountedTools.has('excel') && (
+          <div hidden={tool !== 'excel'}>
+            <SpreadsheetTools {...props} />
+          </div>
+        )}
+        {mountedTools.has('pdf') && (
+          <div hidden={tool !== 'pdf'}>
+            <PdfTools {...props} />
+          </div>
+        )}
+        {mountedTools.has('browser') && (
+          <div hidden={tool !== 'browser'}>
+            <BrowserTools
+              {...props}
+              available={Boolean(capabilities?.browserUse.available)}
+            />
+          </div>
+        )}
+        {mountedTools.has('search') && (
+          <div hidden={tool !== 'search'}>
+            <SearchTools {...props} />
+          </div>
+        )}
+        {mountedTools.has('computer') && (
+          <div hidden={tool !== 'computer'}>
+            <ComputerTools
+              {...props}
+              available={Boolean(capabilities?.computerUse.available)}
+            />
+          </div>
         )}
         {result != null && (
           <ToolResultView
