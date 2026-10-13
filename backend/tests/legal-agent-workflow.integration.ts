@@ -1109,6 +1109,11 @@ test('claim verification drops sentences their cited record does not support, an
   assert.equal(verified.answer, '법원은 예정액을 감액할 수 있습니다 [L1].\n결론적으로 감액이 가능합니다 [L1].');
   assert.match(prompts[0]!, /부당히 과다한 경우/, 'the cited record text is shown to the judge');
 
+  const quoted = new LegalWorkflow({ claimVerification: true, retrieval, limits, model: { complete: async () => '{"unsupported": ["2"]}' } });
+  const quotedResult = await quoted.verifyClaims(answer, sources, signal);
+  assert.equal(quotedResult.checked, true, 'numbers written as strings are still a readable verdict');
+  assert.equal(quotedResult.removed, 1);
+
   const broken = new LegalWorkflow({ claimVerification: true, retrieval, limits, model: { complete: async () => 'not json' } });
   assert.deepEqual(await broken.verifyClaims(answer, sources, signal), { answer, removed: 0, checked: false });
 
@@ -1188,7 +1193,7 @@ test('when the verifier removes the only cited sentence, a substantial remainder
 test('malformed claim-verification responses never claim successful verification', async () => {
   const limits = { maxQueryCharacters: 300, orchestratedQueryLimit: 5, maxRetrievalSteps: 8, maxToolCalls: 12, maxPrecedentCharacters: 12_000, directSourceLimit: 6 };
   const answer = '근거를 검토했습니다 [L1].';
-  for (const reply of ['{}', 'null', '[]', '{"unsupported":null}', '{"unsupported":["1"]}', '{"unsupported":[2]}']) {
+  for (const reply of ['{}', 'null', '[]', '{"unsupported":null}', '{"unsupported":["first"]}', '{"unsupported":[1.5]}', '{"unsupported":[2]}']) {
     const workflow = new LegalWorkflow({ claimVerification: true, retrieval: {} as LegalRetrievalService, limits, model: { complete: async () => reply } });
     const result = await workflow.verifyClaims(answer, [lawSource], new AbortController().signal);
     assert.equal(result.checked, false, reply);

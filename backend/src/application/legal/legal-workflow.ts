@@ -149,6 +149,8 @@ const QUOTATION_CONTAINMENT = 0.9;
 const CLAIM_EXCERPT_MAX_CHARACTERS = 3_500;
 const DEFAULT_EVIDENCE_BUDGET_CHARS = 6_000;
 const CLAIM_VERIFY_TIMEOUT_MS = 60_000;
+/** The verifier's Groq call takes seconds; waiting for the token window beats a minute of reasoning on a slower model. */
+const CLAIM_VERIFY_RATE_WAIT_MS = 40_000;
 
 /** The rewrite only improves recall, so a slow model must not stall a direct lookup. */
 const REWRITE_TIMEOUT_MS = 6_000;
@@ -470,16 +472,19 @@ ${listing}`,
       const raw = await this.deps.model.complete({
         system: CLAIM_VERIFY_SYSTEM,
         expectedOutputTokens: 400,
+        maxRateLimitWaitMs: CLAIM_VERIFY_RATE_WAIT_MS,
         user: `SOURCES\n${recordText}\n\nSENTENCES\n${sentenceText}`,
         signal: AbortSignal.any([signal, AbortSignal.timeout(CLAIM_VERIFY_TIMEOUT_MS)])
       });
       let parsed: { unsupported?: unknown } | undefined;
       try { parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')) as { unsupported?: unknown }; } catch { parsed = undefined; }
-      if (!parsed || !Array.isArray(parsed.unsupported) || parsed.unsupported.some(item => !Number.isInteger(item) || item < 1 || item > cited.length)) {
+      // A model may quote the numbers ("1" instead of 1); that is still an unambiguous answer.
+      const numbers = Array.isArray(parsed?.unsupported) ? parsed.unsupported.map(item => (typeof item === 'string' && /^\d{1,3}$/.test(item.trim()) ? Number(item) : item)) : undefined;
+      if (!numbers || numbers.some(item => !Number.isInteger(item) || (item as number) < 1 || (item as number) > cited.length)) {
         reportProgress('문장 검증 건너뜀', `검증 모델의 응답을 해석하지 못해 검증 없이 진행: ${raw.replace(/\s+/g, ' ').slice(0, 120)}`);
         return { answer, removed: 0, checked: false };
       }
-      const flagged = new Set<number>(parsed.unsupported);
+      const flagged = new Set<number>(numbers as number[]);
       const drop = new Set([...flagged].map(position => cited[position - 1]!.index));
       reportProgress('문장 검증', drop.size > 0 ? `근거가 뒷받침하지 않는 문장 ${drop.size}개를 제외` : `검증한 문장 ${cited.length}개가 모두 근거와 일치`, [...drop].map(index => `제외: ${parts[index]!.sentence.trim().slice(0, 90)}`));
       if (drop.size === 0) return { answer, removed: 0, checked: true };

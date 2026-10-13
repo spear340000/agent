@@ -385,3 +385,17 @@ test('when every model is cooling down they are all tried again rather than fail
   await assert.rejects(() => provider.complete({ system: 's', user: 'u' }));
   await assert.rejects(() => provider.complete({ system: 's', user: 'u' }), /모든 모델 제공자/);
 });
+
+test('a caller that can wait for a rate-limited model gets it back before its cooldown ends', async () => {
+  let clock = 0;
+  const calls: string[] = [];
+  const provider = new ModelFailoverProvider([
+    { name: 'fast', complete: async () => { calls.push('fast'); if (calls.length === 1) throw new ModelProviderError('window full', true, false, 30_000); return 'fast answer'; } },
+    { name: 'slow', complete: async () => { calls.push('slow'); return 'slow answer'; } }
+  ], { now: () => clock });
+  assert.equal(await provider.complete({ system: 's', user: 'u' }), 'slow answer');
+  clock = 5_000;
+  assert.equal(await provider.complete({ system: 's', user: 'u' }), 'slow answer', 'an impatient caller skips the cooling-down model');
+  assert.equal(await provider.complete({ system: 's', user: 'u', maxRateLimitWaitMs: 40_000 }), 'fast answer', 'a patient caller tries it again');
+  assert.deepEqual(calls, ['fast', 'slow', 'slow', 'fast']);
+});
