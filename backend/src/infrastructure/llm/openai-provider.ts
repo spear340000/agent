@@ -14,11 +14,12 @@ const FAILOVER_RATE_LIMIT_WAIT_MS = 8_000;
 export class OpenAiProvider implements ModelProvider {
   private readonly limiter?: TokenRateLimiter;
 
-  constructor(private readonly options: { apiKey?: string; model: string; baseUrl: string; maxInputCharacters?: number; maxOutputBytes?: number; maxAttempts?: number; tokensPerMinute?: number; failFastOnRateLimit?: boolean; now?: () => number }) {
+  constructor(private readonly options: { apiKey?: string; model: string; baseUrl: string; maxInputCharacters?: number; maxOutputBytes?: number; maxAttempts?: number; retryBaseDelayMs?: number; tokensPerMinute?: number; failFastOnRateLimit?: boolean; now?: () => number }) {
     if (options.tokensPerMinute !== undefined) this.limiter = new TokenRateLimiter(options.tokensPerMinute, options.now);
     if (options.maxInputCharacters !== undefined && (!Number.isSafeInteger(options.maxInputCharacters) || options.maxInputCharacters < 1)) throw new Error('maxInputCharacters must be a positive integer');
     if (options.maxOutputBytes !== undefined && (!Number.isSafeInteger(options.maxOutputBytes) || options.maxOutputBytes < 1)) throw new Error('maxOutputBytes must be a positive integer');
     if (options.maxAttempts !== undefined && (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 1 || options.maxAttempts > 3)) throw new Error('maxAttempts must be an integer from 1 to 3');
+    if (options.retryBaseDelayMs !== undefined && (!Number.isSafeInteger(options.retryBaseDelayMs) || options.retryBaseDelayMs < 0)) throw new Error('retryBaseDelayMs must be a non-negative integer');
   }
   async complete(input: { system: string; user: string; signal?: AbortSignal; expectedOutputTokens?: number; maxRateLimitWaitMs?: number }): Promise<string> {
     const maxInputCharacters = this.options.maxInputCharacters ?? 200_000;
@@ -130,7 +131,7 @@ export class OpenAiProvider implements ModelProvider {
   private delay(attempt: number, signal?: AbortSignal, override?: number): Promise<void> {
     if (signal?.aborted) return Promise.reject(new Error('model request cancelled'));
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, override ?? 300 * (2 ** attempt));
+      const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, override ?? (this.options.retryBaseDelayMs ?? 300) * (2 ** attempt));
       const abort = (): void => { clearTimeout(timer); signal?.removeEventListener('abort', abort); reject(new Error('model request cancelled')); };
       signal?.addEventListener('abort', abort, { once: true });
     });
