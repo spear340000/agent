@@ -3,7 +3,8 @@ import { reportProgress } from '../../shared/task-progress.js';
 
 /** `requestMs`: time of the successful HTTP request itself, without waiting for the token window or earlier retries. */
 export type ModelUsage = { promptTokens?: number; completionTokens?: number; requestMs?: number };
-export type ModelAttempt = { model: string; ok: boolean; ms: number; error?: string } & ModelUsage;
+/** `startedAt`: epoch milliseconds when this attempt's request began, so a trace can place it on the timeline. */
+export type ModelAttempt = { model: string; ok: boolean; ms: number; error?: string; startedAt?: number } & ModelUsage;
 
 const usageStore = new AsyncLocalStorage<ModelUsage>();
 

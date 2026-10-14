@@ -11,6 +11,7 @@ import "./legal-routing.test.ts";
 import "./legal-citations.test.ts";
 import "./legal-evidence-budget.test.ts";
 import "./task-progress.test.ts";
+import "./task-trace.test.ts";
 import "./model-usage.test.ts";
 import "./legal-wiki-supplement.test.ts";
 import "./rate-window-message.test.ts";
