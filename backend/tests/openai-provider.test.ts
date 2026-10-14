@@ -52,7 +52,7 @@ test('provider retries transient HTTP failures with a bounded retry count', asyn
     return calls < 3 ? new Response('', { status: 503 }) : new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), { status: 200 });
   };
   try {
-    const provider = new OpenAiProvider({ apiKey: 'test-secret', model: 'test', baseUrl: 'https://example.com' });
+    const provider = new OpenAiProvider({ apiKey: 'test-secret', model: 'test', baseUrl: 'https://example.com', retryBaseDelayMs: 0 });
     assert.equal(await provider.complete({ system: 's', user: 'u' }), 'ok');
     assert.equal(calls, 3);
   } finally { globalThis.fetch = original; }
@@ -80,7 +80,7 @@ test('provider retries timeout failures at most three times', async () => {
   let calls = 0;
   globalThis.fetch = async () => { calls += 1; throw Object.assign(new Error('timeout'), { name: 'TimeoutError' }); };
   try {
-    const provider = new OpenAiProvider({ apiKey: 'test-secret', model: 'test', baseUrl: 'https://example.com' });
+    const provider = new OpenAiProvider({ apiKey: 'test-secret', model: 'test', baseUrl: 'https://example.com', retryBaseDelayMs: 0 });
     await assert.rejects(() => provider.complete({ system: 's', user: 'u' }), /failed or timed out/);
     assert.equal(calls, 3);
   } finally { globalThis.fetch = original; }

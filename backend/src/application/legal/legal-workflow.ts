@@ -172,7 +172,7 @@ export class LegalWorkflow {
   private okfEntries = new Map<string, OkfEntry>();
 
   constructor(
-    private readonly deps: { retrieval: LegalRetrievalService; model: ModelProvider; limits: LegalWorkflowLimits; queryRewrite?: boolean; wikiHints?: Pick<LegalWikiHints, 'find' | 'sourceUrlFor'>; knowledgeChain?: Pick<LegalKnowledgeChain, 'loadOntology' | 'loadOkf'>; claimVerification?: boolean; evidenceBudgetChars?: number; relevanceFilter?: boolean }
+    private readonly deps: { retrieval: LegalRetrievalService; model: ModelProvider; limits: LegalWorkflowLimits; queryRewrite?: boolean; wikiHints?: Pick<LegalWikiHints, 'find' | 'sourceUrlFor'>; knowledgeChain?: Pick<LegalKnowledgeChain, 'loadOntology' | 'loadOkf'>; claimVerification?: boolean; evidenceBudgetChars?: number; relevanceFilter?: boolean; wikiRetryDelayMs?: number }
   ) {}
 
   setVectorState(state: LegalVectorState): void {
@@ -362,7 +362,7 @@ export class LegalWorkflow {
           reportProgress('LLM Wiki 핵심 조문집 건너뜀', `핵심 조문을 가져오지 못했습니다: ${(error instanceof Error ? error.message : String(error)).slice(0, 140)}`);
           return evidence;
         }
-        await new Promise(resolve => setTimeout(resolve, 1_000));
+        await new Promise(resolve => setTimeout(resolve, this.deps.wikiRetryDelayMs ?? 1_000));
       }
     }
   }

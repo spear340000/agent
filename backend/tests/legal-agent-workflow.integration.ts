@@ -1286,7 +1286,7 @@ test('a wiki article fetch that fails once is retried, and a repeated failure is
       return { sources: [{ ...lawSource, citationId: 'L1' }], status: STATUS, degraded: [], failures: [], toolCalls: steps.length, maxToolCalls: 12, steps, trace: steps.map(step => ({ step: step as never, results: 1 })) };
     }
   } as unknown as LegalRetrievalService;
-  const workflow = new LegalWorkflow({ retrieval: flaky, limits, wikiHints, model: { complete: async () => '' } });
+  const workflow = new LegalWorkflow({ retrieval: flaky, limits, wikiHints, model: { complete: async () => '' }, wikiRetryDelayMs: 0 });
   const base = { sources: [], status: STATUS, degraded: [], failures: [], toolCalls: 0, maxToolCalls: 12, steps: [], trace: [] } as never;
   const recovered = await workflow.addWikiHints('손해배상액의 예정', base, new AbortController().signal);
   assert.equal(fetches, 2, 'one retry');
@@ -1294,7 +1294,7 @@ test('a wiki article fetch that fails once is retried, and a repeated failure is
 
   const reports: string[] = [];
   const { runWithProgress } = await import('../src/shared/task-progress.ts');
-  const broken = new LegalWorkflow({ retrieval: { retrieve: async () => { throw new Error('process down'); } } as unknown as LegalRetrievalService, limits, wikiHints, model: { complete: async () => '' } });
+  const broken = new LegalWorkflow({ retrieval: { retrieve: async () => { throw new Error('process down'); } } as unknown as LegalRetrievalService, limits, wikiHints, model: { complete: async () => '' }, wikiRetryDelayMs: 0 });
   const unchanged = await runWithProgress(report => reports.push(report.title), () => broken.addWikiHints('손해배상액의 예정', base, new AbortController().signal));
   assert.equal(unchanged.sources.length, 0);
   assert.ok(reports.includes('LLM Wiki 핵심 조문집 건너뜀'), 'the failure is visible in the task log');
