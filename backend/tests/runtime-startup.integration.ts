@@ -42,8 +42,9 @@ try {
   // reach the other server, so a port clash is retried on a new port instead.
   let base = '';
   for (let attempt = 1; ; attempt++) {
-    base = `http://127.0.0.1:${await freePort()}`;
-    child = spawn(process.execPath, [tsxCli, serverEntry], { cwd: root, env: { ...baseEnv, PORT: new URL(base).port, API_AUTH_ENABLED: 'false', API_AUTH_TOKEN: 'legacy-configured-token-that-is-not-required' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const port = await freePort();
+    base = `http://127.0.0.1:${port}`;
+    child = spawn(process.execPath, [tsxCli, serverEntry], { cwd: root, env: { ...baseEnv, PORT: String(port), API_AUTH_ENABLED: 'false', API_AUTH_TOKEN: 'legacy-configured-token-that-is-not-required' }, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
     // Wait for stdio and any inherited handles to close, not merely the process exit event.
     const exited = new Promise<void>(resolve => child!.once('close', () => resolve()));
