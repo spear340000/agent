@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import TaskTrace, { traceBars } from './TaskTrace.js'
+import TaskTrace, { tokens, traceBars } from './TaskTrace.js'
 import type { TaskTrace as TraceData } from '../../api/workroom.js'
 
 const trace: TraceData = {
@@ -61,6 +61,13 @@ test('a zero-length run does not divide by zero', () => {
     bars.map((bar) => bar.width),
     [1]
   )
+})
+
+test('token counts get thousands separators', () => {
+  assert.equal(tokens(0), '0')
+  assert.equal(tokens(896), '896')
+  assert.equal(tokens(3381), '3,381')
+  assert.equal(tokens(1234567), '1,234,567')
 })
 
 test('the panel renders closed, with no alert and no request until it is opened', () => {
