@@ -16,6 +16,11 @@ function seconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)}초`
 }
 
+/** Token counts read more easily with thousands separators, e.g. 3,381. */
+export function tokens(count: number): string {
+  return count.toLocaleString('en-US')
+}
+
 /**
  * Places each span on a timeline of the whole run. Left and width are percentages of the total; a span that lasts no
  * time gets a minimum width so a failure still shows as a mark.
@@ -110,8 +115,8 @@ function TraceView({ trace }: { trace: TraceData }) {
             ) : null}
             {span.completionTokens !== undefined ? (
               <span className="task-trace__detail">
-                입력 {span.promptTokens ?? 0} / 출력 {span.completionTokens}{' '}
-                토큰
+                입력 {tokens(span.promptTokens ?? 0)} / 출력{' '}
+                {tokens(span.completionTokens)} 토큰
               </span>
             ) : null}
           </li>
