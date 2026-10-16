@@ -10,7 +10,9 @@ const STATUS_LABEL: Record<FlowStage['status'], string> = {
   done: '',
   error: '오류',
   running: '진행 중',
-  cancelled: '취소됨'
+  cancelled: '취소됨',
+  pending: '대기',
+  skipped: '실행 안 됨'
 }
 
 /**
@@ -34,7 +36,8 @@ export default function ProcessFlow({
   const stages: FlowStage[] = buildProcessFlow({
     legal: task.legal,
     modelUse: task.modelUse,
-    trace: trace.trace
+    trace: trace.trace,
+    taskState: task.state
   })
   const hasActivity = Boolean(task.activity && task.activity.length > 0)
   const trajectory = trace.trace?.trajectory ?? []
