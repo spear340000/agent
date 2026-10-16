@@ -4,6 +4,7 @@ import test from 'node:test';
 import { ModelFailoverProvider } from '../src/infrastructure/llm/model-failover-provider.ts';
 import { runWithModelAttempts, summarizeModelAttempts, tokensPerSecond, type ModelAttempt } from '../src/infrastructure/llm/model-attempts.ts';
 import { OpenAiProvider } from '../src/infrastructure/llm/openai-provider.ts';
+import { ModelProviderError } from '../src/infrastructure/llm/model-provider-error.ts';
 
 test('totals add up tokens and time, and speed counts only successful generating calls', () => {
   const attempts: ModelAttempt[] = [
@@ -42,4 +43,16 @@ test('the usage a provider reports reaches the recorded attempt', async () => {
   } finally {
     server.close();
   }
+});
+
+test('each model call is reported as it finishes, not only when the task ends', async () => {
+  const seen: string[] = [];
+  const failover = new ModelFailoverProvider([
+    { name: 'down', complete: async () => { throw new ModelProviderError('HTTP 503'); } },
+    { name: 'up', complete: async () => '답변' }
+  ]);
+  const attempts: ModelAttempt[] = [];
+  await runWithModelAttempts(attempts, () => failover.complete({ system: 's', user: 'u' }), attempt => seen.push(`${attempt.model}:${attempt.ok}`));
+  assert.equal(attempts.length, seen.length, 'every recorded attempt was also reported');
+  assert.ok(seen.includes('up:true'));
 });

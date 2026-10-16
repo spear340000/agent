@@ -113,10 +113,16 @@ export class AgentService {
   async run(taskId: string): Promise<void> {
     const attempts: ModelAttempt[] = [];
     try {
-      await runWithModelAttempts(attempts, () => runWithProgress(progress => this.event(taskId, 'task.progress', progress.title, progress.detail, 'running', progress.items ? { items: progress.items } : undefined), () => this.runTask(taskId)));
+      await runWithModelAttempts(attempts, () => runWithProgress(progress => this.event(taskId, 'task.progress', progress.title, progress.detail, 'running', progress.items ? { items: progress.items } : undefined), () => this.runTask(taskId)), attempt => this.recordAttempt(taskId, attempt));
     } finally {
       this.recordModelAttempts(taskId, attempts);
     }
+  }
+
+  /** One event per model call, written as the call finishes, so the trace of a running task already shows it. */
+  private recordAttempt(taskId: string, attempt: ModelAttempt): void {
+    const detail = `${attempt.model} · ${(attempt.ms / 1000).toFixed(1)}초${attempt.error ? ` · ${attempt.error.slice(0, 120)}` : ''}`;
+    this.event(taskId, 'model.attempt', attempt.ok ? '모델 응답' : '모델 호출 실패', detail, attempt.ok ? 'completed' : 'warning', { ...attempt });
   }
 
   private recordModelAttempts(taskId: string, attempts: readonly ModelAttempt[]): void {
@@ -394,12 +400,19 @@ export class AgentService {
     this.throwIfCancelled(taskId);
     const fingerprint = createHash('sha256').update(JSON.stringify(inputs)).digest('hex');
     const saved = this.tasks.getCheckpoint<{ version: number; fingerprint: string; value: T }>(taskId, key);
-    if (saved?.version === 1 && saved.fingerprint === fingerprint && Object.hasOwn(saved, 'value')) { steps[index] = { ...steps[index], status: 'completed', progress: 100 }; return saved.value; }
-    const step = steps[index]; steps[index] = { ...step, status: 'running', progress: 5, error: undefined };
-    this.tasks.updateTask(taskId, { steps }); this.event(taskId, 'step.started', step.title, `${step.title} started.`, 'running');
+    const step = steps[index];
+    if (saved?.version === 1 && saved.fingerprint === fingerprint && Object.hasOwn(saved, 'value')) {
+      // A step reused from an earlier run still appears in the trace, so the flow shows what the run actually did.
+      steps[index] = { ...steps[index], status: 'completed', progress: 100 };
+      this.event(taskId, 'step.started', step.title, `${step.title} reused from an earlier run.`, 'running', { key, reused: true });
+      this.event(taskId, 'step.completed', step.title, `${step.title} reused from an earlier run.`, 'completed', { key, reused: true });
+      return saved.value;
+    }
+    steps[index] = { ...step, status: 'running', progress: 5, error: undefined };
+    this.tasks.updateTask(taskId, { steps }); this.event(taskId, 'step.started', step.title, `${step.title} started.`, 'running', { key });
     const result = await work(); this.throwIfCancelled(taskId); this.tasks.setCheckpoint(taskId, key, { version: 1, fingerprint, value: result });
     steps[index] = { ...steps[index], status: 'completed', progress: 100 };
-    this.tasks.updateTask(taskId, { steps }); this.event(taskId, 'step.completed', step.title, `${step.title} completed.`, 'completed');
+    this.tasks.updateTask(taskId, { steps }); this.event(taskId, 'step.completed', step.title, `${step.title} completed.`, 'completed', { key });
     return result;
   }
 
