@@ -1,5 +1,6 @@
 import type { TaskTrace, TaskTraceSpan } from '../../api/workroom'
 import type { LegalAnswerView, TaskModelUse } from './types'
+import { seconds, tokenCount } from './traceFormat'
 
 export type FlowStageKey =
   | 'classify'
@@ -12,13 +13,16 @@ export type FlowStageKey =
 export type FlowStage = {
   key: FlowStageKey
   label: string
-  status: 'done' | 'error'
+  status: 'done' | 'error' | 'running' | 'cancelled'
   durationMs?: number
   summary: string
   details: string[]
 }
 
-/** Which backend step (as the trace names it) belongs to which stage. Unknown step names go to 'other', not dropped. */
+/**
+ * Fallback for trace records from a backend that does not send a stage on each step: the step names it used then.
+ * A stage from the backend always wins over this table.
+ */
 const STEP_STAGE: Record<string, FlowStageKey> = {
   '검색 계획 수립': 'classify',
   '법령·판례 근거 확인': 'retrieve',
@@ -44,8 +48,14 @@ const STAGE_ORDER: FlowStageKey[] = [
   'other'
 ]
 
+const REUSED_DETAIL = '이전 실행에서 재사용'
+
 function stepSpans(trace: TaskTrace | undefined): TaskTraceSpan[] {
   return (trace?.spans ?? []).filter((span) => span.kind === 'step')
+}
+
+function stageOfStep(span: TaskTraceSpan): FlowStageKey | undefined {
+  return span.stage ?? STEP_STAGE[span.name]
 }
 
 function sumDuration(spans: TaskTraceSpan[]): number | undefined {
@@ -54,26 +64,70 @@ function sumDuration(spans: TaskTraceSpan[]): number | undefined {
     : undefined
 }
 
+/** A stage's status is the most serious state among its steps: error, then running, then cancelled, else done. */
+function stageStatus(spans: TaskTraceSpan[]): FlowStage['status'] {
+  if (spans.some((span) => span.status === 'error')) return 'error'
+  if (spans.some((span) => span.status === 'running')) return 'running'
+  if (spans.some((span) => span.status === 'cancelled')) return 'cancelled'
+  return 'done'
+}
+
+/**
+ * The stage a model call belongs to: the stage of the step whose time span contains the call's start. A call that
+ * falls outside every known step is listed under "other" rather than guessed into a stage.
+ */
+function stageOfCall(
+  call: TaskTraceSpan,
+  steps: TaskTraceSpan[]
+): FlowStageKey {
+  const owner = steps.find(
+    (step) =>
+      stageOfStep(step) !== undefined &&
+      call.startMs >= step.startMs &&
+      call.startMs <= step.startMs + step.durationMs
+  )
+  return (owner && stageOfStep(owner)) || 'other'
+}
+
+function callLine(call: TaskTraceSpan): string {
+  const when = call.estimated ? ' · 시작 시각 추정' : ''
+  const tokens =
+    call.promptTokens !== undefined || call.completionTokens !== undefined
+      ? ` · 입력 ${tokenCount(call.promptTokens ?? 0)} / 출력 ${tokenCount(call.completionTokens ?? 0)} 토큰`
+      : ''
+  const failure =
+    call.status === 'error' ? ` · 실패: ${call.detail ?? '알 수 없음'}` : ''
+  return `${call.name} · ${seconds(call.durationMs)}${tokens}${when}${failure}`
+}
+
 /**
  * Turns what the task already recorded (legal path, search tools, model choice, citations) and the run trace into the
- * stages of one processing flow. Each stage gets the time of the trace steps that belong to it. A stage with no data
- * is left out, so a non-legal task shows only what it actually did.
+ * stages of one processing flow. Each stage gets the time of the trace steps that belong to it, its model calls, and
+ * the steps that were reused from an earlier run. A stage with no data is left out, so a non-legal task shows only what
+ * it actually did.
  */
 export function buildProcessFlow(input: {
   legal?: LegalAnswerView
   modelUse?: TaskModelUse
   trace?: TaskTrace
 }): FlowStage[] {
-  const spans = stepSpans(input.trace)
+  const steps = stepSpans(input.trace)
+  const calls = (input.trace?.spans ?? []).filter((span) => span.kind === 'llm')
   const byStage = new Map<FlowStageKey, TaskTraceSpan[]>()
   const unknown: TaskTraceSpan[] = []
-  for (const span of spans) {
-    const key = STEP_STAGE[span.name]
+  for (const span of steps) {
+    const key = stageOfStep(span)
     if (key) byStage.set(key, [...(byStage.get(key) ?? []), span])
     else unknown.push(span)
   }
   if (unknown.length > 0)
     byStage.set('other', [...(byStage.get('other') ?? []), ...unknown])
+
+  const callsByStage = new Map<FlowStageKey, TaskTraceSpan[]>()
+  for (const call of calls) {
+    const key = stageOfCall(call, steps)
+    callsByStage.set(key, [...(callsByStage.get(key) ?? []), call])
+  }
 
   const stages: Partial<Record<FlowStageKey, FlowStage>> = {}
   const { legal, modelUse } = input
@@ -138,7 +192,7 @@ export function buildProcessFlow(input: {
           : []),
         ...(totals
           ? [
-              `모델 호출 ${totals.calls}회 · 토큰 ${totals.promptTokens + totals.completionTokens}`
+              `모델 호출 ${totals.calls}회 · 토큰 ${tokenCount(totals.promptTokens + totals.completionTokens)}`
             ]
           : [])
       ],
@@ -148,32 +202,41 @@ export function buildProcessFlow(input: {
 
   for (const key of STAGE_ORDER) {
     const stageSpans = byStage.get(key)
-    if (!stageSpans) continue
-    const failed = stageSpans.some((span) => span.status === 'error')
+    const stageCalls = callsByStage.get(key) ?? []
+    if (!stageSpans && stageCalls.length === 0) continue
+    const spans = stageSpans ?? []
+    const reused = spans.filter((span) => span.detail === REUSED_DETAIL)
+    const reusedLines = reused.map((span) => `${span.name} · ${REUSED_DETAIL}`)
+    const callLines = stageCalls.map(callLine)
     const existing = stages[key]
     if (existing) {
       stages[key] = {
         ...existing,
-        status: failed ? 'error' : existing.status,
-        durationMs: sumDuration(stageSpans)
+        status: spans.length > 0 ? stageStatus(spans) : existing.status,
+        durationMs: sumDuration(spans) ?? existing.durationMs,
+        details: [...existing.details, ...reusedLines, ...callLines]
       }
     } else if (key === 'other') {
       stages.other = {
         key,
         label: STAGE_LABEL.other,
-        status: failed ? 'error' : 'done',
-        durationMs: sumDuration(stageSpans),
-        summary: `${stageSpans.length}개 단계`,
-        details: stageSpans.map((span) => span.name)
+        status: stageStatus(spans),
+        durationMs: sumDuration(spans),
+        summary: `${spans.length}개 단계`,
+        details: [
+          ...spans.map((span) => span.name),
+          ...reusedLines,
+          ...callLines
+        ]
       }
     } else {
       stages[key] = {
         key,
         label: STAGE_LABEL[key],
-        status: failed ? 'error' : 'done',
-        durationMs: sumDuration(stageSpans),
-        summary: stageSpans.map((span) => span.name).join(' · '),
-        details: []
+        status: stageStatus(spans),
+        durationMs: sumDuration(spans),
+        summary: spans.map((span) => span.name).join(' · '),
+        details: [...reusedLines, ...callLines]
       }
     }
   }

@@ -6918,107 +6918,111 @@
   margin: 8px 0;
 }
 
-.task-trace {
+.process-flow {
   margin: 6px 0 10px;
   font-size: 0.82rem;
 }
 
-.task-trace summary {
+.process-flow > summary {
   cursor: pointer;
   margin: 8px 0;
 }
 
-.task-trace__note {
+.process-flow__note {
+  margin: 6px 0;
   color: var(--muted, #7b746c);
-  margin: 4px 0;
 }
 
-.task-trace__note--error {
-  color: var(--error, #b42318);
+.process-flow__note--error {
+  color: var(--danger, #b42318);
 }
 
-.task-trace__timeline,
-.task-trace__trajectory {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.task-trace__row {
+.process-flow__stages {
   display: grid;
-  gap: 2px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border, #e7e1d8);
+  gap: 8px;
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
 }
 
-.task-trace__label {
+.process-flow__stage {
+  border-left: 2px solid var(--border, #e5ded5);
+  padding: 2px 0 2px 10px;
+}
+
+.process-flow__stage--error {
+  border-left-color: var(--danger, #b42318);
+}
+
+.process-flow__stage--running {
+  border-left-color: var(--accent, #2563eb);
+}
+
+.process-flow__stage--cancelled {
+  border-left-color: var(--muted, #7b746c);
+}
+
+.process-flow__head {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
   align-items: baseline;
-  overflow-wrap: anywhere;
+  gap: 8px;
 }
 
-.task-trace__label time,
-.task-trace__trajectory time {
+.process-flow__head time {
+  margin-left: auto;
   color: var(--muted, #7b746c);
   font-variant-numeric: tabular-nums;
 }
 
-.task-trace__kind {
-  font-size: 0.72rem;
+.process-flow__badge {
+  border: 1px solid currentColor;
+  border-radius: 999px;
   padding: 0 6px;
-  border-radius: 4px;
-  background: var(--surface-muted, #f1ede7);
+  font-size: 0.72rem;
 }
 
-.task-trace__track {
-  position: relative;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--surface-muted, #f1ede7);
+.process-flow__stage p {
+  margin: 2px 0;
 }
 
-.task-trace__bar {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  border-radius: 3px;
-  background: var(--accent, #2f6f5e);
-}
-
-.task-trace__row--error .task-trace__bar {
-  background: var(--error, #b42318);
-}
-
-.task-trace__row--running .task-trace__bar {
-  background: var(--muted, #7b746c);
-}
-
-.task-trace__detail {
+.process-flow__stage ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
   color: var(--muted, #7b746c);
-  overflow-wrap: anywhere;
 }
 
-.task-trace__trajectory {
-  margin-top: 10px;
-  display: grid;
-  gap: 4px;
+.process-flow__trajectory,
+.process-flow__raw {
+  margin-top: 8px;
 }
 
-.task-trace__trajectory li {
+.process-flow__trajectory > summary,
+.process-flow__raw > summary {
+  cursor: pointer;
+}
+
+.process-flow__trajectory ol {
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.process-flow__trajectory li {
   display: grid;
-  grid-template-columns: 4.5em minmax(0, 1fr);
+  grid-template-columns: 52px 1fr;
   gap: 2px 8px;
-  align-items: baseline;
+  padding: 3px 0;
 }
 
-.task-trace__trajectory li > span {
+.process-flow__trajectory time {
+  color: var(--muted, #7b746c);
+  font-variant-numeric: tabular-nums;
+}
+
+.process-flow__trajectory span {
   grid-column: 2;
   color: var(--muted, #7b746c);
-  overflow-wrap: anywhere;
 }
-
 .workfolio-activity__time {
   margin-left: 8px;
   color: var(--muted, #7b746c);

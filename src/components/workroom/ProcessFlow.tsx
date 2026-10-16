@@ -1,27 +1,22 @@
 import React, { useState } from 'react'
-import {
-  getTaskTrace,
-  type Connection,
-  type TaskTrace
-} from '../../api/workroom'
+import type { Connection } from '../../api/workroom'
 import ActivityLog from './ActivityLog'
 import { buildProcessFlow, type FlowStage } from './processFlowModel'
+import { seconds } from './traceFormat'
+import { useTaskTrace } from './useTaskTrace'
 import type { Task } from './types'
 
-function seconds(ms: number): string {
-  return `${(ms / 1000).toFixed(1)}초`
+const STATUS_LABEL: Record<FlowStage['status'], string> = {
+  done: '',
+  error: '오류',
+  running: '진행 중',
+  cancelled: '취소됨'
 }
 
-type TraceState =
-  | { phase: 'idle' }
-  | { phase: 'loading' }
-  | { phase: 'ready'; trace: TaskTrace }
-  | { phase: 'error'; message: string }
-
 /**
- * One processing flow for a task: what each stage decided, the search tools and models it used, and how long it took.
- * The run trace is fetched the first time the flow is opened, so a closed panel costs no request. The raw event log
- * stays folded at the bottom.
+ * One processing flow for a task: what each stage decided, the search tools and models it used, how long it took, and
+ * the order of decisions. The run trace is read only once the flow is opened, and again every few seconds while the
+ * task is still running. The raw event log stays folded at the bottom.
  */
 export default function ProcessFlow({
   task,
@@ -30,44 +25,27 @@ export default function ProcessFlow({
   task: Task
   connection?: Connection
 }) {
-  const [trace, setTrace] = useState<TraceState>({ phase: 'idle' })
-
-  function onToggle(open: boolean) {
-    if (
-      !open ||
-      !connection ||
-      trace.phase === 'loading' ||
-      trace.phase === 'ready'
-    )
-      return
-    setTrace({ phase: 'loading' })
-    getTaskTrace(task.id, connection)
-      .then((loaded) => setTrace({ phase: 'ready', trace: loaded }))
-      .catch((error: unknown) =>
-        setTrace({
-          phase: 'error',
-          message:
-            error instanceof Error
-              ? error.message
-              : '처리 시간을 불러오지 못했습니다.'
-        })
-      )
-  }
+  const [opened, setOpened] = useState(false)
+  const trace = useTaskTrace(task.id, connection, {
+    enabled: opened,
+    live: task.state === 'queued' || task.state === 'running'
+  })
 
   const stages: FlowStage[] = buildProcessFlow({
     legal: task.legal,
     modelUse: task.modelUse,
-    trace: trace.phase === 'ready' ? trace.trace : undefined
+    trace: trace.trace
   })
   const hasActivity = Boolean(task.activity && task.activity.length > 0)
+  const trajectory = trace.trace?.trajectory ?? []
 
   return (
     <details
       className="process-flow"
-      onToggle={(event) => onToggle(event.currentTarget.open)}
+      onToggle={(event) => setOpened(event.currentTarget.open)}
     >
       <summary>처리 흐름</summary>
-      {trace.phase === 'loading' ? (
+      {trace.phase === 'loading' && !trace.trace ? (
         <p className="process-flow__note">처리 시간을 불러오는 중…</p>
       ) : null}
       {trace.phase === 'error' ? (
@@ -87,6 +65,11 @@ export default function ProcessFlow({
             >
               <div className="process-flow__head">
                 <strong>{stage.label}</strong>
+                {STATUS_LABEL[stage.status] ? (
+                  <span className="process-flow__badge">
+                    {STATUS_LABEL[stage.status]}
+                  </span>
+                ) : null}
                 {stage.durationMs !== undefined ? (
                   <time>{seconds(stage.durationMs)}</time>
                 ) : null}
@@ -105,6 +88,20 @@ export default function ProcessFlow({
       ) : (
         <p className="process-flow__note">아직 기록된 처리 단계가 없습니다.</p>
       )}
+      {trajectory.length > 0 ? (
+        <details className="process-flow__trajectory">
+          <summary>판단 순서 {trajectory.length}건</summary>
+          <ol aria-label="판단 순서">
+            {trajectory.map((step) => (
+              <li key={step.order}>
+                <time>{seconds(step.offsetMs)}</time>
+                <strong>{step.title}</strong>
+                {step.detail ? <span>{step.detail}</span> : null}
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
       {hasActivity ? (
         <details className="process-flow__raw">
           <summary>원본 기록 {task.activity!.length}건</summary>
