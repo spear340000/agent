@@ -37,7 +37,8 @@ export default function ProcessFlow({
     legal: task.legal,
     modelUse: task.modelUse,
     trace: trace.trace,
-    taskState: task.state
+    taskState: task.state,
+    error: task.error
   })
   const hasActivity = Boolean(task.activity && task.activity.length > 0)
   const trajectory = trace.trace?.trajectory ?? []

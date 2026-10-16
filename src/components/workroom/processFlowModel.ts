@@ -122,6 +122,8 @@ export function buildProcessFlow(input: {
   trace?: TaskTrace
   /** The task's state. Stages after the last one that started are still to come while it runs, and never run if it stopped. */
   taskState?: string
+  /** The reason the task failed, shown inside the stage that failed. */
+  error?: string
 }): FlowStage[] {
   const steps = stepSpans(input.trace)
   const calls = (input.trace?.spans ?? []).filter((span) => span.kind === 'llm')
@@ -268,13 +270,21 @@ export function buildProcessFlow(input: {
       ): entry is { key: FlowStageKey; index: number; stage: FlowStage } =>
         Boolean(entry.stage)
     )
-    .map(({ key, index, stage }) =>
-      !byStage.has(key) && index > started && stillToRun
-        ? {
-            calls: [],
-            ...stage,
-            status: stopped ? ('skipped' as const) : ('pending' as const)
-          }
-        : { calls: [], ...stage }
-    )
+    .map(({ key, index, stage }) => {
+      // A stage that has not run has no data of its own; the task-wide totals must not be shown under it.
+      if (!byStage.has(key) && index > started && stillToRun)
+        return {
+          key,
+          label: stage.label,
+          calls: [],
+          summary: '',
+          details: [],
+          status: stopped ? ('skipped' as const) : ('pending' as const)
+        }
+      const reason =
+        stage.status === 'error' && input.error
+          ? [`사유: ${input.error.slice(0, 160)}`]
+          : []
+      return { calls: [], ...stage, details: [...stage.details, ...reason] }
+    })
 }
