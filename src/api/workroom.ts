@@ -462,10 +462,14 @@ export type TaskTraceSpan = {
   name: string
   startMs: number
   durationMs: number
-  status: 'ok' | 'error' | 'running'
+  status: 'ok' | 'error' | 'running' | 'cancelled'
   detail?: string
+  /** Set on step spans when the backend knows which part of the work the step belongs to. */
+  stage?: 'classify' | 'retrieve' | 'answer' | 'verify'
   promptTokens?: number
   completionTokens?: number
+  /** True when the call's start time was inferred from its duration (older records). */
+  estimated?: boolean
 }
 
 export type TaskTrajectoryStep = {
