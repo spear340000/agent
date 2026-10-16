@@ -7064,3 +7064,13 @@
   color: var(--muted, #7b746c);
   overflow-wrap: anywhere;
 }
+
+.process-flow__stage--pending {
+  border-left-color: var(--border, #e5ded5);
+  opacity: 0.55;
+}
+
+.process-flow__stage--skipped {
+  border-left-color: var(--border, #e5ded5);
+  opacity: 0.55;
+}

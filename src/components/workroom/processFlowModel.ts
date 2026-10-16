@@ -13,7 +13,7 @@ export type FlowStageKey =
 export type FlowStage = {
   key: FlowStageKey
   label: string
-  status: 'done' | 'error' | 'running' | 'cancelled'
+  status: 'done' | 'error' | 'running' | 'cancelled' | 'pending' | 'skipped'
   durationMs?: number
   summary: string
   details: string[]
@@ -120,6 +120,8 @@ export function buildProcessFlow(input: {
   legal?: LegalAnswerView
   modelUse?: TaskModelUse
   trace?: TaskTrace
+  /** The task's state. Stages after the last one that started are still to come while it runs, and never run if it stopped. */
+  taskState?: string
 }): FlowStage[] {
   const steps = stepSpans(input.trace)
   const calls = (input.trace?.spans ?? []).filter((span) => span.kind === 'llm')
@@ -251,7 +253,28 @@ export function buildProcessFlow(input: {
     }
   }
 
-  return STAGE_ORDER.map((key) => stages[key])
-    .filter((stage): stage is FlowStage => Boolean(stage))
-    .map((stage) => ({ calls: [], ...stage }))
+  // A stage after the last one that has started has not run yet: pending while the task runs, skipped if it stopped first.
+  const stopped =
+    input.taskState === 'cancelled' || input.taskState === 'failed'
+  const stillToRun =
+    input.taskState === 'queued' || input.taskState === 'running' || stopped
+  const started = STAGE_ORDER.map((key, index) =>
+    byStage.has(key) ? index : -1
+  ).reduce((latest, index) => Math.max(latest, index), -1)
+  return STAGE_ORDER.map((key, index) => ({ key, index, stage: stages[key] }))
+    .filter(
+      (
+        entry
+      ): entry is { key: FlowStageKey; index: number; stage: FlowStage } =>
+        Boolean(entry.stage)
+    )
+    .map(({ key, index, stage }) =>
+      !byStage.has(key) && index > started && stillToRun
+        ? {
+            calls: [],
+            ...stage,
+            status: stopped ? ('skipped' as const) : ('pending' as const)
+          }
+        : { calls: [], ...stage }
+    )
 }

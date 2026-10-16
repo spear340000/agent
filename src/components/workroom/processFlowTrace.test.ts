@@ -8,6 +8,7 @@ import {
 } from './useTaskTrace.js'
 import { seconds, tokenCount } from './traceFormat.js'
 import type { TaskTrace, TaskTraceSpan } from '../../api/workroom.js'
+import type { LegalAnswerView } from './types.js'
 
 function step(
   name: string,
@@ -188,4 +189,87 @@ test('the first read shows loading, and a failed first read has no trace', () =>
 
 test('a running task is read again every few seconds', () => {
   assert.equal(TRACE_REFRESH_MS, 3_000)
+})
+
+test('while a task runs, stages after the last one that started are pending, and done once it finishes', () => {
+  const legal = {
+    path: 'direct',
+    plannerCalls: 0,
+    toolCalls: 1,
+    citations: [],
+    sourceStatus: {
+      retrieved: 1,
+      currentness: 'unverified',
+      notes: [],
+      failures: [],
+      degraded: []
+    }
+  } as unknown as LegalAnswerView
+  const running = buildProcessFlow({
+    legal,
+    taskState: 'running',
+    trace: trace([
+      step('근거 기반 답변 작성', 0, 1_000, {
+        stage: 'answer',
+        status: 'running'
+      })
+    ])
+  })
+  assert.equal(
+    running.find((stage) => stage.key === 'answer')!.status,
+    'running'
+  )
+  assert.equal(
+    running.find((stage) => stage.key === 'verify')!.status,
+    'pending',
+    'verification has not started yet'
+  )
+  assert.equal(
+    running.find((stage) => stage.key === 'classify')!.status,
+    'done',
+    'a stage before the running one is not pending'
+  )
+
+  const finished = buildProcessFlow({
+    legal,
+    taskState: 'completed',
+    trace: trace([
+      step('근거 기반 답변 작성', 0, 1_000, { stage: 'answer', status: 'ok' })
+    ])
+  })
+  assert.equal(finished.find((stage) => stage.key === 'verify')!.status, 'done')
+})
+
+test('a cancelled task marks the stages it never reached as skipped, not done', () => {
+  const legal = {
+    path: 'direct',
+    plannerCalls: 0,
+    toolCalls: 1,
+    citations: [],
+    sourceStatus: {
+      retrieved: 1,
+      currentness: 'unverified',
+      notes: [],
+      failures: [],
+      degraded: []
+    }
+  } as unknown as LegalAnswerView
+  const cancelled = buildProcessFlow({
+    legal,
+    taskState: 'cancelled',
+    trace: trace([
+      step('근거 기반 답변 작성', 0, 1_000, {
+        stage: 'answer',
+        status: 'cancelled'
+      })
+    ])
+  })
+  assert.equal(
+    cancelled.find((stage) => stage.key === 'answer')!.status,
+    'cancelled'
+  )
+  assert.equal(
+    cancelled.find((stage) => stage.key === 'verify')!.status,
+    'skipped'
+  )
 })
