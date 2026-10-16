@@ -17,6 +17,8 @@ export type FlowStage = {
   durationMs?: number
   summary: string
   details: string[]
+  /** The model calls of this stage, one line each; shown folded because a stage can make many. */
+  calls?: string[]
 }
 
 /**
@@ -90,14 +92,22 @@ function stageOfCall(
 }
 
 function callLine(call: TaskTraceSpan): string {
-  const when = call.estimated ? ' · 시작 시각 추정' : ''
   const tokens =
     call.promptTokens !== undefined || call.completionTokens !== undefined
       ? ` · 입력 ${tokenCount(call.promptTokens ?? 0)} / 출력 ${tokenCount(call.completionTokens ?? 0)} 토큰`
       : ''
   const failure =
-    call.status === 'error' ? ` · 실패: ${call.detail ?? '알 수 없음'}` : ''
-  return `${call.name} · ${seconds(call.durationMs)}${tokens}${when}${failure}`
+    call.status === 'error'
+      ? ` · 실패: ${(call.detail ?? '알 수 없음').slice(0, 80)}`
+      : ''
+  return `${call.name} · ${seconds(call.durationMs)}${tokens}${failure}`
+}
+
+/** Older records have no start time for their calls; say so once per stage instead of on every line. */
+function estimateNote(calls: TaskTraceSpan[]): string[] {
+  return calls.some((call) => call.estimated)
+    ? ['일부 호출의 시작 시각은 옛 기록이라 추정했습니다']
+    : []
 }
 
 /**
@@ -209,12 +219,14 @@ export function buildProcessFlow(input: {
     const reusedLines = reused.map((span) => `${span.name} · ${REUSED_DETAIL}`)
     const callLines = stageCalls.map(callLine)
     const existing = stages[key]
+    const note = estimateNote(stageCalls)
     if (existing) {
       stages[key] = {
         ...existing,
         status: spans.length > 0 ? stageStatus(spans) : existing.status,
         durationMs: sumDuration(spans) ?? existing.durationMs,
-        details: [...existing.details, ...reusedLines, ...callLines]
+        details: [...existing.details, ...reusedLines, ...note],
+        calls: callLines
       }
     } else if (key === 'other') {
       stages.other = {
@@ -223,11 +235,8 @@ export function buildProcessFlow(input: {
         status: stageStatus(spans),
         durationMs: sumDuration(spans),
         summary: `${spans.length}개 단계`,
-        details: [
-          ...spans.map((span) => span.name),
-          ...reusedLines,
-          ...callLines
-        ]
+        details: [...spans.map((span) => span.name), ...reusedLines, ...note],
+        calls: callLines
       }
     } else {
       stages[key] = {
@@ -236,12 +245,13 @@ export function buildProcessFlow(input: {
         status: stageStatus(spans),
         durationMs: sumDuration(spans),
         summary: spans.map((span) => span.name).join(' · '),
-        details: [...reusedLines, ...callLines]
+        details: [...reusedLines, ...note],
+        calls: callLines
       }
     }
   }
 
-  return STAGE_ORDER.map((key) => stages[key]).filter(
-    (stage): stage is FlowStage => Boolean(stage)
-  )
+  return STAGE_ORDER.map((key) => stages[key])
+    .filter((stage): stage is FlowStage => Boolean(stage))
+    .map((stage) => ({ calls: [], ...stage }))
 }

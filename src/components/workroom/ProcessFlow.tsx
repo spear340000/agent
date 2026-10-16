@@ -82,6 +82,16 @@ export default function ProcessFlow({
                   ))}
                 </ul>
               ) : null}
+              {stage.calls && stage.calls.length > 0 ? (
+                <details className="process-flow__calls">
+                  <summary>모델 호출 {stage.calls.length}건</summary>
+                  <ul>
+                    {stage.calls.map((line, index) => (
+                      <li key={`${line}-${index}`}>{line}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
             </li>
           ))}
         </ol>

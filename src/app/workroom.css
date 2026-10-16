@@ -7047,3 +7047,20 @@
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
 }
+
+.process-flow__calls {
+  margin-top: 6px;
+}
+
+.process-flow__calls > summary {
+  cursor: pointer;
+  color: var(--muted, #7b746c);
+}
+
+.process-flow__calls ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font-size: 0.78rem;
+  color: var(--muted, #7b746c);
+  overflow-wrap: anywhere;
+}
