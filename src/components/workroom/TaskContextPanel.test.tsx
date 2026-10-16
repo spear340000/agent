@@ -403,21 +403,15 @@ test('the technology ledger shows which retrieval layers actually ran', () => {
       onFollowup: async () => true
     })
   )
-  assert.match(markup, /검색 기술 사용 현황/)
-  assert.match(markup, /법령 키워드 검색/)
-  assert.match(markup, /이번 작업에서 사용/)
-  assert.match(markup, /벡터 유사도 검색/)
-  assert.match(markup, /사용하지 않음/)
-  assert.match(markup, /법령 관계 그래프/)
-  assert.match(markup, /이번 작업에서는 조회하지 않음/)
-  assert.match(markup, /법률 온톨로지/)
-  assert.match(markup, /OKF 상태 번들/)
+  assert.match(markup, /처리 흐름/)
+  assert.match(markup, /근거 검색/)
+  assert.match(markup, /검색 도구 2회/)
+  assert.match(markup, /사용 계층: 법령 키워드 검색/)
   assert.match(markup, /search_laws/)
-  assert.match(markup, /기록 5건/)
-  assert.match(markup, /도구 호출 2회 \/ 한도 12회/)
+  assert.match(markup, /→ 5건/)
   assert.match(
     markup,
-    /계획 모델 미사용 · 결정적 라우팅으로 직접 조회/,
+    /계획 모델 미사용/,
     'the planner must be shown as unused rather than implied'
   )
 })

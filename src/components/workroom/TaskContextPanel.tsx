@@ -8,12 +8,11 @@ import {
   X
 } from 'lucide-react'
 import Composer from './Composer'
-import ActivityLog from './ActivityLog'
-import TaskTrace from './TaskTrace'
 import ModelUsage from './ModelUsage'
+import ProcessFlow from './ProcessFlow'
 import type { Connection } from '../../api/workroom'
 import { safeHttpUrl } from './safe-http-url'
-import EvidenceChain, { RouteChips } from './EvidenceChain'
+import { RouteChips } from './EvidenceChain'
 import { Sources } from './Documents'
 import {
   legalIntentLabels,
@@ -94,70 +93,6 @@ const CORPUS_LABELS: Record<string, string> = {
   graph: '관계 그래프',
   document: '첨부 자료',
   web: '웹 자료'
-}
-
-const LAYER_STATE_LABELS: Record<string, string> = {
-  used: '이번 작업에서 사용',
-  ready: '준비됨 · 미사용',
-  degraded: '부분 사용',
-  unused: '사용하지 않음',
-  unavailable: '사용 불가'
-}
-
-function Ledger({ task }: { task: Task }) {
-  const ledger = task.legal?.sourceStatus.ledger
-  if (!ledger) return null
-  return (
-    <section
-      className="task-context__section task-context__ledger"
-      aria-labelledby="task-ledger-title"
-    >
-      <div className="task-context__section-heading">
-        <h3 id="task-ledger-title">검색 기술 사용 현황</h3>
-        <span>{ledger.toolCalls}회</span>
-      </div>
-      <ul className="task-context__layers">
-        {ledger.layers.map((layer) => (
-          <li
-            className={`task-context__layer task-context__layer--${layer.state}`}
-            key={layer.id}
-          >
-            <span className="task-context__layer-mark" aria-hidden="true" />
-            <span className="task-context__layer-body">
-              <strong>{layer.label}</strong>
-              <small>
-                {LAYER_STATE_LABELS[layer.state] ?? layer.state}
-                {layer.detail ? ` · ${layer.detail}` : ''}
-              </small>
-            </span>
-          </li>
-        ))}
-      </ul>
-      <h4 className="task-context__legal-subheading">실행한 검색 도구</h4>
-      {ledger.tools.length === 0 ? (
-        <p className="task-context__legal-note">
-          실행된 법령 검색 도구가 없습니다.
-        </p>
-      ) : (
-        <ol className="task-context__tools">
-          {ledger.tools.map((tool, index) => (
-            <li key={`${tool.tool}-${index}`}>
-              <code>{tool.tool}</code>
-              <span>
-                {tool.query} → 기록 {tool.results}건
-              </span>
-            </li>
-          ))}
-        </ol>
-      )}
-      <p className="task-context__ledger-footer">
-        도구 호출 {ledger.toolCalls}회 / 한도 {ledger.maxToolCalls}회 ·{' '}
-        {ledger.planner.mode === 'used'
-          ? `계획 모델 ${ledger.planner.calls}회 호출`
-          : '계획 모델 미사용 · 결정적 라우팅으로 직접 조회'}
-      </p>
-    </section>
-  )
 }
 
 function formatTokenCount(value?: number): string {
@@ -360,12 +295,6 @@ function LegalAnswer({
           확인된 법령·판례 기록이 없어 단정적인 법적 결론을 제시하지 않습니다.
         </p>
       )}
-      {legal.sourceStatus.chain?.length ? (
-        <>
-          <h4 className="task-context__legal-subheading">근거 형성 과정</h4>
-          <EvidenceChain stages={legal.sourceStatus.chain} />
-        </>
-      ) : null}
       {legal.sourceStatus.notes.length > 0 ? (
         <ul className="task-context__legal-notes">
           {legal.sourceStatus.notes.map((note, index) => (
@@ -565,15 +494,6 @@ export default function TaskContextPanel({
                   ) : null}
                   {statusMessage(task)}
                 </p>
-                {task.activity && task.activity.length > 0 ? (
-                  <details className="task-context__log">
-                    <summary>처리 과정 기록 {task.activity.length}건</summary>
-                    <ActivityLog activity={task.activity} />
-                  </details>
-                ) : null}
-                {connection ? (
-                  <TaskTrace taskId={task.id} connection={connection} />
-                ) : null}
               </div>
             </details>
             {['queued', 'running'].includes(task.state) ? (
@@ -626,7 +546,11 @@ export default function TaskContextPanel({
           ))}
 
         <LegalAnswer task={task} onDraftFromAnswer={onDraftFromAnswer} />
-        <Ledger task={task} />
+        {task.legal ||
+        task.modelUse ||
+        (task.activity && task.activity.length > 0) ? (
+          <ProcessFlow task={task} connection={connection} />
+        ) : null}
       </div>
 
       <div className="task-context__composer">
