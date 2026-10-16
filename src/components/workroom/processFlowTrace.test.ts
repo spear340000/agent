@@ -273,3 +273,66 @@ test('a cancelled task marks the stages it never reached as skipped, not done', 
     'skipped'
   )
 })
+
+test('the reason a task failed is shown inside the stage that failed', () => {
+  const stages = buildProcessFlow({
+    taskState: 'failed',
+    error: '법률 검색 계획 JSON을 해석하지 못했습니다.',
+    trace: trace([
+      step('검색 계획 수립', 0, 1_100, { stage: 'classify', status: 'error' })
+    ])
+  })
+  const classify = stages.find((stage) => stage.key === 'classify')!
+  assert.equal(classify.status, 'error')
+  assert.ok(
+    classify.details.includes(
+      '사유: 법률 검색 계획 JSON을 해석하지 못했습니다.'
+    )
+  )
+  assert.equal(
+    stages.find((stage) => stage.key === 'other'),
+    undefined
+  )
+})
+
+test('a stage that did not run shows no task-wide totals under it', () => {
+  const legal = {
+    path: 'direct',
+    plannerCalls: 0,
+    toolCalls: 1,
+    citations: [],
+    sourceStatus: {
+      retrieved: 1,
+      currentness: 'unverified',
+      notes: [],
+      failures: [],
+      degraded: []
+    }
+  } as unknown as LegalAnswerView
+  const modelUse = {
+    finalModel: 'a',
+    fellBack: true,
+    failedModels: ['b'],
+    totals: {
+      calls: 2,
+      failedCalls: 1,
+      promptTokens: 500,
+      completionTokens: 177,
+      totalMs: 1_000,
+      tokensPerSecond: null
+    }
+  }
+  const stages = buildProcessFlow({
+    legal,
+    modelUse,
+    taskState: 'failed',
+    error: '실패',
+    trace: trace([
+      step('검색 계획 수립', 0, 1_100, { stage: 'classify', status: 'error' })
+    ])
+  })
+  const answer = stages.find((stage) => stage.key === 'answer')!
+  assert.equal(answer.status, 'skipped')
+  assert.deepEqual(answer.details, [])
+  assert.equal(answer.summary, '')
+})
