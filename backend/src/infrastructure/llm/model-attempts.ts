@@ -23,15 +23,21 @@ export function tokensPerSecond(completionTokens: number | undefined, ms: number
   return completionTokens && completionTokens > 0 && ms > 0 ? completionTokens / (ms / 1000) : undefined;
 }
 
-const store = new AsyncLocalStorage<ModelAttempt[]>();
+type AttemptScope = { attempts: ModelAttempt[]; onAttempt?: (attempt: ModelAttempt) => void };
+const store = new AsyncLocalStorage<AttemptScope>();
 
-/** Records, per task, which model answered or failed; concurrent tasks never share a list. */
-export function runWithModelAttempts<T>(attempts: ModelAttempt[], work: () => Promise<T>): Promise<T> {
-  return store.run(attempts, work);
+/**
+ * Records, per task, which model answered or failed; concurrent tasks never share a list. `onAttempt` runs as each
+ * call finishes, so a trace can show a call while the task is still running.
+ */
+export function runWithModelAttempts<T>(attempts: ModelAttempt[], work: () => Promise<T>, onAttempt?: (attempt: ModelAttempt) => void): Promise<T> {
+  return store.run({ attempts, onAttempt }, work);
 }
 
 export function recordModelAttempt(attempt: ModelAttempt): void {
-  store.getStore()?.push(attempt);
+  const scope = store.getStore();
+  scope?.attempts.push(attempt);
+  scope?.onAttempt?.(attempt);
   const speed = tokensPerSecond(attempt.completionTokens, attempt.requestMs ?? attempt.ms);
   const waited = attempt.requestMs !== undefined && attempt.ms - attempt.requestMs >= 1_000 ? ` (대기 ${((attempt.ms - attempt.requestMs) / 1000).toFixed(1)}초 포함)` : '';
   const tokens = attempt.promptTokens !== undefined || attempt.completionTokens !== undefined
