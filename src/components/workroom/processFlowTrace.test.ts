@@ -59,16 +59,18 @@ test('a model call is listed under the stage whose step time contains its start'
   })
   const answer = stages.find((stage) => stage.key === 'answer')!
   assert.ok(
-    answer.details.some((line) => line.startsWith('groq · a · 0.8초')),
+    (answer.calls ?? []).some((line) => line.startsWith('groq · a · 0.8초')),
     'the call inside the answer step is listed there'
   )
   assert.ok(
-    answer.details.some((line) => line.includes('입력 1,500 / 출력 90 토큰')),
+    (answer.calls ?? []).some((line) =>
+      line.includes('입력 1,500 / 출력 90 토큰')
+    ),
     'token counts use thousands separators'
   )
   const classify = stages.find((stage) => stage.key === 'classify')!
   assert.equal(
-    classify.details.some((line) => line.startsWith('nvidia')),
+    (classify.calls ?? []).some((line) => line.startsWith('nvidia')),
     false,
     'a call elsewhere is not listed under the wrong stage'
   )
@@ -79,10 +81,10 @@ test('a call outside every known step is kept under other rather than guessed in
     trace: trace([llm('orphan · m', 9_000, 500)])
   })
   const other = stages.find((stage) => stage.key === 'other')!
-  assert.ok(other.details.some((line) => line.startsWith('orphan · m')))
+  assert.ok((other.calls ?? []).some((line) => line.startsWith('orphan · m')))
 })
 
-test('an estimated start and a failed call are said so in the call line', () => {
+test('an estimated start is noted once per stage and a failed call shows its reason', () => {
   const stages = buildProcessFlow({
     trace: trace([
       step('근거 기반 답변 작성', 0, 5_000, { stage: 'answer' }),
@@ -90,9 +92,16 @@ test('an estimated start and a failed call are said so in the call line', () => 
       llm('bad · m', 3_000, 500, { status: 'error', detail: 'HTTP 429' })
     ])
   })
-  const lines = stages.find((stage) => stage.key === 'answer')!.details
-  assert.ok(lines.some((line) => line.endsWith('시작 시각 추정')))
-  assert.ok(lines.some((line) => line.endsWith('실패: HTTP 429')))
+  const answerStage = stages.find((stage) => stage.key === 'answer')!
+  assert.ok(
+    answerStage.details.includes(
+      '일부 호출의 시작 시각은 옛 기록이라 추정했습니다'
+    ),
+    'the estimate is said once for the stage'
+  )
+  assert.ok(
+    (answerStage.calls ?? []).some((line) => line.endsWith('실패: HTTP 429'))
+  )
 })
 
 test('a reused step says it was reused, and a stage with a cancelled step is shown as cancelled', () => {
